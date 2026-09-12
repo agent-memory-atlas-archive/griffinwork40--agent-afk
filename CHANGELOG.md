@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.208.3] - 2026-09-12
+
+### Fixed
+- drop envelope fallback in call<T>() for void-result methods (#1629) (#1637) (04705f23)
+
 ## [5.208.2] - 2026-09-11
 
 ### Fixed
