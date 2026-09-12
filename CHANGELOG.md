@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.208.4] - 2026-09-12
+
+### Added
+- add read-only Settings view with config API endpoint (#1581) (#1640) (12678d25)
+
+### Fixed
+- add debug logging for closeTab window.close() limitation (#1628) (#1636) (0c0430a7)
+
+### Changed
+- add workspace persistence decision record — won't-fix (#1541) (#1639) (a6ffff01)
+
 ## [5.208.3] - 2026-09-12
 
 ### Fixed
