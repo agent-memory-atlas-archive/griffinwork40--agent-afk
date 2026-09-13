@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.209.0] - 2026-09-13
+
+### Added
+- overhaul chat UI with topology spine (#1635) (d0af56f9)
+
 ## [5.208.4] - 2026-09-12
 
 ### Added
