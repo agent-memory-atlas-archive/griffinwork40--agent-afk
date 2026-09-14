@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.209.1] - 2026-09-14
+
+### Fixed
+- boost docs site favicon palette for small-size legibility (#1655) (a3d3997b)
+
+### Changed
+- bump @types/node from 26.4.1 to 26.5.1 in /website (#1651) (d2601bb9)
+
 ## [5.209.0] - 2026-09-13
 
 ### Added
