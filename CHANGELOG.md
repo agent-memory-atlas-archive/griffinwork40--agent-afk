@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.211.0] - 2026-09-15
+
+### Added
+- agent-maintained SPINE.md (#17) (#1649) (9b71939c)
+
 ## [5.210.0] - 2026-09-15
 
 ### Added
