@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.1] - 2026-09-15
+
+### Fixed
+- remove blank row at top of scrollback history (#1674) (a229e376)
+
 ## [5.212.0] - 2026-09-15
 
 ### Added
