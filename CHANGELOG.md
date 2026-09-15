@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.209.4] - 2026-09-15
+
+### Added
+- persistent cross-session objective tracking (#1632) (2467ad19)
+
+### Fixed
+- use os.userInfo().uid fallback in guiDomain() (#1661) (#1664) (d3967925)
+
 ## [5.209.3] - 2026-09-15
 
 ### Fixed
