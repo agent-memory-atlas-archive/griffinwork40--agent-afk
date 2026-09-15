@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.0] - 2026-09-15
+
+### Added
+- parallel-first scheduling posture (#1676) (12b25e09)
+
 ## [5.211.0] - 2026-09-15
 
 ### Added
