@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.210.0] - 2026-09-15
+
+### Added
+- word-by-word ghost acceptance via Right arrow (#1673) (693d5f9d)
+
 ## [5.209.5] - 2026-09-15
 
 ### Changed
