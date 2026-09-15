@@ -17,6 +17,7 @@ import { createAfkModeGate } from './afk-mode-gate.js';
 import { cleanupComposeSpills } from './tools/compose-executor.js';
 import { runReceiptSessionEndHook } from './trace/receipt.js';
 import { createFacetSessionEndHook } from './facets/session-end-hook.js';
+import { createSpineSessionEndHook } from './spine/index.js';
 import { inboundAttachmentRegistry } from './content/attachment-registry.js';
 import { env } from '../config/env.js';
 import { createEffectLedgerPostHook } from './effect-ledger/index.js';
@@ -249,26 +250,10 @@ export function createDefaultHookRegistry(
   }
 
   registry.register('SessionEnd', createMemorySessionEndHook(store, surface));
-  // Clean up compose-truncation spill files when the session ends. Files
-  // are written under <sessions>/<sessionId>/compose/<callId>/<nodeId>.txt
-  // by ComposeExecutor when a node's output exceeds MAX_NODE_OUTPUT_CHARS;
-  // the parent uses them within the session to recover full output via
-  // read_file. Once the session ends, the recovery window is closed.
-  registry.register('SessionEnd', (context) => {
-    if (context.event !== 'SessionEnd') return {};
-    if (context.sessionId) cleanupComposeSpills(context.sessionId);
-    return {};
-  });
-  // Evict the session's inbound image records from the module-level Map so
-  // terminated sessions don't leak image data forever. Each forked child owns
-  // its own AgentSession.sessionId, so a subagent's SessionEnd clears an empty
-  // bucket — the parent's entries (under the parent's id) survive until the
-  // parent's own SessionEnd fires.
-  registry.register('SessionEnd', (context) => {
-    if (context.event !== 'SessionEnd') return {};
-    if (context.sessionId) inboundAttachmentRegistry.clear(context.sessionId);
-    return {};
-  });
+  // Clean up compose-truncation spill files (written under <sessions>/<sessionId>/compose/)
+  // and evict inbound image records at session end so terminated sessions don't leak data.
+  registry.register('SessionEnd', (c) => { if (c.event === 'SessionEnd' && c.sessionId) cleanupComposeSpills(c.sessionId); return {}; });
+  registry.register('SessionEnd', (c) => { if (c.event === 'SessionEnd' && c.sessionId) inboundAttachmentRegistry.clear(c.sessionId); return {}; });
   // Read-only run receipt: after the trace is sealed (sealing precedes
   // SessionEnd dispatch — see agent-session.ts dispatchSessionEndOnce), emit a
   // JSON+Markdown summary of the run under ~/.afk/state/receipts/. Best-effort
@@ -278,6 +263,9 @@ export function createDefaultHookRegistry(
   // is visible to harvest --rank and other facet consumers. Best-effort;
   // skips subagents; never blocks teardown.
   registry.register('SessionEnd', createFacetSessionEndHook());
+  // SPINE.md: classify git diff against the architecture spine at session end.
+  // Best-effort; skips subagents; honors AFK_DISABLE_SPINE_UPDATE=1.
+  registry.register('SessionEnd', createSpineSessionEndHook({ repoRoot: agentOptions?.cwd }));
   if (onSubagentComplete) {
     registry.register('SubagentStop', (context) => {
       if (context.event !== 'SubagentStop') return {};

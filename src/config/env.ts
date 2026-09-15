@@ -180,6 +180,18 @@ export const ENV_REGISTRY = [
     category: 'process',
   },
   {
+    name: 'AFK_DISABLE_SPINE_UPDATE',
+    description:
+      'Disable the SPINE.md SessionEnd hook when set to 1. The hook runs a single LLM call at the ' +
+      'end of each top-level session to classify architectural signals in the git diff against ' +
+      'SPINE.md. Set to 1 to opt out globally (useful in CI or when the LLM call is unwanted).',
+    type: 'boolean',
+    required: false,
+    default: '0',
+    example: '1',
+    category: 'misc',
+  },
+  {
     name: 'AFK_FORCE_BASH_INTERPRETER_GUARD',
     description:
       'Apply the bash interpreter-eval denylist (python -c, node -e, sh -c, ...) even on headless ' +
