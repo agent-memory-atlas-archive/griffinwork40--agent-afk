@@ -19,8 +19,8 @@
  * User-visible symptom: submitting the first message echoed the card's
  * FIRST line (the separator rule) twice near the top while the card body
  * vanished under the streaming frame. Reproduced live in tmux (80×24,
- * 11 pre-arm rows) with AFK_DEBUG_COMPOSITOR traces showing commit 1 enter
- * topRow=12/anchorRow=12 → fitsAboveFrame=false → phase2 newTopRow=22.
+ * 10 pre-arm rows) with AFK_DEBUG_COMPOSITOR traces showing commit 1 enter
+ * topRow=11/anchorRow=11 → fitsAboveFrame=false → phase2 newTopRow=22.
  *
  * Fix (terminal-compositor.committed-band-commit.ts): when a banner is
  * active and the band is empty, flip commitInFlight and clear+repaint
@@ -72,7 +72,7 @@ function wireFooter(stdout: MockStdout): StatusLine {
 
 const COLS = 80;
 const ROWS = 24;
-const BANNER_ROWS = 11; // live geometry: anchorRow = 12
+const BANNER_ROWS = 10; // live geometry: anchorRow = 11
 
 const MESSAGE =
   'Reply with only the word ok and nothing else. DUPCHECK alpha bravo charlie delta echo foxtrot golf hotel india';
@@ -251,8 +251,8 @@ describe('first turn after banner — idle banner-followed frame commit', () => 
     // leaving the separator and body rows permanently blank.
     //
     // Scenario that reproduces the gap:
-    //  • anchorRow=12, 4 echo commits (sep + body1 + body2 + blank) → band rows 18..21
-    //  • overlay grows to 7 rows + spinner → banner-path evictions shift band to ~9..12,
+    //  • anchorRow=11, 4 echo commits (sep + body1 + body2 + blank) → band rows 17..20
+    //  • overlay grows to 7 rows + spinner → banner-path evictions shift band to ~8..11,
     //    anchorRow drops to ~3
     //  • setOverlay('') + setSpinner(false) → idle repaint at contentFloor+1 (NOT 22);
     //    repositionCommittedBand: moved=false, renderErasedBand=false → no re-pin

@@ -357,7 +357,7 @@ export const SCENARIOS: Record<string, PtyScenario> = {
     rows: 24,
     ref: '#509 · terminal-compositor.first-turn-echo-image.test.ts',
     async drive({ stdout, stdin }): Promise<void> {
-      const BANNER_ROWS = 11;
+      const BANNER_ROWS = 10;
       const MESSAGE = 'Reply with only the word ok and nothing else. DUPCHECK alpha bravo charlie delta echo foxtrot golf hotel india';
       for (let i = 0; i < BANNER_ROWS; i++) stdout.write(`BANNER_LINE_${i}\n`);
       const statusLine = wireProductionFooter(stdout, 'M');
@@ -646,7 +646,7 @@ export const SCENARIOS: Record<string, PtyScenario> = {
 
       // Phase 3 — the pre-arm print block, in production order: banner, then
       // the drained bootstrap warnings, then the trailing blank line.
-      const BANNER_ROWS = 11;
+      const BANNER_ROWS = 10;
       for (let i = 0; i < BANNER_ROWS; i++) stdout.write(`POSTCLEAR_BANNER_${i}\n`);
       stdout.write('  [afk] agents: SHADOWWARN overrides built-in agent "research-agent"\n');
       stdout.write('  [mcp] MCPWARN unknown key\n');
@@ -681,7 +681,7 @@ export const SCENARIOS: Record<string, PtyScenario> = {
       exactlyOnce: ['SHADOWWARN', 'MCPWARN', 'FIRST_TURN_OUTPUT'],
       // Warnings sit above the first turn's output, below the banner.
       order: [
-        ['POSTCLEAR_BANNER_10', 'SHADOWWARN'],
+        ['POSTCLEAR_BANNER_9', 'SHADOWWARN'],
         ['SHADOWWARN', 'MCPWARN'],
         ['MCPWARN', 'FIRST_TURN_OUTPUT'],
       ],
