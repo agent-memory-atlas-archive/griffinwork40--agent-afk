@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.209.3] - 2026-09-15
+
+### Fixed
+- warn about systemd >= 240 requirement for log output (#1659) (#1669) (7a9c606c)
+
+### Changed
+- bump react and @types/react in /website (#1653) (6ed00fbc)
+
 ## [5.209.2] - 2026-09-15
 
 ### Added
