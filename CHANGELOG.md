@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.209.5] - 2026-09-15
+
+### Changed
+- extract shared Collapse component (#1648) (#1667) (f0bc0279)
+
 ## [5.209.4] - 2026-09-15
 
 ### Added
