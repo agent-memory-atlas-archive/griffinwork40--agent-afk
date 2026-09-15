@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.2] - 2026-09-15
+
+### Fixed
+- top-align committed band to eliminate dropdown gap (#1670) (1e34de69)
+
 ## [5.212.1] - 2026-09-15
 
 ### Fixed
