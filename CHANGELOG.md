@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.11] - 2026-09-16
+
+### Fixed
+- close SQLite handle before test cleanup + flush --version on Windows pipes (23f5a98a)
+
 ## [5.212.10] - 2026-09-16
 
 ### Fixed
