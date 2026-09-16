@@ -1,8 +1,9 @@
 import { env } from '../../../config/env.js';
 import type { DiffPayload, DiffLine } from '../../../utils/diff.js';
 import { palette } from '../../palette.js';
-import { stripAnsi } from '../../display.js';
+import { stripAnsi, displayWidth } from '../../display.js';
 import { previewDiff } from '../../render/preview-diff.js';
+import { getTerminalWidth } from '../../terminal-size.js';
 
 /**
  * Maximum number of diff body lines to render in the live overlay before
@@ -296,5 +297,13 @@ function _diffBlockCacheStore(diff: DiffPayload, key: string, result: string[]):
  */
 export function formatPreviewDiffBlock(diff: DiffPayload, indent: string): string[] {
   if (diffsDisabled()) return [];
-  return previewDiff(diff).split('\n').map((l) => indent + l);
+  // Thread the live terminal width so compactDiffView renders the box at the
+  // correct width instead of the hardcoded 80-col default. Use displayWidth()
+  // rather than indent.length so ANSI escape codes embedded in `indent` (e.g.
+  // from tool-lane-render-children.ts where previewIndent includes palette.dim
+  // colour codes) are excluded from the column count. Clamp to 40 so the box
+  // remains usable in very narrow panes.
+  const indentCols = displayWidth(indent);
+  const width = Math.max(40, getTerminalWidth() - indentCols);
+  return previewDiff(diff, { width }).split('\n').map((l) => indent + l);
 }
