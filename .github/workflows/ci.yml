@@ -255,6 +255,99 @@ jobs:
       - name: Test (no coverage gate — see job comment)
         run: pnpm test
 
+  # A required Windows integration check, kept separate from the known-red,
+  # advisory compatibility suite above so those failures cannot skip or mask it.
+  smoke-windows:
+    name: Smoke test (Windows CLI)
+    runs-on: windows-2022
+    timeout-minutes: 10
+    env:
+      # Secrets cannot be referenced directly in a step-level `if`. Exposing the
+      # possibly-empty value here lets the optional chat step test `env` instead.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build publish bundle (esbuild)
+        run: pnpm build:dist
+
+      - name: Assert CLI bundle exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path -PathType Leaf dist/cli.mjs)) {
+            Write-Host "::error::dist/cli.mjs was not produced by pnpm build:dist"
+            exit 1
+          }
+
+      - name: Smoke test — CLI --version (mandatory, issue #1603)
+        # Mirrors the equivalent step in the `publish-bundle` job but runs on
+        # Windows so we exercise shell resolution, path handling, and config
+        # loading on win32. A dummy API key bypasses the startup credential
+        # check (see the publish-bundle job comment for rationale — same quirk).
+        # Uses PowerShell (the default Windows shell on GitHub Actions) so we
+        # can capture stdout/stderr and inspect the exit code in one block.
+        shell: pwsh
+        env:
+          ANTHROPIC_API_KEY: sk-ant-dummy-not-used-version-only
+        run: |
+          $output = (node dist/cli.mjs --version 2>&1 | Out-String)
+          $exitCode = $LASTEXITCODE
+          Write-Host "afk --version exit code: $exitCode"
+          Write-Host "afk --version output: $output"
+          if ($exitCode -ne 0) {
+            Write-Host "::error::dist/cli.mjs --version exited $exitCode on Windows — integration broken"
+            exit 1
+          }
+          if ($output -notmatch '\d+\.\d+\.\d+') {
+            Write-Host "::error::dist/cli.mjs --version printed no semver on Windows"
+            exit 1
+          }
+          Write-Host "Windows CLI smoke test passed."
+
+      - name: Smoke test — CLI chat (conditional on API key, issue #1603)
+        # Only runs when ANTHROPIC_API_KEY is available as a repository secret.
+        # It is therefore always skipped for fork PRs, where GitHub withholds
+        # repository secrets. The mandatory --version step above still exercises
+        # the full boot path; this step adds a real API round-trip when possible.
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        shell: pwsh
+        run: |
+          $output = (node dist/cli.mjs chat "respond with exactly the word OK" --model haiku -f json 2>&1 | Out-String)
+          $exitCode = $LASTEXITCODE
+          Write-Host "afk chat exit code: $exitCode"
+          Write-Host "afk chat output: $output"
+          if ($exitCode -ne 0) {
+            Write-Host "::error::afk chat exited $exitCode on Windows"
+            exit 1
+          }
+          try {
+            $response = $output | ConvertFrom-Json
+          } catch {
+            Write-Host "::error::afk chat returned malformed JSON on Windows"
+            exit 1
+          }
+          if ($output -notmatch '\bOK\b') {
+            Write-Host "::error::afk chat response did not contain OK on Windows"
+            exit 1
+          }
+          Write-Host "Windows chat smoke test passed."
+
   # Real-PTY scrollback harness (issue #541). Isolated from the main `test` job
   # because it depends on the native `node-pty` module (compiled from source on
   # Linux via pnpm.onlyBuiltDependencies — the same path better-sqlite3 already
