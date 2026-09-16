@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.7] - 2026-09-16
+
+### Fixed
+- revert top-aligned band to bottom-aligned (#1670 regression) (#1684) (999925e5)
+
 ## [5.212.6] - 2026-09-16
 
 ### Fixed
