@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.8] - 2026-09-16
+
+### Fixed
+- resolve stacked Windows smoke test failures (pnpm ENOENT + dashboard deps) (#1685) (fe1ea69d)
+
 ## [5.212.7] - 2026-09-16
 
 ### Fixed
