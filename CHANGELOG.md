@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.3] - 2026-09-16
+
+### Fixed
+- normalize CRLF to LF in esbuild prompt-inlining plugin (#1682) (0a2eb930)
+- replace POSIX path assumptions with platform-agnostic APIs (#1600) (#1642) (35c80942)
+
+### Changed
+- bump react-dom and @types/react-dom in /website (#1652) (9c2ab252)
+
 ## [5.212.2] - 2026-09-15
 
 ### Fixed
