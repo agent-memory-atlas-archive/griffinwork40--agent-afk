@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.4] - 2026-09-16
+
+### Fixed
+- update stale BANNER_LINE_10 assertion in PTY scrollback test (#1683) (3ef0f7b3)
+
+### Changed
+- add end-to-end CLI smoke test (#1603) (#1638) (7cf76048)
+
 ## [5.212.3] - 2026-09-16
 
 ### Fixed
