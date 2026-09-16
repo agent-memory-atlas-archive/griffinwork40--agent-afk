@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import type { ChildProcess } from 'child_process';
+import { sep } from 'path';
 
 // ---------------------------------------------------------------------------
 // Mock child_process.spawn BEFORE importing the handler
@@ -90,6 +91,12 @@ const PYTEST_DISCOVERY = {
   runner: 'pytest' as const,
   command: 'pytest',
   args: ['pytest'],
+};
+
+const GO_TEST_DISCOVERY = {
+  runner: 'go-test' as const,
+  command: 'go test ./...',
+  args: ['go', 'test', './...'],
 };
 
 // ---------------------------------------------------------------------------
@@ -288,6 +295,20 @@ describe('test_run: file and name narrowing', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       'pytest',
       expect.arrayContaining(['-k', 'test_add']),
+      expect.any(Object),
+    );
+  });
+
+  it('qualifies a relative Go package directory as a filesystem path', async () => {
+    mockDiscover.mockReturnValue(GO_TEST_DISCOVERY);
+    mockSpawn.mockReturnValue(makeProc({ stdout: 'ok\texample/pkg\t0.01s\n', exitCode: 0 }));
+
+    const ctrl = makeAbort();
+    await testRunHandler({ file: `pkg${sep}foo_test.go` }, ctrl.signal);
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'go',
+      ['test', `.${sep}pkg`],
       expect.any(Object),
     );
   });
