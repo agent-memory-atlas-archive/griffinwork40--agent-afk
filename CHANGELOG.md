@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.5] - 2026-09-16
+
+### Fixed
+- resolve remaining umber references and add UserDefaults migration (#1681) (98306679)
+
 ## [5.212.4] - 2026-09-16
 
 ### Fixed
