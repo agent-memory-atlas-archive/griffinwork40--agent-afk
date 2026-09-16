@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.9] - 2026-09-16
+
+### Fixed
+- prevent watchdog suspension ceiling stacking (#1660) (#1665) (59e059ba)
+
 ## [5.212.8] - 2026-09-16
 
 ### Fixed
