@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.6] - 2026-09-16
+
+### Fixed
+- add manifest gate and scoped re-review to reduce cycling (#1680) (990dcf5c)
+
 ## [5.212.5] - 2026-09-16
 
 ### Fixed
