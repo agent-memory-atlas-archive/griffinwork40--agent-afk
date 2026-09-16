@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.212.10] - 2026-09-16
+
+### Fixed
+- periodic sessionData eviction and elicitation route cleanup (#1657, #1662) (#1668) (d9ed4479)
+
 ## [5.212.9] - 2026-09-16
 
 ### Fixed
