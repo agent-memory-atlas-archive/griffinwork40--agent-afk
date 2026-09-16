@@ -69,8 +69,16 @@ const PINNED_HASHES = {
   // in #943. No upstream counterpart — bundled-only.
   'false-completion-gate':
     '9b0d90e150a9a4690c713d1063dd1901ce5b659d33b6c9f12b74e44b3d0163ce',
+  // Hash bumped: PR #1680 — Phase 3.5 manifest gate + Phase 6 --brief re-review scoping.
+  // Hash re-bumped: resolve review — aggregation-before-redispatch + commit on invariant-only-cap path.
+  // Hash re-bumped: resolve review findings — clarify commit ownership (subagent no longer commits),
+  //   fix Phase 3.5 scope-check gap (add --cached to catch staged files), mandate Phase 3.5
+  //   re-run after each Phase 4 re-dispatch.
+  // Hash re-bumped: resolve review — Phase 2.5 switched from compose to parallel agent calls
+  //   (compose nodes lack agent_type/cwd), Phase 3.5 unverified-invariant cap path tightened
+  //   (no longer commits unconditionally with unverified invariants).
   'fix-pr':
-    'c89030fd9ab9200d9676ee503ae3db7e06fcb862d52a55eb67cb85786e585ff9',
+    '3eacfbf593256786755b633fbab2f9a4c97eea6eb0669747b1ea44af533c7bdc',
   // gather + parallelize carry a bundled-only `context: load` frontmatter line
   // (2026-06 skill-execution-mode work). `context` is an agent-afk-specific
   // field; Claude Code upstream skills are natively inline/progressive-disclosure,
