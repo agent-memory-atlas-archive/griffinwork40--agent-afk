@@ -47,6 +47,16 @@ function store(): StateStore {
 }
 
 /**
+ * Close the underlying SQLite connection and reset the module-scope singleton.
+ * Required for test teardown on Windows where SQLite file handles prevent
+ * directory deletion until the connection is explicitly closed.
+ */
+export function closeStore(): void {
+  _store?.close();
+  _store = undefined;
+}
+
+/**
  * Read the current goal (any status). Returns null when no goal is set.
  */
 export function getGoal(): Goal | null {

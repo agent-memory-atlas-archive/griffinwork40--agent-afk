@@ -36,6 +36,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  mod.closeStore();          // Close SQLite handle before directory deletion
   vi.restoreAllMocks();
   rmSync(tmpDir, { recursive: true, force: true });
 });
