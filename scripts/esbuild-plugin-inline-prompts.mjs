@@ -264,7 +264,7 @@ export function prepareSources() {
   const systemPromptSourcePath = join(tmpSrc, 'cli', 'system-prompt.ts');
   const systemPromptPath = join(repoRoot, 'prompts', 'system-prompt.md');
   if (existsSync(systemPromptSourcePath) && existsSync(systemPromptPath)) {
-    let shContent = readFileSync(systemPromptSourcePath, 'utf-8');
+    let shContent = readFileSync(systemPromptSourcePath, 'utf-8').replace(/\r\n/g, '\n');
     const systemPrompt = readFileSync(systemPromptPath, 'utf-8');
     const escaped = escapeForTemplate(systemPrompt);
     // Find and replace the exact function body using string search
