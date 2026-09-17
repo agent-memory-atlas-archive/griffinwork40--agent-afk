@@ -239,10 +239,14 @@ export async function runFirstRunDetector(argv: string[] = process.argv): Promis
 
 // Parse and execute — only when run directly as CLI (not imported by tests)
 import { realpathSync } from 'fs';
+import { pathToFileURL } from 'url';
 const argv1 = process.argv[1] ?? '';
+// pathToFileURL normalizes backslashes → forward slashes and applies
+// percent-encoding, so `file:///D:/path` matches on Windows where a
+// naive `file://${argv1}` would produce `file:///D:\path` and miss.
 const isDirectRun =
-  import.meta.url === `file://${argv1}` ||
-  import.meta.url === `file://${realpathSync(argv1)}`;
+  import.meta.url === pathToFileURL(argv1).href ||
+  import.meta.url === pathToFileURL(realpathSync(argv1)).href;
 if (isDirectRun) {
   (async () => {
     await runFirstRunDetector();
@@ -311,16 +315,14 @@ if (isDirectRun) {
       triggerAutoUpdate(updateInfo.latestVersion);
     }
 
-    // Early-exit version flag — must precede parseAsync() so stdout flushes on
-    // Windows before process.exit tears down the pipe. Commander's internal
-    // handler calls process.stdout.write (async on Windows non-TTY pipes via
-    // libuv completion ports) then immediately process.exit(0), so the write
-    // may never flush. console.log goes through the same write path but Node's
-    // stream drain logic ensures the buffer is flushed before exit when we call
-    // process.exit(0) ourselves in the same tick after the write is queued.
+    // Early-exit version flag — must precede parseAsync() so Commander never
+    // handles --version itself. Commander's internal handler calls
+    // process.stdout.write then immediately process.exit(0), which can
+    // race on some shells. We print and return without process.exit so
+    // Node drains stdout naturally before the event loop terminates.
     if (process.argv.includes('--version') || process.argv.includes('-V')) {
       console.log(getVersion());
-      process.exit(0);
+      return;
     }
 
     program.parseAsync(process.argv).catch((err) => {

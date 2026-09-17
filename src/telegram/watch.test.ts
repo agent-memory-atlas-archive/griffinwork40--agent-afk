@@ -608,7 +608,11 @@ describe('SessionWatchManager — keep-alive heartbeat for a pending elicitation
     });
 
     // Wait through many heartbeat intervals WITHOUT answering.
-    await sleep(400);
+    // Budget must absorb worst-case poll latency (POLL_INTERVAL_MS=250ms) plus
+    // at least one heartbeat tick (25ms) with generous slack for CI event-loop
+    // jitter — 400ms was too tight on macOS runners where fs.watch coalescing
+    // makes the 250ms poll the sole wakeup mechanism.
+    await sleep(800);
     const nudges = () => sent.filter((t) => /still waiting/i.test(t)).length;
     // Fired at least once, but capped (MAX_ELICIT_NUDGES = 4) — never spams forever ...
     expect(nudges()).toBeGreaterThanOrEqual(1);
@@ -620,7 +624,7 @@ describe('SessionWatchManager — keep-alive heartbeat for a pending elicitation
     // Answer → the wait resolves, the heartbeat is cleared, nudges stop.
     const beforeAnswer = nudges();
     resolver!('Alice');
-    await sleep(150);
+    await sleep(300);
     expect(nudges()).toBe(beforeAnswer);
 
     await writer.close();
