@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.217.0] - 2026-09-17
+
+### Added
+- add prior-reviewer-feedback awareness for PR targets (#1720) (7e5fc83c)
+
+### Changed
+- comprehensive site audit and update (#1722) (79ebf803)
+
 ## [5.216.2] - 2026-09-17
 
 ### Fixed
