@@ -441,3 +441,28 @@ export {
   renderGroupedRootTools,
   formatGroupedToolResults,
 } from './tool-lane-render-grouped-root.js';
+
+/**
+ * Build a parent→children map from the lane's entry set. Extracted from
+ * {@link ToolLane} (a private method) to keep that class under the 350-line
+ * ratchet. Pure — reads only `entries` and `order`, mutates nothing.
+ *
+ * Callers may pass a scoped subset of entries (e.g. in `flushSource`) or the
+ * full lane map (in `flush`/`flushCompletedRoots`/`getOverlay`).
+ */
+export function buildChildMap(
+  entries: ReadonlyMap<string, Entry>,
+  order: readonly string[],
+): Map<string, Entry[]> {
+  const map = new Map<string, Entry[]>();
+  for (const id of order) {
+    const entry = entries.get(id);
+    if (!entry) continue;
+    const ctx = entry.kind === 'tool' ? entry.agentContext : entry.agentContext;
+    if (!ctx) continue;
+    let children = map.get(ctx);
+    if (!children) { children = []; map.set(ctx, children); }
+    children.push(entry);
+  }
+  return map;
+}

@@ -17,6 +17,7 @@ import type { Writer } from '../slash/types.js';
 import type { TerminalCompositor } from '../terminal-compositor.js';
 import type { OverlayComposer } from './overlay-composer.js';
 import type { ToolLane } from '../commands/interactive/tool-lane.js';
+import type { ToolLaneFlash } from '../commands/interactive/tool-lane-flash.js';
 import type { CommitCoordinator } from './commit-coordinator.js';
 import type { StreamingMarkdownRenderer } from '../markdown-stream.js';
 import type { DedupingLineWriter } from './dedup-line-writer.js';
@@ -49,6 +50,8 @@ export interface DisposeCtx {
   overlayComposerRef: { current: OverlayComposer | null };
   /** Shared ToolLane — may have pending entries that need safety-net flushing. */
   toolLane: ToolLane;
+  /** Flash tracker for 150ms glyph pulses — disposed here to cancel timers. */
+  toolLaneFlash: ToolLaneFlash | null;
   /**
    * Mutable ref holding the orchestrator StreamingMarkdownRenderer.
    * disposeRenderer nulls this out after flushing.
@@ -207,7 +210,11 @@ export async function disposeRenderer(ctx: DisposeCtx): Promise<void> {
     }
   }
 
-  // Phase 7: Clear the pause tick interval.
+  // Phase 7a: Dispose the flash tracker — cancels any pending 150ms timers so
+  // they can't fire after the overlay is torn down.
+  ctx.toolLaneFlash?.dispose();
+
+  // Phase 7b: Clear the pause tick interval.
   if (ctx.pauseTickIntervalRef.current) {
     clearInterval(ctx.pauseTickIntervalRef.current);
     ctx.pauseTickIntervalRef.current = null;

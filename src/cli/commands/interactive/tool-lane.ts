@@ -11,6 +11,7 @@ import {
   formatAgentHeader,
   formatAgentChildren,
   renderGroupedRootTools,
+  buildChildMap,
   getGlyphs, toolLaneWidth,
   freshToolEntry,
   pushOutcomeLines,
@@ -19,6 +20,7 @@ import {
   type Entry,
 } from './tool-lane-render.js';
 import { formatFlatRootCompletion } from './tool-lane-overlay-completion.js';
+import type { ToolLaneFlash } from './tool-lane-flash.js';
 
 // Re-export types from render module for consumers
 export type { ToolEntry, TextEntry, Entry };
@@ -73,6 +75,13 @@ export class ToolLane {
    * `null` when no parallel wave is in flight.
    */
   private activeTools: { activeCount: number; toolUseIds: Set<string> } | null = null;
+
+  /**
+   * Optional flash tracker for 150ms glyph pulses on tool completion.
+   * Set by `StreamRenderer.arm()` after the OverlayComposer is ready.
+   * `null` on non-TTY surfaces (no overlay to repaint) and in tests.
+   */
+  flash: ToolLaneFlash | null = null;
 
   addStart(toolUseId: string, toolName: string, toolInput: string): void {
     // Strip ANSI from toolInput at storage time: it originates from LLM
@@ -232,6 +241,12 @@ export class ToolLane {
     // start and settle (see notifyToolActivity), so inferring the live set from
     // arriving results would race that authoritative feed and re-introduce the
     // sticky badge this design removes.
+    //
+    // Flash: mark the glyph as flashing for 150ms so the overlay renderer can
+    // apply a bold highlight on the next frame. The flash-on repaint fires
+    // naturally (the caller always calls setComposedOverlay after addResult);
+    // the flash-off repaint is triggered by ToolLaneFlash.onRepaint.
+    this.flash?.flashTool(toolUseId);
   }
 
   /**
@@ -435,7 +450,7 @@ export class ToolLane {
   }
 
   getOverlay(): string {
-    const childMap = this.buildChildMap();
+    const childMap = buildChildMap(this.entries, this.order);
     const lines: string[] = [];
     // Read glyphs once per overlay frame so the turn-root marker on Agent
     // rows matches the spine glyphs renderOverlayChildren will draw below.
@@ -647,7 +662,11 @@ export class ToolLane {
           // pre-date the finishedAt field (should not occur in practice).
           const elapsedMs = (entry.finishedAt ?? Date.now()) - entry.startedAt;
           const cardWidth = cols - displayWidth(flatRootLead);
-          lines.push(clamp(flatRootLead + formatFlatRootCompletion(entry.toolName, entry.result, elapsedMs, batchBadge(entry.result), cardWidth)));
+          const card = formatFlatRootCompletion(entry.toolName, entry.result, elapsedMs, batchBadge(entry.result), cardWidth);
+          // Flash pulse: bold-wrap the card for 150ms after completion so the
+          // glyph catches the eye in peripheral vision (issue: lane-flash).
+          const flashedCard = this.flash?.isFlashing(entry.toolUseId) ? palette.bold(card) : card;
+          lines.push(clamp(flatRootLead + flashedCard));
           if (entry.diff && !entry.result.isError) {
             // Diff hangs under the outcome line, indented one level deeper
             // (4 spaces) so it visually attaches to this tool entry.
@@ -939,7 +958,7 @@ export class ToolLane {
   flushCompletedRoots(homeDir?: string): string[] {
     if (this.entries.size === 0) return [];
 
-    const childMap = this.buildChildMap();
+    const childMap = buildChildMap(this.entries, this.order);
     const rootOrder: string[] = [];
 
     for (const id of this.order) {
@@ -1015,7 +1034,7 @@ export class ToolLane {
   flush(homeDir?: string): string[] {
     if (this.entries.size === 0) return [];
 
-    const childMap = this.buildChildMap();
+    const childMap = buildChildMap(this.entries, this.order);
     const rootOrder: string[] = [];
 
     for (const id of this.order) {
@@ -1074,22 +1093,6 @@ export class ToolLane {
     return lines;
   }
 
-  private buildChildMap(): Map<string, Entry[]> {
-    const map = new Map<string, Entry[]>();
-    for (const id of this.order) {
-      const entry = this.entries.get(id);
-      if (!entry) continue;
-      const ctx = entry.kind === 'tool' ? entry.agentContext : entry.agentContext;
-      if (!ctx) continue;
-      let children = map.get(ctx);
-      if (!children) {
-        children = [];
-        map.set(ctx, children);
-      }
-      children.push(entry);
-    }
-    return map;
-  }
 }
 
 // Re-export public formatting functions

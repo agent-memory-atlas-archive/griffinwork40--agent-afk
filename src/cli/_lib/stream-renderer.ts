@@ -37,6 +37,7 @@ import type { AutocompleteState } from '../input/autocomplete-state.js';
 import { colorizeInputBuffer, type SlashRegistryView } from '../input-highlight.js';
 import { createSlashRegistryView } from '../slash/registry.js';
 import { ToolLane } from '../commands/interactive/tool-lane.js';
+import { ToolLaneFlash } from '../commands/interactive/tool-lane-flash.js';
 import { ThinkingLane } from '../commands/interactive/thinking-lane.js';
 import { StreamingMarkdownRenderer } from '../markdown-stream.js';
 import { type SourceState } from './stream-renderer-source.js';
@@ -156,6 +157,8 @@ export class StreamRenderer {
   private inFlightTools = new InFlightToolTracker();
 
   private disposed = false;
+  /** Flash tracker for 150ms glyph pulses on tool completion. Null until arm(). */
+  private toolLaneFlash: ToolLaneFlash | null = null;
   private pauseTickInterval: ReturnType<typeof setInterval> | null = null;
   /** ResizeBus unsubscriber — re-derives the overlay at the new terminal width on resize. */
   private resizeUnsub: (() => void) | null = null;
@@ -366,6 +369,12 @@ export class StreamRenderer {
       getActiveSubagents: () => this.activeSubagents,
     });
 
+    // Wire the flash tracker: completed tool glyphs pulse bold for 150ms.
+    // Repaint callback reuses deferFlush (same deferred-flush pattern as
+    // setInterrupting / setSoftStopping) to avoid double-setOverlay races.
+    this.toolLaneFlash = new ToolLaneFlash(() => this.deferFlush('tool-lane'));
+    this.toolLane.flash = this.toolLaneFlash;
+
     // Reduced-motion suppresses the spinner ticker at the source. State-transition
     // repaints remain active — only the high-frequency 12.5 Hz animation is gated.
     compositor.setSpinner({ enabled: !this.reducedMotion, rotateVerbEveryMs: 3500 });
@@ -412,6 +421,18 @@ export class StreamRenderer {
   }
 
   /**
+   * Mark an overlay slot dirty and schedule a deferred flush (next microtask).
+   * Deferred flush avoids a double-setOverlay race with checkPauseAnnotations'
+   * batched flush — the pattern used by setInterrupting, setSoftStopping, and
+   * setBashOutputTail (see those methods for the full rationale).
+   */
+  private deferFlush(slot: string): void {
+    if (!this.overlayComposer) return;
+    this.overlayComposer.markDirty(slot);
+    setTimeout(() => { if (!this.disposed) this.overlayComposer?.flush(); }, 0);
+  }
+
+  /**
    * Toggle the live "interrupting…" overlay affordance. Called from the REPL
    * SIGINT handler (via the published interrupt notifier) when Ctrl+C is
    * pressed mid-turn, giving immediate feedback that the interrupt registered
@@ -425,18 +446,7 @@ export class StreamRenderer {
   setInterrupting(active: boolean): void {
     if (this.disposed) return;
     this.interrupting = active;
-    if (this.overlayComposer) {
-      this.overlayComposer.markDirty('interrupt');
-      // Deferred flush: an eager flush() here fires a setOverlay() call that
-      // can collide with checkPauseAnnotations' batched flush in the same
-      // event-loop turn, producing the same double-setOverlay compositor desync
-      // fixed in applyFirstContent / checkTtfbAnnotation. Deferring to the
-      // next microtask preserves sub-millisecond visual feedback while
-      // eliminating the two-flush race window.
-      setTimeout(() => {
-        if (!this.disposed) this.overlayComposer?.flush();
-      }, 0);
-    }
+    this.deferFlush('interrupt');
   }
 
   /**
@@ -446,13 +456,7 @@ export class StreamRenderer {
   setSoftStopping(active: boolean): void {
     if (this.disposed) return;
     this.softStopping = active;
-    if (this.overlayComposer) {
-      this.overlayComposer.markDirty('progress-banner');
-      // Deferred flush — same double-setOverlay race as setInterrupting above.
-      setTimeout(() => {
-        if (!this.disposed) this.overlayComposer?.flush();
-      }, 0);
-    }
+    this.deferFlush('progress-banner');
   }
 
   /**
@@ -493,14 +497,9 @@ export class StreamRenderer {
   setBashOutputTail(toolUseId: string, tail: string | undefined): void {
     if (this.disposed) return;
     this.toolLane.setBashOutputTail(toolUseId, tail);
-    if (this.overlayComposer) {
-      this.overlayComposer.markDirty('tool-lane');
-      // Tail callbacks arrive asynchronously from the command stream. Defer
-      // repaint to coalesce with any model event in the current turn.
-      setTimeout(() => {
-        if (!this.disposed) this.overlayComposer?.flush();
-      }, 0);
-    }
+    // Tail callbacks arrive asynchronously from the command stream. Defer
+    // repaint to coalesce with any model event in the current turn.
+    this.deferFlush('tool-lane');
   }
 
   /** Signal first streaming content — clears the TTFB waiting indicator. Idempotent. */
@@ -613,6 +612,7 @@ export class StreamRenderer {
       compositorRef: { current: this.compositor },
       overlayComposerRef: { current: this.overlayComposer },
       toolLane: this.toolLane,
+      toolLaneFlash: this.toolLaneFlash,
       streamingMarkdownRef: this.streamingMarkdownRef,
       subagentMarkdown: this.subagentMarkdown,
       lastProgressByTask: this.lastProgressByTask,
