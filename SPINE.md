@@ -19,6 +19,10 @@
 - **INV-012** (2026-09-17, spine-init): Pass postText to spawnSync as an argv element, NOT as part of a shell command string
 - **INV-013** (2026-09-17, spine-init): Audit only on state change (see dispatcher.addReadRoot) — not on repeat grants
 - **INV-014** (2026-09-17, spine-init): Witness traces are the durable record of agent execution; tool args in events.jsonl, prompts/outputs in separate capture
+- **INV-015** (2026-09-17, 6c724132): Service restart must preserve custom environment variables across upgrades via config re-render
+- **INV-016** (2026-09-17, 2aafb714): Atomic plist upgrade uses tmp-then-rename write strategy; byte-equal content skips write (no-op safety)
+- **INV-017** (2026-09-17, 151dc338): Service upgrade must detect and safely skip writes when config content is byte-identical to disk (no-op idempotence)
+- **INV-018** (2026-09-17, 151dc338): ServiceManager.upgrade() must never invoke launchctl; caller responsible for applying updated config to running job
 
 
 ## Explicitly Rejected Patterns
@@ -33,3 +37,4 @@
 
 - **TST-001** (2026-09-17, spine-init): pnpm exclusively (lockfile is pnpm-specific); Node ≥22 required
 - **TST-002** (2026-09-17, spine-init): Run single test with `pnpm test <file> -t <name>` scoped to file, not `--` (pnpm 10 drops args after --)
+- **TST-003** (2026-09-17, 6c724132): Use optional ServiceInstallOptions parameter to pass backend re-render directives during service operations
