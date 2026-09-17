@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.213.3] - 2026-09-17
+
+### Fixed
+- make /spine init actually populate entries from codebase artifacts (#1698) (38152c80)
+
 ## [5.213.2] - 2026-09-17
 
 ### Fixed
