@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.219.0] - 2026-09-17
+
+### Added
+- add executor tagged union for scheduled tasks (#1719) (090e976b)
+
 ## [5.218.2] - 2026-09-17
 
 ### Fixed
