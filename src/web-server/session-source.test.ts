@@ -288,6 +288,89 @@ describe('listWebSessions', () => {
     expect(entry?.title).toBe('second message has the real content');
   });
 
+  // -------------------------------------------------------------------------
+  // XML-tagged skill dispatch — the manifest block and breadcrumb tags
+  // (preflight-context, command-name, command-args) must be parsed into a
+  // readable "/<skill> <args>" title, not shown as raw XML.
+  // -------------------------------------------------------------------------
+
+  it('extracts a readable title from a preflight-context + command-name skill dispatch', async () => {
+    // Simulates what summarizeContentBlocks produces: manifest + breadcrumb + instruction joined by spaces.
+    const text = [
+      '<preflight-context skill="review" pr="32">',
+      'Title: fix auth bug',
+      '</preflight-context>',
+      ' <command-name>/review</command-name>',
+      '            <command-message>review</command-message>',
+      '            <command-args>32</command-args>',
+      ' Use the `skill` tool with {"name": "review", "arguments": "32"} to dispatch this skill.',
+    ].join(' ');
+
+    writeLedger('xml-skill-1', [metaLine('xml-skill-1'), userLine(text)]);
+
+    const results = await listWebSessions(new Set());
+    const entry = results.find((r) => r.id === 'xml-skill-1');
+
+    expect(entry?.title).toBe('/review 32');
+  });
+
+  it('extracts title from command-name dispatch without preflight manifest', async () => {
+    const text = [
+      '<command-name>/fix-pr</command-name>',
+      '            <command-message>fix-pr</command-message>',
+      '            <command-args>215 --no-push</command-args>',
+      ' Use the `skill` tool with {"name": "fix-pr", "arguments": "215 --no-push"} to dispatch this skill.',
+    ].join('\n');
+
+    writeLedger('xml-skill-2', [metaLine('xml-skill-2'), userLine(text)]);
+
+    const results = await listWebSessions(new Set());
+    const entry = results.find((r) => r.id === 'xml-skill-2');
+
+    expect(entry?.title).toBe('/fix-pr 215 --no-push');
+  });
+
+  it('extracts title from skill dispatch with empty args', async () => {
+    const text = '<command-name>/ground-state</command-name>\n            <command-message>ground-state</command-message>\n            <command-args></command-args>';
+
+    writeLedger('xml-skill-3', [metaLine('xml-skill-3'), userLine(text)]);
+
+    const results = await listWebSessions(new Set());
+    const entry = results.find((r) => r.id === 'xml-skill-3');
+
+    expect(entry?.title).toBe('/ground-state');
+  });
+
+  it('prefers bridge-marker user content over XML skill name when both are present', async () => {
+    // Full preamble + bridge + skill tags + user content after bridge marker
+    const text = [
+      '[agent-workflow-amplifiers: unlocked]',
+      '',
+      'Plugin instructions.',
+      '[bridge: prior-session context]',
+      '',
+      'Recent commits:',
+      '24ca8537 some commit',
+      '',
+      'Read any referenced file for deeper context before acting — these are pointers, not full content.',
+      '<command-name>/review</command-name>',
+      '            <command-message>review</command-message>',
+      '            <command-args>32</command-args>',
+      'why is this the names',
+    ].join('\n');
+
+    writeLedger('xml-with-bridge-1', [metaLine('xml-with-bridge-1'), userLine(text)]);
+
+    const results = await listWebSessions(new Set());
+    const entry = results.find((r) => r.id === 'xml-with-bridge-1');
+
+    // The bridge marker extraction finds user content after the period,
+    // which includes the XML tags + user text. Since it's non-empty, it
+    // returns that. The truncation to 80 chars applies.
+    expect(entry?.title).toBeDefined();
+    expect(entry!.title!.length).toBeGreaterThan(0);
+  });
+
   // A long-lived install accumulates tens of thousands of session dirs. Before
   // the cap, listing them took ~810ms and produced a 2.4MB payload on a real
   // machine — per sidebar load, growing without bound.

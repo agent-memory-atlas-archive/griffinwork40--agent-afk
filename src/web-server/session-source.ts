@@ -53,10 +53,26 @@ const HEAD_RECORD_SCAN_LIMIT = 20;
 /**
  * Detect plugin/skill preamble text injected as a synthetic first user turn.
  * These start with a bracketed tag like `[agent-workflow-amplifiers: unlocked]`
- * or `[skill-routing: active]`.
+ * or `[skill-routing: active]`, OR with an XML tag like
+ * `<preflight-context ...>` or `<command-name>` from skill dispatch.
  */
 function isPreamble(text: string): boolean {
-  return /^\s*\[[\w-]+[:\s]/.test(text);
+  return /^\s*(\[[\w-]+[:\s]|<(preflight-context|command-name)\b)/.test(text);
+}
+
+/**
+ * Extract a readable "/<skill> <args>" title from XML-tagged skill dispatch
+ * records. When `summarizeContentBlocks` joins a manifest + breadcrumb +
+ * instruction, the ledger record contains `<command-name>` and
+ * `<command-args>` tags from the breadcrumb formatter.
+ */
+function extractSkillTitle(text: string): string | undefined {
+  const skillMatch = text.match(/<command-name>\/?([^<]+)<\/command-name>/);
+  if (!skillMatch) return undefined;
+  const skillName = skillMatch[1]!.replace(/^\//, '').trim();
+  const argsMatch = text.match(/<command-args>([^<]*)<\/command-args>/);
+  const args = argsMatch?.[1]?.trim();
+  return args ? `/${skillName} ${args}` : `/${skillName}`;
 }
 
 /**
@@ -92,11 +108,23 @@ function extractUserContent(text: string): string | undefined {
       '',
     );
     const result = cleaned.trim();
-    return result || undefined;
+    // When the bridge-tail extraction yields user content, return it.
+    // When it yields nothing, the bridge marker was present but no user text
+    // followed — fall through to the XML-tag strategy only, since the bridge
+    // marker is authoritative evidence that everything before it is boilerplate.
+    if (result) return result;
+    // Bridge marker found but no user content after it — try XML tags only.
+    const xmlFallback = extractSkillTitle(text);
+    return xmlFallback;
   }
 
-  // Strategy 2 (no bridge marker): collect lines after the last bracketed
-  // section header. Handles minimal preambles like "[skill-routing: active]\n…"
+  // Strategy 2: XML-tagged skill dispatch records.
+  const xmlTitle = extractSkillTitle(text);
+  if (xmlTitle) return xmlTitle;
+
+  // Strategy 3 (no bridge marker, no XML tags): collect lines after the last
+  // bracketed section header. Handles minimal preambles like
+  // "[skill-routing: active]\n…"
   const lines = text.split('\n');
   let lastBracketLine = -1;
   for (let i = 0; i < lines.length; i++) {
