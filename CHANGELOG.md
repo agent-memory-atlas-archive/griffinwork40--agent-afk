@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.218.1] - 2026-09-17
+
+### Fixed
+- extract session titles from preamble-bearing ledger records (#1732) (975ea7bf)
+
 ## [5.218.0] - 2026-09-17
 
 ### Added
