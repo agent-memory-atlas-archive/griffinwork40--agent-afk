@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.213.1] - 2026-09-17
+
+### Fixed
+- add plist upgrade path for existing installs (#1686) (d196ed8e)
+
 ## [5.213.0] - 2026-09-17
 
 ### Added
