@@ -156,6 +156,34 @@ export function registerServiceCommand(program: Command): void {
     });
 
   service
+    .command('upgrade <name>')
+    .description('Re-render the service config and atomically replace it if the on-disk file has drifted (e.g. after a version upgrade that adds new plist keys)')
+    .option('--no-watch', 'Disable auto-restart-on-rebuild')
+    .action((nameArg: string, opts: { watch?: boolean }) => {
+      try {
+        const mgr = resolveManager();
+        const name = parseServiceName(nameArg);
+        const result = mgr.upgrade(name, { noWatch: opts.watch === false });
+        if (result.kind === 'not-installed') {
+          console.log(palette.warning(`${mgr.label(name)} is not installed. Run 'afk service install ${name}' first.`));
+          return;
+        }
+        if (result.kind === 'already-current') {
+          console.log(palette.success(`${result.label} config is already up to date.`));
+          return;
+        }
+        if (result.kind === 'failed') {
+          console.error(palette.error(`Upgrade failed: ${result.reason}`));
+          process.exit(1);
+        }
+        console.log(palette.success(`Upgraded ${result.label} config at ${result.configPath}`));
+        console.log(palette.meta(`  Run 'afk service restart ${name}' to apply the new config.`));
+      } catch (err) {
+        handleCommandError(err);
+      }
+    });
+
+  service
     .command('restart <name>')
     .description('Restart the service (launchctl kickstart -k / systemctl --user restart)')
     .action((nameArg: string) => {

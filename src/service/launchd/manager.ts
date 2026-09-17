@@ -25,9 +25,10 @@ import type {
   ServiceRestartOutcome,
   ServiceStatus,
   ServiceUninstallOutcome,
+  ServiceUpgradeOutcome,
 } from '../types.js';
 import { guiDomain, LAUNCHCTL_TIMEOUT_MS, labelFor, plistPath, serviceLogPath } from './paths.js';
-import { installService, readPlistFile, uninstallService } from './install.js';
+import { installService, readPlistFile, uninstallService, upgradeService } from './install.js';
 import { serviceStatus } from './status.js';
 
 export const launchdManager: ServiceManager = {
@@ -82,16 +83,82 @@ export const launchdManager: ServiceManager = {
     };
   },
 
+  upgrade(name: ServiceName, opts: ServiceInstallOptions = {}): ServiceUpgradeOutcome {
+    const result = upgradeService(name, {
+      noWatch: opts.noWatch ?? false,
+      ...(opts.environment ? { environment: opts.environment } : {}),
+    });
+    if (result.kind === 'upgraded') {
+      return { kind: 'upgraded', configPath: result.plistPath, label: result.label };
+    }
+    if (result.kind === 'already-current') {
+      return { kind: 'already-current', configPath: result.plistPath, label: result.label };
+    }
+    if (result.kind === 'not-installed') {
+      return { kind: 'not-installed', configPath: result.plistPath };
+    }
+    return { kind: 'failed', reason: result.reason };
+  },
+
   restart(name: ServiceName): ServiceRestartOutcome {
     if (!this.isInstalled(name)) {
       return { kind: 'not-installed', configPath: plistPath(name) };
     }
+
+    // Invariant: before restarting the process, ensure the on-disk plist
+    // matches what the current code would render. Without this, a version
+    // upgrade that adds new plist keys (e.g. ThrottleInterval) only takes
+    // effect for fresh installs, and existing users remain on the old
+    // config indefinitely.
+    //
+    // When the plist was actually rewritten ('upgraded'), a simple
+    // `kickstart -k` is NOT sufficient: it restarts the process but launchd
+    // keeps the OLD in-memory job definition. New keys (ThrottleInterval,
+    // EnvironmentVariables, etc.) only take effect after a full
+    // bootout → bootstrap cycle that forces launchd to re-read the plist
+    // from disk. When the plist is already current, kickstart -k is cheaper
+    // (no definition reload) and is still correct.
+    //
+    // upgradeService() returns a result object and never throws — the
+    // try/catch wrapper was dead code. We capture the result for logging
+    // and to choose the right restart strategy.
+
     // M-5: process.getuid is undefined on non-POSIX; on darwin it always
     // exists, but assert explicitly so a misuse surfaces here rather than
     // as a confusing launchctl "no such domain" error.
     if (typeof process.getuid !== 'function') {
       return { kind: 'failed', reason: 'process.getuid is unavailable — restart requires a POSIX system.' };
     }
+
+    const upgradeResult = upgradeService(name);
+    if (upgradeResult.kind === 'upgraded') {
+      // Plist was rewritten — force launchd to re-read from disk via a
+      // full bootout → bootstrap cycle (mirrors installService / uninstallService).
+      const label = labelFor(name);
+      const domain = guiDomain();
+      const path = plistPath(name);
+      try {
+        execFileSync('launchctl', ['bootout', `${domain}/${label}`], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: LAUNCHCTL_TIMEOUT_MS,
+        });
+      } catch {
+        // bootout may fail if the job was not loaded — non-fatal, proceed
+        // to bootstrap so the updated plist is picked up regardless.
+      }
+      try {
+        execFileSync('launchctl', ['bootstrap', domain, path], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: LAUNCHCTL_TIMEOUT_MS,
+        });
+        return { kind: 'restarted', label };
+      } catch (e) {
+        return { kind: 'failed', reason: (e as Error).message };
+      }
+    }
+
+    // Plist unchanged (already-current), not installed, or upgrade failed —
+    // fall back to kickstart -k for a lighter-weight process restart.
     try {
       execFileSync('launchctl', ['kickstart', '-k', `${guiDomain()}/${labelFor(name)}`], {
         stdio: ['ignore', 'pipe', 'pipe'],

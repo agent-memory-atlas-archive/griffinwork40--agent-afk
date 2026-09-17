@@ -88,8 +88,14 @@ export function isManualBotRunning(pidFilePath, probeFn = process.kill) {
  * code. A long-running Node process keeps the OLD module graph in memory after
  * `npm install -g` overwrites the files on disk; only a restart swaps it.
  * `launchctl kickstart -k` kills and relaunches the job against the (now
- * updated) on-disk entrypoint — ProgramArguments are unchanged, only file
- * contents, so no plist reload is needed.
+ * updated) on-disk entrypoint.
+ *
+ * When dist/cli.mjs is available, this function delegates to
+ * `node <dist>/cli.mjs service restart <name>` which internally upgrades
+ * the plist (if stale) and uses the correct launchctl reload strategy
+ * (bootout+bootstrap for an upgraded plist, kickstart for unchanged).
+ * Without the CLI, falls back to raw `launchctl kickstart -k`.
+ * The restart is best-effort — a failure is swallowed so the install never fails.
  *
  * Fail-open and best-effort: a service whose plist is absent is skipped (never
  * installed as a service); a launchctl error (job not loaded, launchctl wedged)
@@ -107,6 +113,8 @@ export function isManualBotRunning(pidFilePath, probeFn = process.kill) {
  * @param {string[]} [opts.labels]    - launchd labels to consider.
  * @param {function} [opts.existsFn]  - Injectable plist existence check.
  * @param {function} [opts.execFn]    - Injectable launchctl runner; receives the argv array.
+ * @param {function} [opts.restartFn] - Injectable CLI restart runner; receives (node, cliMjs, name).
+ *                                      Defaults to execFileSync. Pass a no-op stub in tests.
  * @returns {string[]} labels that were successfully restarted.
  */
 export function restartLaunchdServices(opts = {}) {
@@ -123,15 +131,61 @@ export function restartLaunchdServices(opts = {}) {
         timeout: 8000,
       }));
 
+  // Resolve the path to dist/cli.mjs relative to this script so we can invoke
+  // `afk service upgrade <name>` via the just-installed compiled CLI. This is
+  // the only way a plain .mjs postinstall script can reach the compiled TS
+  // helpers — it cannot import them directly.
+  //
+  // __dirname equivalent for ESM: derive from import.meta.url.
+  // scripts/postinstall.mjs → dist/cli.mjs (package root / dist/).
+  const scriptDir = new URL('.', import.meta.url).pathname;
+  const pkgRoot = join(scriptDir, '..');
+  const cliMjs = join(pkgRoot, 'dist', 'cli.mjs');
+
+  // Invariant: `afk service restart` is the correct single command — it
+  // internally runs upgradeService() and then chooses bootout+bootstrap
+  // (when the plist was rewritten) or kickstart -k (when unchanged).
+  // Calling upgrade then kickstart separately would leave the old launchd
+  // in-memory definition active even after the plist file was rewritten.
+  const restartFn =
+    opts.restartFn ??
+    ((node, cli, name) =>
+      execFileSync(node, [cli, 'service', 'restart', name], {
+        stdio: ['ignore', 'ignore', 'ignore'],
+        timeout: 15000,
+      }));
+
   const restarted = [];
   for (const label of labels) {
     const plist = join(home, 'Library', 'LaunchAgents', `${label}.plist`);
     if (!existsFn(plist)) continue; // not installed as a service
-    try {
-      execFn(['kickstart', '-k', `gui/${uid}/${label}`]);
-      restarted.push(label);
-    } catch {
-      // Job not loaded, or launchctl errored — skip; install must not fail.
+
+    // Derive the short service name from the reverse-DNS label (mirrors labelFor()).
+    const name = label.replace(/^com\.afk\./, '');
+
+    // Best-effort restart via the compiled CLI. `afk service restart`
+    // handles plist upgrade + the correct launchctl reload strategy
+    // (bootout+bootstrap when upgraded, kickstart when unchanged).
+    // Falls back to raw kickstart when dist/cli.mjs is unavailable
+    // (e.g. source checkout without a build).
+    let restarted_via_cli = false;
+    if (existsSync(cliMjs)) {
+      try {
+        restartFn(process.execPath, cliMjs, name);
+        restarted_via_cli = true;
+        restarted.push(label);
+      } catch {
+        // CLI restart failed — fall through to raw kickstart.
+      }
+    }
+
+    if (!restarted_via_cli) {
+      try {
+        execFn(['kickstart', '-k', `gui/${uid}/${label}`]);
+        restarted.push(label);
+      } catch {
+        // Job not loaded, or launchctl errored — skip; install must not fail.
+      }
     }
   }
   return restarted;

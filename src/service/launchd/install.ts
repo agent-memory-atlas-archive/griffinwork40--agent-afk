@@ -15,6 +15,13 @@ export type InstallResult =
   | { kind: 'already-installed'; plistPath: string; label: string }
   | { kind: 'failed'; reason: string };
 
+/** Result discriminated union for `upgradeService()`. */
+export type UpgradeResult =
+  | { kind: 'upgraded'; plistPath: string; label: string }
+  | { kind: 'already-current'; plistPath: string; label: string }
+  | { kind: 'not-installed'; plistPath: string }
+  | { kind: 'failed'; reason: string };
+
 /** Result discriminated union for `uninstallService()`. */
 export type UninstallResult =
   | { kind: 'uninstalled'; plistPath: string }
@@ -224,6 +231,97 @@ export function uninstallService(name: ServiceName, opts: { skipBootout?: boolea
     return { kind: 'failed', reason: `Failed to remove plist: ${(err as Error).message}` };
   }
   return { kind: 'uninstalled', plistPath: path };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Upgrade (re-render + atomic replace)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Re-render the plist for an already-installed service and atomically
+ * replace the on-disk file when its content has changed.
+ *
+ * Invariant: existing plists installed by older versions of AFK may be
+ * missing keys added in later releases (e.g. ThrottleInterval). Running
+ * `afk service install` returns `already-installed` and never rewrites
+ * the file. This function closes that gap so upgrades propagate to the
+ * on-disk plist without requiring a manual uninstall/reinstall cycle.
+ *
+ * Write atomicity: same tmp+rename pattern as `installService()`.
+ * Uses `wx` (O_EXCL) like `installService()` to close the TOCTOU
+ * symlink window; catches EEXIST from a stale crash-leftover tmp
+ * and retries once after cleanup.
+ */
+export function upgradeService(name: ServiceName, opts: InstallOptions = {}): UpgradeResult {
+  const path = plistPath(name);
+  if (!existsSync(path)) {
+    return { kind: 'not-installed', plistPath: path };
+  }
+
+  let args: string[];
+  try {
+    args = resolveProgramArguments(name, opts._entrypointExistsCheck);
+  } catch (err) {
+    return { kind: 'failed', reason: (err as Error).message };
+  }
+  const watchPaths = opts.noWatch ? undefined : resolveWatchPaths(name, opts._entrypointExistsCheck);
+  const logFile = serviceLogPath(name);
+
+  const environmentVariables: Record<string, string> = {
+    PATH: resolveServicePath(),
+    ...(opts.environment ?? {}),
+  };
+
+  const plistOpts: PlistOptions = {
+    label: labelFor(name),
+    programArguments: args,
+    workingDirectory: homedir(),
+    standardOutPath: logFile,
+    standardErrorPath: logFile,
+    ...(watchPaths ? { watchPaths } : {}),
+    environmentVariables,
+  };
+  const desired = renderPlist(plistOpts);
+
+  // Compare to on-disk content. If identical, no-op.
+  // Invariant: readFileSync is wrapped so upgradeService() never throws —
+  // callers (manager.restart, postinstall) rely on result-only returns.
+  let current: string;
+  try {
+    current = readFileSync(path, 'utf-8');
+  } catch (err) {
+    return { kind: 'failed', reason: `Failed to read current plist: ${(err as Error).message}` };
+  }
+  if (current === desired) {
+    return { kind: 'already-current', plistPath: path, label: labelFor(name) };
+  }
+
+  // Atomic write: O_EXCL (wx) to close the TOCTOU symlink window at the
+  // predictable tmp path. On EEXIST (stale crash leftover), clean up and
+  // retry once — same defense-in-depth as installService().
+  const tmpPath = `${path}.tmp`;
+  try {
+    writeFileSync(tmpPath, desired, { encoding: 'utf-8', flag: 'wx', mode: 0o600 });
+  } catch (firstErr) {
+    if ((firstErr as NodeJS.ErrnoException).code === 'EEXIST') {
+      try { unlinkSync(tmpPath); } catch { /* ignore cleanup failure */ }
+      try {
+        writeFileSync(tmpPath, desired, { encoding: 'utf-8', flag: 'wx', mode: 0o600 });
+      } catch (retryErr) {
+        return { kind: 'failed', reason: `Failed to write upgraded plist (tmp ${tmpPath}): ${(retryErr as Error).message}` };
+      }
+    } else {
+      return { kind: 'failed', reason: `Failed to write upgraded plist (tmp ${tmpPath}): ${(firstErr as Error).message}` };
+    }
+  }
+  try {
+    renameSync(tmpPath, path);
+  } catch (err) {
+    try { unlinkSync(tmpPath); } catch { /* ignore */ }
+    return { kind: 'failed', reason: `Failed to install upgraded plist (rename ${tmpPath} -> ${path}): ${(err as Error).message}` };
+  }
+
+  return { kind: 'upgraded', plistPath: path, label: labelFor(name) };
 }
 
 /** Read the on-disk plist contents, if installed. Useful for `service status --verbose`. */

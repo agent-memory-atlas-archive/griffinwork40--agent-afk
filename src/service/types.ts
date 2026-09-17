@@ -70,6 +70,13 @@ export type ServiceRestartOutcome =
   | { kind: 'not-installed'; configPath: string }
   | { kind: 'failed'; reason: string };
 
+/** Outcome of {@link ServiceManager.upgrade}. */
+export type ServiceUpgradeOutcome =
+  | { kind: 'upgraded'; configPath: string; label: string }
+  | { kind: 'already-current'; configPath: string; label: string }
+  | { kind: 'not-installed'; configPath: string }
+  | { kind: 'failed'; reason: string };
+
 /** Neutral status snapshot rendered by `afk service status`. */
 export interface ServiceStatus {
   name: ServiceName;
@@ -102,6 +109,14 @@ export interface ServiceManager {
   uninstall(name: ServiceName): ServiceUninstallOutcome;
   status(name: ServiceName): ServiceStatus;
   restart(name: ServiceName): ServiceRestartOutcome;
+
+  /**
+   * Re-render the service config from the current code and atomically
+   * replace it if the on-disk file has drifted. Returns `already-current`
+   * when the rendered config matches what is installed, so the caller can
+   * skip an unnecessary restart.
+   */
+  upgrade(name: ServiceName, opts?: ServiceInstallOptions): ServiceUpgradeOutcome;
 
   /** Cheap installed-or-not check (config file present) without querying the supervisor. */
   isInstalled(name: ServiceName): boolean;

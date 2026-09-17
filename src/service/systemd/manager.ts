@@ -16,6 +16,7 @@ import type {
   ServiceRestartOutcome,
   ServiceStatus,
   ServiceUninstallOutcome,
+  ServiceUpgradeOutcome,
 } from '../types.js';
 import { SYSTEMCTL_TIMEOUT_MS, serviceLogPath, systemdLabel, unitFileName, unitPath } from './paths.js';
 import { installSystemdService, readUnitFile, uninstallSystemdService } from './install.js';
@@ -35,6 +36,15 @@ export const systemdManager: ServiceManager = {
 
   status(name: ServiceName): ServiceStatus {
     return systemdStatus(name);
+  },
+
+  upgrade(_name: ServiceName, _opts?: ServiceInstallOptions): ServiceUpgradeOutcome {
+    // Invariant: systemd unit upgrade is not yet implemented. The unit
+    // content is re-rendered by `afk service install --force` (uninstall +
+    // reinstall). A proper in-place upgrade like the launchd backend would
+    // need to diff the .service unit, its companion .path unit, and the
+    // oneshot restart helper. For now, advise reinstall.
+    return { kind: 'failed', reason: 'In-place upgrade not yet supported for systemd. Run `afk service uninstall <name>` then `afk service install <name>`.' };
   },
 
   restart(name: ServiceName): ServiceRestartOutcome {
