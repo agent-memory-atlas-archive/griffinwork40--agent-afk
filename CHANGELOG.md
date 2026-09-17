@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.213.0] - 2026-09-17
+
+### Added
+- 150ms glyph flash on tool completion (#1691) (3a88c42f)
+- live tok/s momentum ticker in status line (#1690) (1e5126e4)
+
 ## [5.212.12] - 2026-09-17
 
 ### Fixed
