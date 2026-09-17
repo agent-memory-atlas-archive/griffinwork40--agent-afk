@@ -44,6 +44,20 @@ The only shell permitted is **read-only inspection**: `git diff` / `git show` / 
 
 Never fabricate intent. When none is available the value is the literal `(none supplied)`; agents disclose its absence rather than guess.
 
+**Capture prior reviewer feedback (inline, PR targets only).** When the review target is a PR URL or number, fetch existing reviewer feedback from all three GitHub comment stores before dispatching Wave 1:
+
+1. Inline review comments (anchored to diff lines): `gh api repos/{owner}/{repo}/pulls/<n>/comments --paginate`.
+2. Review summary bodies (top-level body per review submission): `gh pr view <n> -R {owner}/{repo} --json reviews -q '.reviews[] | {author: .author.login, state: .state, body: .body, submittedAt: .submittedAt}'`.
+3. Conversation comments (issue-level PR comments): `gh pr view <n> -R {owner}/{repo} --json comments -q '.comments[] | {author: .author.login, body: .body, createdAt: .createdAt}'`.
+
+Extract `{owner}/{repo}` from the PR URL argument directly, or for bare-number inputs from `gh pr view <n> --json url -q .url`. Pass `-R {owner}/{repo}` on every `gh pr view` call above so cross-repo PR URLs resolve in the correct repository.
+
+Filter: drop bot/automation comments (author login contains `[bot]` or body is empty/whitespace). Merge all three stores into a single array, sort by timestamp descending (`created_at` / `submittedAt` / `createdAt`), then cap to the **20 most recent** comments, truncated to a combined **4,096 tokens** to prevent context-window bloat on busy PRs. Identify afk's own prior review comments by the `<!-- agent-afk-review -->` marker.
+
+Bundle surviving comments as a **`prior-reviewer-feedback`** block: `[{ source: "inline"|"review"|"conversation", author, body, timestamp, path?, line? }]`. When the PR has no prior comments, set `prior-reviewer-feedback: none`.
+
+For non-PR targets (`--staged`, `--head`, working-tree, patch-file, bare commit SHA, branch with no open PR), skip this step and set `prior-reviewer-feedback: not available — non-PR target`.
+
 **Pre-fetch file contents at reviewed ref (inline).** After capturing `reviewed_ref` and the diff, and before dispatching any Wave 1 agent, the orchestrator (which has Bash) pre-reads every changed file at the reviewed ref and bundles the results for injection into sub-agent prompts. This is required because Wave 1 and Wave 1.5 agents are `research-agent` instances with no shell — they cannot run `git show` themselves.
 
 1. Extract the list of changed files from the diff: `git diff --name-only <base>..<reviewed-ref>` (or parse `--- a/<file>` / `+++ b/<file>` headers from a patch-file diff).
@@ -63,7 +77,7 @@ When `reviewed_ref` is `unknown` (patch-file input), skip pre-fetch entirely and
 - **security · api-compat** — contracts, auth, injection, breaking changes, secret exposure.
 - **correctness · spec-compliance · test-coverage · perf-observability** — logic bugs, regressions, whether the change satisfies its **stated intent** (unmet requirement or unrequested scope creep), missing tests, hot-path perf, logging gaps.
 
-Each agent receives: full diff + file tree + triage header + **reviewed ref (SHA)** + the **stated intent** (what the change is meant to accomplish, or `(none supplied)`), the severity rubric, **the `blocking` default table plus its overrides and assignment-order invariant**, and the finding schema. The blocking rules are not optional context: the finding schema mandates a `blocking` value per finding, so an agent that receives the schema without the table is being told to emit a field whose assignment rules it was never given.
+Each agent receives: full diff + file tree + triage header + **reviewed ref (SHA)** + the **stated intent** (what the change is meant to accomplish, or `(none supplied)`), the **`prior-reviewer-feedback`** block (when available), the severity rubric, **the `blocking` default table plus its overrides and assignment-order invariant**, and the finding schema. The blocking rules are not optional context: the finding schema mandates a `blocking` value per finding, so an agent that receives the schema without the table is being told to emit a field whose assignment rules it was never given.
 
 **Citation requirement (enforced per agent).** Wave 1 agents cite from the diff and from the **`prefetched-files` block injected by the orchestrator**. They do **not** call `read_file` for ref-anchored verification (the working tree may be on a different branch) and do **not** run git. Centralized verification runs in Wave 1.5, which checks every `blocking`/`critical`/`high` citation **and every `file-state` citation at any severity** against the same pre-fetched content, then drops fabricated ones. Each agent must:
 1. State the reviewed ref it was given in each finding: `ref: <sha>`.
@@ -92,7 +106,7 @@ If the `Grep` tool is unavailable, tag the finding `[UNVERIFIED: reachability no
 
 This is the agent's first-line self-check; **Wave 1.5 Check B** independently re-verifies any surviving absence claims against the reviewed ref as a backstop.
 
-**Wave 1 — Light review (regime=light, 1 agent, `subagent_type: "research-agent"`).** Single agent covers all dimensions (including spec-compliance). Same `stated-intent` input, rubric, schema, and citation requirement. Through synthesis, the light regime peaks at **1 concurrent sub-agent session** and dispatches **2 in total** (Wave 1 ×1, then Wave 2 ×1, sequential). Its conditional post-synthesis `/shadow-verify` tail dispatches 1–3 verifiers in parallel when qualifying findings surface, making the whole-run budget **peak 1–3 concurrent, 3–5 total (1–3 verifiers)**; the same bound of at most 3 claims in one round with no repeat rounds applies.
+**Wave 1 — Light review (regime=light, 1 agent, `subagent_type: "research-agent"`).** Single agent covers all dimensions (including spec-compliance). Same `stated-intent` input, `prior-reviewer-feedback` block, rubric, schema, and citation requirement. Through synthesis, the light regime peaks at **1 concurrent sub-agent session** and dispatches **2 in total** (Wave 1 ×1, then Wave 2 ×1, sequential). Its conditional post-synthesis `/shadow-verify` tail dispatches 1–3 verifiers in parallel when qualifying findings surface, making the whole-run budget **peak 1–3 concurrent, 3–5 total (1–3 verifiers)**; the same bound of at most 3 claims in one round with no repeat rounds applies.
 
 **Wave 1.5 — Citation + absence-claim verification (INLINE — run by the orchestrator, dispatches nothing).** Run after Wave 1 returns, before Wave 2 synthesis. The orchestrator already holds exactly the read-only shell this verification needs (`git show` / `git diff` / `gh pr diff` / `grep` / `rg` — see the shell grant above), so running it inline costs **zero** additional sessions and zero nesting. A shell-less sub-agent here would have to nest a `git-investigator` to run the very commands the orchestrator can already run. Two independent checks:
 
@@ -108,7 +122,15 @@ This is the agent's first-line self-check; **Wave 1.5 Check B** independently re
 
 Returns a combined verification manifest: `[{type: citation|absence, claim, status, finding_id, evidence?}]`. Findings classified `fabricated` (citation) or `false-absent` (absence) are excluded from Wave 2 input. `diff-only` citations are passed to Wave 2 with a `⚠ diff-only citation — line absent at the reviewed ref` annotation and auto-downgraded one severity tier. `grep-unavailable` absence claims are passed through with their `[UNVERIFIED]` tag intact.
 
-**Wave 2 — Synthesis (1 agent, `subagent_type: "research-agent"`).** Receives: Wave 1 findings **after** citation-verification filtering + manifest of dropped/downgraded citations + **the merge-decision rule and its counts format below**. Wave 2 emits the verdict, so it needs that rule for exactly the reason Wave 1 needs the blocking table: an agent told to produce an output whose format and threshold it was never given will improvise both. Dedup by `(file, line_range, dimension)` — keep highest severity on exact match. Flag cross-agent conflicts as `CONFLICT` blocks (surface both rationales; do not auto-resolve).
+**Wave 2 — Synthesis (1 agent, `subagent_type: "research-agent"`).** Receives: Wave 1 findings **after** citation-verification filtering + manifest of dropped/downgraded citations + **the `prior-reviewer-feedback` block** (when available) + **the merge-decision rule and its counts format below**. Wave 2 emits the verdict, so it needs that rule for exactly the reason Wave 1 needs the blocking table: an agent told to produce an output whose format and threshold it was never given will improvise both. Dedup by `(file, line_range, dimension)` — keep highest severity on exact match. Flag cross-agent conflicts as `CONFLICT` blocks (surface both rationales; do not auto-resolve).
+
+**Prior-feedback dedup (cross-run).** After intra-run dedup, compare each surviving finding against the `prior-reviewer-feedback` block. Decision rubric:
+- The **diff contains evidence** that the concern was addressed (removed line, added guard, new test) → downgrade finding to `low` severity with `blocking: false` and annotation `[addressed since prior review]`. This is an explicit override of the assignment-order invariant: the pre-downgrade `blocking` value does **not** carry through, because the concern is resolved and surfacing it as blocking defeats the purpose of recognizing the fix. Do not suppress entirely — the reviewer sees the resolution.
+- A prior comment (from afk or a human reviewer) **raised the same concern** and the author **acknowledged and deferred** it (e.g. "I'll fix this in a follow-up") → tag finding `[previously raised — author deferred]` and preserve its original severity. Do not re-raise the argument; note the deferral.
+- A prior comment **raised the same concern** but the issue **persists unchanged in the current diff** → preserve the finding at its earned severity with annotation `[persists from prior review]`. Never suppress a real issue because a prior comment exists.
+- No match in prior feedback → emit the finding unchanged.
+
+This rubric is concrete, not discretionary. "Same concern" means the finding and prior comment reference the same file, overlapping line range, and the same class of defect. Semantic similarity alone ("error handling" vs. "missing error handler") is not a match unless file and line range also overlap.
 
 **Severity sort order within the blocking list:** findings tagged with semantics matching `invariant violation`, `defeats stated purpose`, `defeats refactor goal`, or `breaks stated contract` sort above all other `high` findings, even those with higher mechanical severity (e.g. test/build hygiene). Within that group, sort by tier (critical → high). Mechanical findings (missing test, build hygiene) sort last within their tier.
 
