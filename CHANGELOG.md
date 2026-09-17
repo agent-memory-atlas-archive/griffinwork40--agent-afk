@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.215.2] - 2026-09-17
+
+### Fixed
+- use repo default merge strategy instead of hardcoding --squash (#1704) (61cc0c7f)
+
 ## [5.215.1] - 2026-09-17
 
 ### Fixed
