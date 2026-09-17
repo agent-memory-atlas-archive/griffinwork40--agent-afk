@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.216.2] - 2026-09-17
+
+### Fixed
+- strip existing annotations in idempotency guard, fix TOCTOU comment (#1677) (#1709) (48895d8b)
+
+### Changed
+- add MomentumTicker unit tests and fix stale comments (#1692) (#1713) (78a218d9)
+
 ## [5.216.1] - 2026-09-17
 
 ### Fixed
