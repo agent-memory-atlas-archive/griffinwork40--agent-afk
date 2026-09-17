@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.216.1] - 2026-09-17
+
+### Fixed
+- surface upgradeService failure in restart() (#1695) (#1714) (b3495044)
+- forward opts to upgradeService in restart() (#1694) (#1711) (9e144158)
+- harden eviction module (#1705) (#1708) (3ad1e10d)
+- lane flash reduced-motion gate, tests, dead ternary (#1693) (#1712) (9d081ebb)
+
+### Changed
+- deduplicate TranscriptItem type definition (#1710) (c2183d52)
+- merge SPINE.md service invariants into main baseline (798b0713)
+
 ## [5.216.0] - 2026-09-17
 
 ### Added
