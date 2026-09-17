@@ -38,7 +38,7 @@ export interface RenderHost {
   readonly activeGhost: string | null;
   readonly autocompleteState?: AutocompleteState;
   readonly formatInputBuffer?: (segment: string) => string;
-  readonly promptTextFn: () => string;
+  readonly promptTextFn: (buffer: string) => string;
   readonly stdout: NodeJS.WriteStream;
 }
 
@@ -77,8 +77,13 @@ export function renderInputLine(self: RenderHost): string {
   // caret character is rendered RAW so it stays a single visual
   // cell — passing it through a colorizer would compose ANSI codes on top
   // of the caret SGR and complicate grapheme-width math.
-  const before = self.formatInputBuffer?.(rawBefore) ?? rawBefore;
-  const after = self.formatInputBuffer?.(rawAfter) ?? rawAfter;
+  const shellMode = self.input.buffer.startsWith('!');
+  const before = shellMode
+    ? palette.shell(rawBefore)
+    : (self.formatInputBuffer?.(rawBefore) ?? rawBefore);
+  const after = shellMode
+    ? palette.shell(rawAfter)
+    : (self.formatInputBuffer?.(rawAfter) ?? rawAfter);
   // Caret is always painted (in its visible phase). `repaint()` already gates
   // on `armed`, so this code only runs while we hold raw mode; there is no path
   // where rendering the caret "leaks" a phantom cursor after disarm — every
@@ -110,6 +115,7 @@ export function renderInputLine(self: RenderHost): string {
   // never wraps (wrapping would corrupt DECSTBM scroll-region math).
   const ac = self.autocompleteState;
   let ghostSuffix = '';
+  const shellGhost = shellModeGhost(self.input.buffer);
   const ghost = self.activeGhost;
   // Invariant: an EMPTY buffer is a legitimate ghost state — that is the
   // empty-prompt suggestion (see cli/input/suggest-prompt), the one source
@@ -118,12 +124,14 @@ export function renderInputLine(self: RenderHost): string {
   // end-of-buffer and every string `startsWith('')`, so the prefix-extension
   // guarantee that makes Tab/Right-arrow acceptance safe is unchanged.
   if (
-    ghost !== null &&
     !suffix &&
     self.input.cursor === self.input.buffer.length &&
-    ghost.startsWith(self.input.buffer) &&
-    ghost.length > self.input.buffer.length &&
-    !ac?.dropdownOpen
+    !ac?.dropdownOpen &&
+    (shellGhost !== null || (
+      ghost !== null &&
+      ghost.startsWith(self.input.buffer) &&
+      ghost.length > self.input.buffer.length
+    ))
   ) {
     // Defense-in-depth: strip terminal control sequences / control chars from
     // the ghost suffix before rendering. Tier-2 (LLM) text is already
@@ -131,13 +139,13 @@ export function renderInputLine(self: RenderHost): string {
     // multi-line history entry) could still carry an embedded newline that
     // would break the single-line input render and corrupt the DECSTBM
     // scroll-region accounting (see the truncation note below).
-    const remainder = stripGhostControlChars(ghost.slice(self.input.buffer.length));
+    const remainder = shellGhost ?? stripGhostControlChars(ghost!.slice(self.input.buffer.length));
     // Compute available columns: total cols minus what the prompt + buffer
     // already consume. Measure with grapheme/column-aware displayWidth — NOT
     // String.length (UTF-16 code units) — so CJK (2 cells / 1 unit) and emoji
     // (2 cells / surrogate pair) are budgeted by the cells they occupy.
     const cols = self.stdout.columns ?? 80;
-    const promptWidth = displayWidth(stripAnsi(self.promptTextFn()));
+    const promptWidth = displayWidth(stripAnsi(self.promptTextFn(self.input.buffer)));
     const bufferWidth = displayWidth(stripAnsi(rawBefore)) + 1; // +1 for caret cell
     const budget = Math.max(0, cols - promptWidth - bufferWidth - 1);
     // truncateDisplayWidth truncates on grapheme boundaries (never splits a
@@ -146,10 +154,20 @@ export function renderInputLine(self: RenderHost): string {
     // ellipsis: a ghost is a silent hint, not a labelled truncation.
     const truncated = truncateDisplayWidth(remainder, budget, '');
     if (truncated.length > 0) {
-      ghostSuffix = palette.dim(truncated);
+      ghostSuffix = shellGhost !== null ? palette.meta(truncated) : palette.dim(truncated);
     }
   }
-  return self.promptTextFn() + before + caret + after + ghostSuffix + suffix;
+  return self.promptTextFn(self.input.buffer) + before + caret + after + ghostSuffix + suffix;
+}
+
+/** Fixed, non-accepting shell-mode hint rendered in the ghost-text lane. */
+function shellModeGhost(buffer: string): string | null {
+  if (buffer === '!') return 'command';
+  if (!buffer.startsWith('!')) return null;
+  if (buffer.startsWith('!&')) {
+    return '  (shell: background)';
+  }
+  return '  (shell)';
 }
 
 /**

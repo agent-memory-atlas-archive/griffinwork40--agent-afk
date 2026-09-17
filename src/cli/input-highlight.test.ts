@@ -14,6 +14,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import chalk from 'chalk';
 import { colorizeInputBuffer, type SlashRegistryView } from './input-highlight.js';
+import { palette } from './palette.js';
 
 // Inline ANSI strip — avoids adding a new dependency.
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
@@ -81,6 +82,21 @@ describe('colorizeInputBuffer', () => {
     const out = colorizeInputBuffer('hello world', allKnown);
     expect(out).toBe('hello world');
     expect(out).not.toMatch(ANSI_RE);
+  });
+
+  describe('shell mode', () => {
+    it.each(['!', '!git status', '!&pnpm test', '!echo @src /mint'])(
+      'colors the entire `%s` line with one shell-tone span',
+      (input) => {
+        const out = colorizeInputBuffer(input, allKnown);
+        expect(out).toBe(palette.shell(input));
+        expect(stripAnsi(out)).toBe(input);
+      },
+    );
+
+    it('does not activate when `!` is not the first character', () => {
+      expect(colorizeInputBuffer('run !echo hi', allKnown)).toBe('run !echo hi');
+    });
   });
 
   it('returns plain text for a bare slash with no name', () => {

@@ -87,7 +87,7 @@ export interface InputSurfaceOptions {
 }
 
 export interface InputSurfaceReadOpts {
-  promptFn: () => string;
+  promptFn: (buffer: string) => string;
   onSigint?: () => void;
   /** Called for a single Escape on the compositor (TTY) path. */
   onEscape?: () => void;
@@ -154,7 +154,7 @@ export interface InputSurfaceArmOpts {
    * model swaps reflect immediately. Forwarded to the compositor
    * as its `promptText` getter.
    */
-  promptFn: () => string;
+  promptFn: (buffer: string) => string;
   /**
    * Stable cancel handler — called when the user presses Ctrl+C in
    * any mode. The REPL passes its `handleSigint` here; that function
@@ -580,7 +580,7 @@ export class InputSurface {
           const echoText = payload.displayText ?? payload.text;
           const echo = formatSubmittedEcho({
             buffer: colorizeInputBuffer(echoText, this.slashRegistryView),
-            promptText: opts.promptFn(),
+            promptText: opts.promptFn(echoText),
             isTTY: Boolean(echoStdout.isTTY),
             attachmentSummary: describeAttachmentSummary([...payload.attachments]),
           });
@@ -625,7 +625,10 @@ export class InputSurface {
     // Non-TTY fallback: delegate to the existing reader.
     return readWithAutocomplete({
       rl: this.rl,
-      promptFn: opts.promptFn,
+      // Non-TTY reader calls promptFn() with no arg (static prompt — no live
+      // buffer repainting). Wrap to satisfy the optional-param type while
+      // forwarding the buffer when available (defaults to '' in buildPrompt).
+      promptFn: (buffer?: string) => opts.promptFn(buffer ?? ''),
       ...(opts.initialBuffer !== undefined ? { initialBuffer: opts.initialBuffer } : {}),
       ...(opts.onSigint ? { onSigint: opts.onSigint } : {}),
       ...(opts.onShiftTab ? { onShiftTab: opts.onShiftTab } : {}),

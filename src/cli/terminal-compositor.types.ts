@@ -311,15 +311,14 @@ export interface TerminalCompositorOptions {
    *   - a `string` — fixed for the compositor's lifetime (per-turn callers
    *     use this; the prompt only changes between turns and they
    *     reconstruct the compositor anyway).
-   *   - a `() => string` — re-queried on every {@link renderInputLine}
-   *     call so plan-mode toggles, model swaps, and other between-turn
-   *     state changes reflect immediately. The persistent InputSurface
-   *     (Stage 3b+) passes a closure so its single long-lived
-   *     compositor tracks the canonical prompt across all turns.
+   *   - a `(buffer: string) => string` — re-queried on every
+   *     {@link renderInputLine} call with the live input buffer so prompt modes,
+   *     plan-mode toggles, and model swaps reflect immediately. Zero-argument
+   *     closures remain compatible because they may ignore the argument.
    *
    * Falsy / unset → dim chevron fallback (`'  ⎯ '`).
    */
-  promptText?: string | (() => string);
+  promptText?: string | ((buffer: string) => string);
   /**
    * When provided, ↑/Ctrl+P and ↓/Ctrl+N navigate history during the
    * agent turn, consistent with the between-turn prompt surface.

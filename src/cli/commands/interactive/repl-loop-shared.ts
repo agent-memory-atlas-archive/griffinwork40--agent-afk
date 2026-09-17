@@ -64,7 +64,7 @@ export interface TurnState {
   interruptPickerAbort?: AbortController | null;
 }
 
-export function buildPrompt(mode: PermissionMode): string {
+export function buildPrompt(mode: PermissionMode, buffer = ''): string {
   // The model name AND the worded mode chip (`○ default`, `● plan`, `◐ AFK`,
   // `⚡ bypass`) live only in the persistent status line (status-line.ts) —
   // the caret carries just the brand + a compact echo of the non-default
@@ -86,9 +86,9 @@ export function buildPrompt(mode: PermissionMode): string {
     mode === 'autonomous' ? palette.info(' ◐') :
     mode === 'bypassPermissions' ? palette.bypass(' ⚡ bp') :
     '';
-  // Caret is brand-toned (not dim) so the input point reads as a deliberate
-  // affordance rather than receding chrome — matches the "the caret carries the
-  // brand" intent above. Glyph unchanged (`›`) so piped/stripped transcripts and
-  // the strip-based buildPrompt tests are unaffected.
-  return base + marker + palette.brand('  › ');
+  // Shell passthrough is a distinct input mode: once `!` is the first buffer
+  // character, swap the ordinary chevron for the universal shell prompt glyph.
+  // The compositor supplies the live buffer on every repaint.
+  const promptGlyph = buffer.startsWith('!') ? '$' : '›';
+  return base + marker + palette.brand(`  ${promptGlyph} `);
 }

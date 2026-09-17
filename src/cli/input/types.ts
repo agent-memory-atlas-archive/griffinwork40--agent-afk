@@ -76,7 +76,7 @@ export interface Candidate {
 
 export interface ReadWithAutocompleteOpts {
   rl: ReadlineInterface;
-  promptFn: () => string;
+  promptFn: (buffer?: string) => string;
   /**
    * Invoked when the user presses Ctrl+C.
    *

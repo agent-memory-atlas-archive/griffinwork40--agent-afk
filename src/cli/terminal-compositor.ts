@@ -153,7 +153,7 @@ export class TerminalCompositor {
    * downstream code path is uniform.
    */
   /** @internal Relaxed from `private` — read by sibling free-function modules via Host interfaces. */
-  readonly promptTextFn: () => string;
+  readonly promptTextFn: (buffer: string) => string;
   /** @internal Relaxed from `private` for the input-dispatch module (KeyDispatchHost). */
   readonly history?: IHistoryRing;
   /** @internal Relaxed from `private` — read/mutated-in-place by sibling free-function modules via Host interfaces. */
@@ -585,8 +585,8 @@ export class TerminalCompositor {
     this.onShiftTab = opts.onShiftTab;
     this.onTaskView = opts.onTaskView;
     this.onOpenEditor = opts.onOpenEditor;
-    // Normalize promptText to a function: string → constant closure;
-    // function → use as-is; falsy → dim-chevron fallback.
+    // Normalize promptText to a buffer-aware function: string → constant
+    // closure; function → use as-is; falsy → dim-chevron fallback.
     const promptOpt = opts.promptText;
     if (typeof promptOpt === 'function') {
       this.promptTextFn = promptOpt;

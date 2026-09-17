@@ -7,6 +7,7 @@
  *   - `/mint` (and `/<plugin>:mint`) → palette.mint (mint green — per-command override)
  *   - `/<command>` unknown     → palette.meta    (dim)
  *   - `@<path>` file reference → palette.fileRef (teal)
+ *   - `!<command>` shell mode   → palette.shell   (warm lime-green)
  *
  * The visual goal: when the user types `/mint` or `@src/index.ts`, the
  * trigger token reads as a distinct chip rather than blending into the
@@ -61,6 +62,12 @@ const SLASH_TOKEN_RE = /(?<=\s|^)(\/[A-Za-z][\w:-]*)(?=\s|$)/g;
 // at the end keeps mid-token highlighting from happening while the user is
 // still typing a word that just happens to contain `@`.
 const FILE_TOKEN_RE = /(?<=\s|^)(@[~\w./-]*)(?=\s|$)/g;
+
+// Shell mode owns the entire input line. Unlike slash commands and file refs,
+// `!` is a mode switch rather than an individual token, so everything from the
+// leading `!` (including the optional `&`) through end-of-buffer shares one
+// semantic tone.
+const SHELL_TOKEN_RE = /^!.*$/s;
 
 // Paste-truncation placeholder — emitted by terminal-compositor.ts when a
 // bracketed paste exceeds the size thresholds. Visually styled dim so the
@@ -121,7 +128,7 @@ function toneForKnownToken(name: string): ((s: string) => string) | null {
 }
 
 // Invariant: single-entry memo for `colorizeInputBuffer`. The colorizer runs
-// three whole-buffer regex `.replace` passes and is called on EVERY keystroke
+// several whole-buffer regex `.replace` passes and is called on EVERY keystroke
 // (per repaint), yet the buffer is usually identical between consecutive
 // repaints (cursor moves, no-op keys, dropdown navigation). Caching the last
 // (input, chalk.level, registry-version) → output collapses those repeats to
@@ -179,10 +186,25 @@ export function colorizeInputBuffer(
     return memoOutput;
   }
 
-  // Order matters for nesting safety, not semantics: the three regexes
-  // match disjoint shapes (slash starts with `/`, file with `@`, paste
-  // placeholder with `[`). Apply in any order — done in declaration
-  // order so the existing ANSI-shape tests stay stable.
+  // Shell mode owns the whole line, so short-circuit before token-level passes;
+  // otherwise an `@path` or `/command` inside a shell command would receive a
+  // nested, competing tone.
+  const shellOutput = buffer.replace(SHELL_TOKEN_RE, (line) => palette.shell(line));
+  if (shellOutput !== buffer) {
+    if (canMemo) {
+      memoRegistry = registry;
+      memoBuffer = buffer;
+      memoLevel = chalk.level;
+      memoVersion = version!;
+      memoOutput = shellOutput;
+    }
+    return shellOutput;
+  }
+
+  // Order matters for nesting safety, not semantics: these regexes match
+  // disjoint shapes (slash starts with `/`, file with `@`, paste placeholder
+  // with `[`). Apply in declaration order so existing ANSI-shape tests stay
+  // stable.
   const withSlash = buffer.replace(SLASH_TOKEN_RE, (token) => {
     const name = token.slice(1);
     if (!registry.has(name)) return palette.meta(token);

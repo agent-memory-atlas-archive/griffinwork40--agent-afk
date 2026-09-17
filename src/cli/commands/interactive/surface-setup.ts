@@ -104,7 +104,7 @@ export async function setupSurface(
   // The caller's try block wraps this call so a rejection from armCompositor
   // still reaches the finally and surface.dispose() cleans up raw-mode stdin.
   await surface.armCompositor({
-    promptFn: () => buildPrompt(ctx.stats.permissionMode),
+    promptFn: (buffer) => buildPrompt(ctx.stats.permissionMode, buffer),
     // Stable cancel handler for both idle (between turns) and streaming
     // (mid-turn). handleSigint internally dispatches on `turnInFlight`:
     //   - In flight: session.interrupt() + arm "press Ctrl+C again to exit".

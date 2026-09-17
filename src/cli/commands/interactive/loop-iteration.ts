@@ -304,7 +304,7 @@ export async function runInputLoop(
         // readLine echo path so scrollback parity holds).
         const queued = seedBuffer;
         seedBuffer = undefined;
-        const prompt = buildPrompt(ctx.stats.permissionMode);
+        const prompt = buildPrompt(ctx.stats.permissionMode, queued.text);
         const echo = formatSubmittedEcho({
           buffer: queued.text,
           promptText: prompt,
@@ -323,7 +323,7 @@ export async function runInputLoop(
         const initialBuffer = prefillBuffer;
         prefillBuffer = undefined;
         const result = await surface.readLine({
-          promptFn: () => buildPrompt(ctx.stats.permissionMode),
+          promptFn: (buffer) => buildPrompt(ctx.stats.permissionMode, buffer),
           ...(initialBuffer !== undefined ? { initialBuffer } : {}),
           // This is THE turn-boundary prompt — the one "what should I do next"
           // moment in the loop, and the only read that opts into an

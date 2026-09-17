@@ -73,6 +73,8 @@ const darkPaletteDef = {
   brand: chalk.hex('#E67E4C'),
   /** Mint accent — cool mint green, used by the input-buffer highlighter as a per-command override for `/mint` (and its namespaced forms, e.g. `/example-plugin:mint`). A playful color pun on the skill name; treats `/mint` as a chip distinct from the brand-orange chip every other registered command renders as. Distinct from `success` (saturated ANSI green), `fileRef` (teal), `goblin` (olive), and `syntaxString` (warm sage). */
   mint: chalk.hex('#5FE3A1'),
+  /** Shell tone — warm lime-green, used for `!` passthrough input and shell tool lanes. */
+  shell: chalk.hex('#A8E060'),
   /** Goblin tone — bilious olive, used for the mascot sprite in the welcome banner and (future) ambient status surfaces. Owned by the mascot identity — do not reuse for chrome or syntax. */
   goblin: chalk.hex('#9CB04A'),
   /** User cyan — for user prompt text and their "you said" markers. Reserved for user identity only. */
@@ -147,6 +149,8 @@ const lightPaletteDef: ThemePalette = {
   brand: chalk.hex('#C0562A'),
   /** Deeper mint-green (the pale dark-theme mint vanishes on white). */
   mint: chalk.hex('#1B9E63'),
+  /** Dark lime-green — shell input on white. */
+  shell: chalk.hex('#4F7F14'),
   /** Darker olive — mascot identity on light. */
   goblin: chalk.hex('#6B7D2A'),
   /** Dark cyan/teal — bright cyan is illegible on white; keeps user-identity hue. */
@@ -231,6 +235,8 @@ const umberPaletteDef: ThemePalette = {
   brand: chalk.hex('#FF9B5A'),
   /** ansi10 bright green — pale mint, distinct from `success` (ansi2). */
   mint: chalk.hex('#B4FCC3'),
+  /** Warm lime-green — shell input, aligned with Umber's bright green. */
+  shell: chalk.hex('#B4FCC3'),
   /** Warm olive — no Umber analogue; warm-shifted from the dark theme's `#9CB04A` to sit beside Umber's `#D7AA32` yellow. */
   goblin: chalk.hex('#A5AC55'),
   /** ansi6 cyan — the faithful translation of the dark theme's `chalk.cyan`. Reserved for user identity only. */

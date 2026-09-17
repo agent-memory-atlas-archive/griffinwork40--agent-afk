@@ -51,8 +51,13 @@ describe('buildPrompt', () => {
 
   it('always ends with the caret', () => {
     for (const mode of ['default', 'plan', 'autonomous', 'bypassPermissions'] as const) {
-      expect(strip(buildPrompt(mode))).toMatch(/› $/);
+      expect(strip(buildPrompt(mode))).toMatch(/[›$] $/);
     }
+  });
+
+  it('switches to a shell prompt when the live buffer starts with `!`', () => {
+    expect(strip(buildPrompt('default', '!git status'))).toBe('afk  $ ');
+    expect(strip(buildPrompt('default', ' !git status'))).toBe('afk  › ');
   });
 
   it('renders the caret in the brand tone, not dim', () => {
