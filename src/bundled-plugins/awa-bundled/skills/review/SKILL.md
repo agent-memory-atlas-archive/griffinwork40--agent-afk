@@ -7,12 +7,14 @@ context: load
 
 ## Read-only — hard constraint
 
-This skill **analyzes and reports**; it never mutates the repository, the PR/MR, or anything external. After you emit the merge recommendation, **STOP**.
+This skill **analyzes and reports**; it never mutates the repository, the PR/MR, or anything external. After you emit the merge recommendation, **STOP** -- unless the **Merge offer** conditions (below) are met.
 
 Never — not for a real bug, not for a blocking defect, not even when there is no human reviewer and "someone has to fix it":
 - edit, create, or delete files (no `write`/`edit`-style mutations);
 - `git add` / `commit` / `stash` / `reset`, `git checkout` to discard changes, or `git push`;
 - `gh pr comment` / `review` / `edit` / `merge` / `create`, or post or edit any PR/MR body, comment, or description;
+
+**Exception:** `gh pr merge` is permitted after a **MERGE** verdict on a PR review in-which the findings are docs/test-related only, but **only** after the user explicitly confirms via `ask_question` (see **Merge offer** below).
 - run any other write- or network-mutating shell command.
 
 The only shell permitted is **read-only inspection**: `git diff` / `git show` / `gh pr diff`, `grep` / `rg`, and file reads — plus dispatching the review sub-agents. Resolving findings, fixing bugs, resolving merge conflicts, and "making the branch mergeable" are explicitly **out of scope**: a fixable defect is a finding to report (`file:line` + a one-line fix in the `suggestion` field), never a license to act.
@@ -140,7 +142,9 @@ Emit **DO NOT MERGE** when one or more findings carry `blocking: true` after Wav
 
 State the counts that drove the decision on the same line, **with a dimension breakdown for any blocking medium**, e.g. `Decision: DO NOT MERGE — 1 high, 2 medium blocking (1 security, 1 correctness); 1 medium waived, 3 low.` or `Decision: MERGE — 0 blocking (2 medium waived, 3 low, 1 nit).` If zero findings survived, say `Decision: MERGE — 0 findings.` Never emit a bare verdict with no counts, and never waive a finding silently — a waived medium must appear in the count with its justification.
 
-This is the terminal step — after emitting the decision, STOP. Do not act on any finding: no edits, commits, pushes, or PR/MR mutations. A blocking bug is a finding to report, not a fix to apply.
+This is the terminal step. A blocking bug is a finding to report, not a fix to apply -- no edits, commits, pushes, or PR/MR mutations.
+
+**Merge offer (docs/test-only PR reviews).** When **all four** hold: (1) the decision is **MERGE**, (2) the review target was a **PR** (URL or number), (3) every surviving finding is in the `test-coverage` dimension or is a documentation-only concern (comments, doc strings, README) -- no `security`, `correctness`, `api-compat`, `perf-observability`, or `spec-compliance` findings survived, and (4) every changed file in the PR is a test or documentation file (test files: `*.test.*`, `*.spec.*`, files under `__tests__/`, `/test/`, `/tests/`; doc files: `*.md`, `*.mdx`, doc-only config such as `typedoc.json`) -- no production source files changed -- ask the user: "Would you like me to merge this PR?" via `ask_question` with `type: "confirm"`. On accept (`value: true`), run `gh pr merge <pr-ref> --squash --match-head-commit <reviewed-ref>` where `<reviewed-ref>` is the SHA captured at triage time, so the merge is pinned to the exact commit that was reviewed. If `gh pr merge` exits non-zero, surface the error output to the user and stop. On decline, cancel, skip, non-PR target, or any condition not met: stop.
 
 **Severity rubric (impact axis only — severity measures blast radius and reachability, never category):**
 - `critical` — data loss, auth bypass, secret exposure, RCE. If it cannot cause unauthorized access or data loss, it is NOT critical.
