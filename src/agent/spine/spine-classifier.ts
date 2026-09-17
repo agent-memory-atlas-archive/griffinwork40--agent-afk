@@ -60,25 +60,29 @@ export interface ClassifierResult {
 // Prompt loading
 // ---------------------------------------------------------------------------
 
-const PROMPT_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  'prompts',
-  'classifier.md',
-);
+const PROMPTS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'prompts');
+const PROMPT_PATH = join(PROMPTS_DIR, 'classifier.md');
+const INIT_PROMPT_PATH = join(PROMPTS_DIR, 'init-classifier.md');
 
 /**
- * Load the classifier prompt. Lazy-cached at module scope so repeated hook
- * invocations don't re-read the file.
+ * Load a classifier prompt by path. Lazy-cached at module scope so repeated
+ * hook invocations don't re-read the file.
  */
-let _cachedPrompt: string | undefined;
+const _promptCache = new Map<string, string>();
+
+function loadPrompt(path: string): string {
+  const cached = _promptCache.get(path);
+  if (cached !== undefined) return cached;
+  if (!existsSync(path)) {
+    throw new Error(`SPINE classifier prompt not found at ${path}`);
+  }
+  const content = readFileSync(path, 'utf-8');
+  _promptCache.set(path, content);
+  return content;
+}
 
 function loadClassifierPrompt(): string {
-  if (_cachedPrompt !== undefined) return _cachedPrompt;
-  if (!existsSync(PROMPT_PATH)) {
-    throw new Error(`SPINE classifier prompt not found at ${PROMPT_PATH}`);
-  }
-  _cachedPrompt = readFileSync(PROMPT_PATH, 'utf-8');
-  return _cachedPrompt;
+  return loadPrompt(PROMPT_PATH);
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +121,46 @@ export async function classifyDiff(
       : diff;
 
   const userMessage = buildUserMessage(truncatedDiff, spineContent);
+
+  const rawOutput = await oneShotCompletion({
+    token,
+    model: CLASSIFIER_MODEL,
+    system: systemPrompt,
+    user: userMessage,
+    maxTokens: MAX_TOKENS,
+    ...(signal !== undefined ? { signal } : {}),
+  });
+
+  return parseClassifierOutput(rawOutput);
+}
+
+/**
+ * Classify seed material (invariant comments, CHANGELOG, AFK.md, git reverts)
+ * into proposed SPINE.md entries during `/spine init`. Uses a purpose-built
+ * init prompt rather than the diff-oriented classifier prompt.
+ */
+export async function classifySeedMaterial(
+  seedText: string,
+  signal?: AbortSignal,
+): Promise<ClassifierResult> {
+  const token = loadAnthropicCredential();
+  if (!token) {
+    throw new Error('No Anthropic credential available for SPINE init classifier');
+  }
+
+  const systemPrompt = loadPrompt(INIT_PROMPT_PATH);
+  const truncated =
+    seedText.length > DIFF_CHAR_LIMIT
+      ? seedText.slice(0, DIFF_CHAR_LIMIT) + '\n\n... (seed material truncated at 20k chars)'
+      : seedText;
+
+  const userMessage = [
+    '<seed-material>',
+    escapeCodeFence(truncated),
+    '</seed-material>',
+    '',
+    'Classify the architectural signals in this seed material. Return ONLY the JSON array.',
+  ].join('\n');
 
   const rawOutput = await oneShotCompletion({
     token,

@@ -28,6 +28,8 @@ export type {
 
 export {
   classifyDiff,
+  classifySeedMaterial,
+  parseClassifierOutput,
 } from './spine-classifier.js';
 
 export type {

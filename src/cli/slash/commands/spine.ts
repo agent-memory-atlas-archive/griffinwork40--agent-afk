@@ -18,7 +18,10 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { palette } from '../../palette.js';
-import { readSpine, serializeSpine, findEntry } from '../../../agent/spine/index.js';
+import {
+  readSpine, findEntry, addEntry, writeSpine,
+  classifySeedMaterial,
+} from '../../../agent/spine/index.js';
 import type { SpineDocument } from '../../../agent/spine/index.js';
 import { getAfkStateDir } from '../../../paths.js';
 import type { SlashCommand } from '../types.js';
@@ -156,15 +159,11 @@ async function handleInit(
     return 'continue';
   }
 
-  ctx.out.info('Bootstrapping SPINE.md from codebase artifacts…');
+  ctx.out.info('Bootstrapping SPINE.md from codebase artifacts...');
 
-  // Gather seed material
   const seeds: string[] = [];
 
-  // 1. Scan for Invariant:/Contract:/History: comments
-  //    ripgrep respects .gitignore → skips node_modules/dist/.afk-worktrees
-  //    without explicit --exclude-dir flags, and is ~7,500× faster than GNU grep
-  //    on repos with large dependency trees.
+  // 1. Scan for Invariant:/Contract:/History: comments (ripgrep, .gitignore-aware)
   try {
     const grep = execFileSync(
       'rg',
@@ -176,65 +175,88 @@ async function handleInit(
       ],
       { encoding: 'utf8', maxBuffer: 512 * 1024, stdio: ['ignore', 'pipe', 'ignore'] },
     );
-    const matches = grep
-      .split('\n')
-      .map((l) => l.trim().slice(0, 200))
-      .filter(Boolean)
-      .slice(0, 20);
+    const matches = grep.split('\n').map((l) => l.trim().slice(0, 200)).filter(Boolean).slice(0, 30);
     if (matches.length > 0) {
       seeds.push('### Discovered invariant/contract comments:', ...matches, '');
     }
-  } catch {
-    // No grep hits or grep not available — continue
+  } catch { /* no hits or rg unavailable */ }
+
+  // 2. AFK.md (project-scope conventions — the richest seed source)
+  const afkMdPath = join(repoRoot, 'AFK.md');
+  if (existsSync(afkMdPath)) {
+    try {
+      seeds.push('### AFK.md (project conventions):', readFileSync(afkMdPath, 'utf-8').slice(0, 6000), '');
+    } catch { /* ignore */ }
   }
 
-  // 2. CHANGELOG if present
+  // 3. Git revert history — strong signal for REJ entries
+  try {
+    const reverts = execFileSync(
+      'git', ['log', '--all', '--grep=Revert', '--oneline', '-30'],
+      { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim();
+    if (reverts) seeds.push('### Git revert history:', reverts, '');
+  } catch { /* ignore */ }
+
+  // 4. CHANGELOG excerpt
   const changelogPath = join(repoRoot, 'CHANGELOG.md');
   if (existsSync(changelogPath)) {
     try {
-      const cl = readFileSync(changelogPath, 'utf-8').slice(0, 2000);
-      seeds.push('### CHANGELOG excerpt:', cl, '');
-    } catch {
-      // ignore
-    }
+      seeds.push('### CHANGELOG excerpt:', readFileSync(changelogPath, 'utf-8').slice(0, 2000), '');
+    } catch { /* ignore */ }
   }
 
-  // 3. ADR directory if present
-  const adrDirs = ['docs/adr', 'adr', 'docs/decisions'];
-  for (const dir of adrDirs) {
-    const adrPath = join(repoRoot, dir);
-    if (existsSync(adrPath)) {
+  // 5. ADR directory
+  for (const dir of ['docs/adr', 'adr', 'docs/decisions']) {
+    if (existsSync(join(repoRoot, dir))) {
       seeds.push(`### ADR directory found: ${dir}`);
       break;
     }
   }
 
-  // Surface the draft to the model for approval
-  const seedText =
-    seeds.length > 0
-      ? seeds.join('\n')
-      : '(No seed material found — generating an empty skeleton)';
+  const seedText = seeds.length > 0
+    ? seeds.join('\n')
+    : '';
+
+  if (!seedText) {
+    ctx.out.warn('No seed material found. Writing empty skeleton.');
+    const doc = makeEmptyDoc();
+    writeSpine(repoRoot, doc);
+    ctx.out.success(`Wrote empty SPINE.md to ${spinePath}`);
+    return 'continue';
+  }
 
   ctx.out.line('');
-  ctx.out.line(palette.heading('## SPINE.md Bootstrap'));
-  ctx.out.line('');
-  ctx.out.line('Seed material gathered:');
-  ctx.out.line(palette.meta(seedText.slice(0, 800)));
-  ctx.out.line('');
-  ctx.out.warn(
-    'SPINE.md init is a guided process — the model should now review the seed material\n' +
-      'and draft entries. Writing a skeleton now for you to populate.',
-  );
+  ctx.out.line(`Gathered ${seeds.length} seed sections. Classifying...`);
 
-  // Write the skeleton
-  const doc = makeEmptyDoc();
-  const content = serializeSpine(doc);
-  writeFileSync(spinePath, content, 'utf-8');
+  // Call the LLM to classify seed material into spine entries
+  let doc: SpineDocument;
+  try {
+    const result = await classifySeedMaterial(seedText);
+    doc = makeEmptyDoc();
+    const additions = result.items.filter((i) => i.label === 'new-addition');
+    if (additions.length === 0) {
+      ctx.out.warn('Classifier found no architectural signals. Writing empty skeleton.');
+    } else {
+      for (const item of additions) {
+        if (item.label !== 'new-addition') continue;
+        const id = addEntry(doc, item.prefix, 'spine-init', item.description);
+        ctx.out.line(`  ${palette.bold(id)}  ${item.description}`);
+      }
+      ctx.out.line('');
+      ctx.out.success(`Classified ${additions.length} entries from seed material.`);
+    }
+  } catch (err) {
+    // No API key or network error — fall back to empty skeleton
+    const msg = err instanceof Error ? err.message : String(err);
+    ctx.out.warn(`Classifier failed (${msg}). Writing empty skeleton.`);
+    doc = makeEmptyDoc();
+  }
 
-  ctx.out.success(`Wrote SPINE.md skeleton to ${spinePath}`);
+  writeSpine(repoRoot, doc);
+  ctx.out.success(`Wrote SPINE.md to ${spinePath}`);
   ctx.out.line(palette.meta(
-    'Tip: run /spine show to view it, then manually add entries or wait for the\n' +
-    '     SessionEnd hook to auto-populate it after your next coding session.',
+    'Review with /spine show. The SessionEnd hook will auto-add entries after coding sessions.',
   ));
 
   return 'continue';
