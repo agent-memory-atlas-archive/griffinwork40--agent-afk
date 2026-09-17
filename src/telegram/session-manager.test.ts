@@ -10,7 +10,7 @@ import { promises as fs, existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { useUnsetAfkHome } from '../__test-utils__/unset-afk-home.js';
-import { clearElicitationRoute, getElicitationRoute } from './elicitation-route-registry.js';
+import { clearElicitationRoute, getElicitationRoute, elicitationRegistrySize } from './elicitation-route-registry.js';
 import { createSessionRegistry, asHandleId } from '../agent/session/session-registry.js';
 
 // Mock agent session
@@ -1403,5 +1403,151 @@ describe('SessionManager — getActiveThreadId', () => {
     await manager.getSession({ chatId: 500, threadId: 3 });
     // Different chat — getActiveThreadId must NOT return chat 500's threadId for chat 501.
     expect(manager.getActiveThreadId(501)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Elicitation-route-registry cleanup — fix for issue #1662
+// ---------------------------------------------------------------------------
+describe('SessionManager — elicitation route registry cleanup (#1662)', () => {
+  // Verify that the module-scope elicitation registry does not grow unbounded:
+  // entries registered via setElicitationRoute must be cleared on every teardown
+  // path, not just on explicit /clear.
+  useUnsetAfkHome();
+
+  let testDataDir: string;
+  let manager: SessionManager;
+
+  beforeEach(() => {
+    const entropy = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    testDataDir = join(tmpdir(), `afk-tg-elicit-${entropy}`);
+    manager = new SessionManager({
+      dataDir: testDataDir,
+      apiKey: 'test-key',
+      defaultModel: 'sonnet',
+      createSession: async () =>
+        ({ state: 'idle', sessionId: `sdk-${Math.random().toString(36).slice(2)}`, async close() {}, async reset() {}, abort() {}, async sendMessage() { return { role: 'assistant' as const, content: '', timestamp: new Date() }; }, async *getOutputStream() { yield { type: 'done' as const }; } } as unknown as IAgentSession),
+    });
+  });
+
+  afterEach(async () => {
+    await manager.closeAll().catch(() => {});
+    if (existsSync(testDataDir)) rmSync(testDataDir, { recursive: true, force: true });
+  });
+
+  test('closeAll clears registry entries for live sessions', async () => {
+    const session = await manager.getSession(7001);
+    const sid = session.sessionId!;
+    expect(getElicitationRoute(sid)).toBeDefined();
+
+    await manager.closeAll();
+    expect(getElicitationRoute(sid)).toBeUndefined();
+  });
+
+  test('closeAll clears registry entries registered only via recordTelegramTurn (no live session)', async () => {
+    // Simulate a sessionId registered only through recordTelegramTurn — no live
+    // IAgentSession object in sessions map (the common "natural completion" case).
+    const sid = 'sdk-turn-only-7002';
+    manager.recordTelegramTurn(7002, 'hello', 'hi', { sessionId: sid });
+    expect(getElicitationRoute(sid)).toBeDefined();
+
+    await manager.closeAll();
+    expect(getElicitationRoute(sid)).toBeUndefined();
+  });
+
+  test('_evictStaleSessionData clears registry entries as it evicts stale routes', async () => {
+    // getSession populates sessionData (required for _evictStaleSessionData to
+    // find the entry). The live session is then "forgotten" by closing and
+    // deleting it, so the route is no longer live — eligible for eviction.
+    const session = await manager.getSession(7003);
+    const sid = session.sessionId!;
+    expect(getElicitationRoute(sid)).toBeDefined();
+
+    // Simulate natural session end: close + remove from live map, but leave
+    // sessionData in place (matches real-world idle-session state).
+    await session.close();
+    (manager as unknown as { sessions: Map<string, IAgentSession> }).sessions.delete('7003');
+
+    // Wait ≥1ms so Date.now() - lastActivity > maxAgeMs=0 is strictly satisfied.
+    await new Promise((r) => setTimeout(r, 2));
+
+    // Trigger eviction with maxAgeMs=0 so the just-added entry qualifies.
+    // Access private method via cast — test-only.
+    await (manager as unknown as { _evictStaleSessionData(ms: number): Promise<void> })._evictStaleSessionData(0);
+    expect(getElicitationRoute(sid)).toBeUndefined();
+  });
+
+  test('_evictStaleSessionData closes idle live sessions and clears their registry entries (#1700)', async () => {
+    // This is the exact case Codex flagged: a user stops chatting, the session
+    // sits idle in this.sessions, and _evictStaleSessionData's sessions.has()
+    // guard previously shielded it from eviction. After the fix, Phase 1
+    // (evictIdleSessions) closes and removes it from the live map, then Phase 2
+    // evicts its sessionData and clears the elicitation-route entry.
+    const session = await manager.getSession(7005);
+    const sid = session.sessionId!;
+    expect(getElicitationRoute(sid)).toBeDefined();
+
+    // The session is still in this.sessions — we do NOT manually delete it.
+    // Its state is 'idle' (mock default). Wait so lastActivity qualifies.
+    await new Promise((r) => setTimeout(r, 2));
+
+    await (manager as unknown as { _evictStaleSessionData(ms: number): Promise<void> })._evictStaleSessionData(0);
+
+    // Phase 1 should have closed and removed it from the live map.
+    expect((manager as unknown as { sessions: Map<string, IAgentSession> }).sessions.has('7005')).toBe(false);
+    // Phase 2 should have cleared the registry entry.
+    expect(getElicitationRoute(sid)).toBeUndefined();
+  });
+
+  test('_evictStaleSessionData skips non-idle sessions', async () => {
+    // A session that is actively processing should never be evicted.
+    let sessionState = 'processing';
+    const customManager = new SessionManager({
+      dataDir: testDataDir,
+      apiKey: 'test-key',
+      defaultModel: 'sonnet',
+      createSession: async () =>
+        ({ get state() { return sessionState; }, sessionId: `sdk-${Math.random().toString(36).slice(2)}`, async close() {}, async reset() {}, abort() {}, async sendMessage() { return { role: 'assistant' as const, content: '', timestamp: new Date() }; }, async *getOutputStream() { yield { type: 'done' as const }; } } as unknown as IAgentSession),
+    });
+
+    const session = await customManager.getSession(7006);
+    const sid = session.sessionId!;
+    expect(getElicitationRoute(sid)).toBeDefined();
+
+    await new Promise((r) => setTimeout(r, 2));
+
+    // Evict with maxAgeMs=0 — should skip because state is 'processing'.
+    await (customManager as unknown as { _evictStaleSessionData(ms: number): Promise<void> })._evictStaleSessionData(0);
+    expect((customManager as unknown as { sessions: Map<string, IAgentSession> }).sessions.has('7006')).toBe(true);
+    expect(getElicitationRoute(sid)).toBeDefined();
+
+    // Transition to idle — now it should be evicted.
+    sessionState = 'idle';
+    await (customManager as unknown as { _evictStaleSessionData(ms: number): Promise<void> })._evictStaleSessionData(0);
+    expect((customManager as unknown as { sessions: Map<string, IAgentSession> }).sessions.has('7006')).toBe(false);
+    expect(getElicitationRoute(sid)).toBeUndefined();
+
+    await customManager.closeAll().catch(() => {});
+  });
+
+  test('registry does not grow across multiple record-then-closeAll cycles', async () => {
+    const before = elicitationRegistrySize();
+
+    // Cycle 1
+    manager.recordTelegramTurn(7004, 'a', 'b', { sessionId: 'sdk-cycle-a' });
+    await manager.closeAll();
+    expect(elicitationRegistrySize()).toBeLessThanOrEqual(before);
+
+    // Rebuild manager for cycle 2 (closeAll cleared sessions).
+    manager = new SessionManager({
+      dataDir: testDataDir,
+      apiKey: 'test-key',
+      defaultModel: 'sonnet',
+      createSession: async () =>
+        ({ state: 'idle', sessionId: `sdk-${Math.random().toString(36).slice(2)}`, async close() {}, async reset() {}, abort() {}, async sendMessage() { return { role: 'assistant' as const, content: '', timestamp: new Date() }; }, async *getOutputStream() { yield { type: 'done' as const }; } } as unknown as IAgentSession),
+    });
+    manager.recordTelegramTurn(7004, 'c', 'd', { sessionId: 'sdk-cycle-b' });
+    await manager.closeAll();
+    expect(elicitationRegistrySize()).toBeLessThanOrEqual(before);
   });
 });
