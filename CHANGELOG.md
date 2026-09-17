@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.218.0] - 2026-09-17
+
+### Added
+- add shell-mode input visuals for ! prefix (#1730) (7fb33211)
+
+### Changed
+- add crash-to-resume DAG checkpoint benchmark (#1731) (24ca8537)
+- add abort-cascade correctness benchmark (#1729) (9df5bb7c)
+
 ## [5.217.0] - 2026-09-17
 
 ### Added
