@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.215.1] - 2026-09-17
+
+### Fixed
+- bound elicitation route registry growth (#1700) (c765fce2)
+
 ## [5.215.0] - 2026-09-17
 
 ### Added
