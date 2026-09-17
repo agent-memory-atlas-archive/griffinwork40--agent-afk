@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.214.0] - 2026-09-17
+
+### Added
+- read SPINE.md in ground-state pre-flight (#1699) (f2f1a8a6)
+
 ## [5.213.3] - 2026-09-17
 
 ### Fixed
