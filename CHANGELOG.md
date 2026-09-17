@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.216.0] - 2026-09-17
+
+### Added
+- add searchable capture index CLI command (#1502) (#1641) (54160008)
+
 ## [5.215.2] - 2026-09-17
 
 ### Fixed
