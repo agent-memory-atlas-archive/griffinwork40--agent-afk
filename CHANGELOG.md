@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.214.1] - 2026-09-17
+
+### Fixed
+- drain micro-buffer before terminal-state inspection (#1701) (2b7b8835)
+
+### Changed
+- track initialized SPINE.md for agent-afk repo (7670e286)
+
 ## [5.214.0] - 2026-09-17
 
 ### Added
