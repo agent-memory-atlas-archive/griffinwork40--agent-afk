@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.218.2] - 2026-09-17
+
+### Fixed
+- remove tsx watch from dev script (#1733) (86abb85c)
+- extract readable titles from XML-tagged skill dispatch sessions (70deb28d)
+
 ## [5.218.1] - 2026-09-17
 
 ### Fixed
