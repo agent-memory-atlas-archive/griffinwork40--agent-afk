@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.213.2] - 2026-09-17
+
+### Fixed
+- widen /spine init grep to cover all documented comment prefixes and file types (#1697) (9f7977ae)
+
 ## [5.213.1] - 2026-09-17
 
 ### Fixed
