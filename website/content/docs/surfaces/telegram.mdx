@@ -59,6 +59,53 @@ To allow multiple users:
 AFK_TELEGRAM_ALLOWED_CHAT_IDS=12345678,87654321
 ```
 
+### Environment variable reference
+
+All Telegram-related env vars belong in `~/.afk/config/afk.env`. Prefer `afk config env set
+<VAR>` for secrets — it masks input so the value never appears in your shell history.
+
+| Variable | Required | Description |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from @BotFather. |
+| `AFK_TELEGRAM_ALLOWED_CHAT_IDS` | Yes | Comma-separated chat IDs the bot will accept messages from. |
+| `AFK_TELEGRAM_PRIMARY_CHAT_ID` | No | Default chat for outbound notifications. When unset, notifications go to the first private/DM chat in `AFK_TELEGRAM_ALLOWED_CHAT_IDS`. Overridden by `telegram.notify` in `afk.config.json`. |
+| `AFK_TELEGRAM_NOTIFY_MODE` | No | Outbound notification fan-out: `primary` (default — one chat), `broadcast` (every allowed chat), or `custom` (`telegram.notify.targets` in `afk.config.json` picks the list). Overridden by `telegram.notify.mode`. |
+| `AFK_TELEGRAM_TAG_ONLY_CHAT_IDS` | No | Comma-separated chat IDs where the bot responds only when directly addressed — a reply to the bot, an @mention, or a `text_mention` entity resolving to the bot. Slash-commands are unaffected; unlisted chats behave normally. Requires Telegram privacy mode OFF (BotFather `/setprivacy Disable`) for non-addressed group messages to reach the bot at all. Overridden by `telegram.tagOnlyChats` in `afk.config.json`. |
+| `AFK_TELEGRAM_CWD` | No | Override the working directory used when the bot spawns agent sessions. Useful when the bot runs as a service and the default `cwd` is not your project root. |
+
+### `afk.config.json` — telegram block
+
+Structured Telegram settings live under the `telegram` key in `afk.config.json` (typically at
+`~/.afk/config/afk.config.json` for global settings, or `<cwd>/afk.config.json` for
+per-project overrides).
+
+```json
+{
+  "telegram": {
+    "notify": {
+      "mode": "primary",
+      "primaryChatId": 12345678,
+      "targets": [12345678, 87654321]
+    },
+    "tagOnlyChats": [-100987654321],
+    "chatAliases": {
+      "ops": -100987654321,
+      "personal": 12345678
+    },
+    "verifyDone": false
+  }
+}
+```
+
+| Key | Type | Description |
+|---|---|---|
+| `telegram.notify.mode` | `"primary"` \| `"broadcast"` \| `"custom"` | Fan-out strategy for outbound notifications. `primary` (default): one target chat. `broadcast`: every chat in `AFK_TELEGRAM_ALLOWED_CHAT_IDS`. `custom`: only the IDs in `targets`. |
+| `telegram.notify.primaryChatId` | `number` | Explicit primary chat, overriding the env var and the first-DM fallback. |
+| `telegram.notify.targets` | `number[]` | Chat IDs used when `mode` is `custom`. |
+| `telegram.tagOnlyChats` | `number[]` | Per-chat tag-only policy (takes precedence over `AFK_TELEGRAM_TAG_ONLY_CHAT_IDS`). The bot responds to non-command messages in these chats only when directly addressed. |
+| `telegram.chatAliases` | `Record<string, number>` | Named aliases for chat IDs. The `send_telegram` tool's `chat` param and a scheduled task's `notifyChat` accept an alias name in place of a raw numeric ID. The resolved alias must still be in the allowlist (fail-closed). |
+| `telegram.verifyDone` | `boolean` | When `true`, a Done notification is downgraded to "⚠️ Done (unverified)" unless the session produced corroborating evidence (a file write or executed command). Default: `false`. |
+
 ## Bot commands
 
 Inside Telegram, the bot recognizes:
@@ -95,8 +142,26 @@ afk telegram logs -n 100 # show the last 100 lines
 ## Telegram as a notification channel
 
 Even without the interactive bot surface, you can use Telegram purely for push notifications.
-The daemon pushes a message to `AFK_TELEGRAM_ALLOWED_CHAT_IDS` on every task completion. The
-`send_telegram` tool is also available inside agent sessions — any agent session can push a notification to your phone when work finishes.
+The daemon pushes a message on every scheduled task completion; where that message goes is
+controlled by the notification routing described above — `primary` (default), `broadcast`, or
+`custom`.
+
+The `send_telegram` tool is also available inside agent sessions. You can target a specific chat
+by raw numeric ID or by a `chatAliases` name defined in `afk.config.json`:
+
+```json
+{
+  "telegram": {
+    "chatAliases": {
+      "ops": -100987654321,
+      "personal": 12345678
+    }
+  }
+}
+```
+
+Then in a session the agent can route to `"ops"` by name instead of the raw ID. The resolved
+alias is still validated against the allowlist — a non-allowlisted target is rejected.
 
 The `send_telegram` tool is safe to attempt unconditionally: if Telegram is not configured,
 it returns an error instead of crashing.

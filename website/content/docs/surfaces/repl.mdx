@@ -59,6 +59,7 @@ Type `/` in the REPL to see available commands. Typos are caught automatically �
 | `/mcp` | Show MCP server status |
 | `/limits` | Show rate-limit and budget state |
 | `/debug` | Toggle verbose debug output |
+| `/suggestions [N \| rm \<index\> \| clear]` | View or manage the saved input history that feeds ghost-text suggestions. `/suggestions` shows the last 20 entries; `/suggestions rm 3` removes entry #3; `/suggestions clear` wipes the ring. Prefix any input with a space to skip history recording. |
 | `/keys` | Show keybinding reference |
 | `/config` | View resolved configuration (model, provider, API keys, env vars) |
 | `/doctor` | Run system health checks (API keys, directories, config, Telegram) |
@@ -79,7 +80,10 @@ There is no `/bypass` command — cycle into `bypassPermissions` with **Shift+Ta
 | Command | Description |
 |---|---|
 | `/plan` | Open the plan editor |
-| `/todo` | Manage the persistent todo list |
+| `/goal [text]` | Set a persistent objective that survives compaction and session restarts. Subcommands: `set <text>`, `status`, `pause`, `resume`, `done`, `clear`. The active goal is injected into the system prompt at session start; mid-session changes take effect on the next session. |
+| `/todo [add\|done\|rm\|clear\|list]` | Per-session checklist. Add items with `/todo add <text>`, mark done with `/todo done <id>`, remove with `/todo rm <id>`, list with `/todo list` (also the default). |
+| `/spine [init\|show\|pending\|dismiss\|dismiss-all]` | Manage `SPINE.md` — the git-tracked project architecture manifest (invariants, rejected patterns, taste calls). `/spine init` bootstraps from existing codebase artifacts; the SessionEnd hook updates it automatically after coding sessions. |
+| `/ghost [on\|off]` | Toggle inline ghost-text suggestions for the current session. Session-scoped; does not persist. Permanent toggle: set `interactive.suggestGhost: false` in `afk.config.json`. |
 | `/init` | Scan the current project and generate an `AFK.md` |
 | `/changelog [--dry-run]` | Generate CHANGELOG entries from commits since last tag |
 
@@ -166,6 +170,32 @@ See [Permissions](../configuration/permissions.mdx) for full mode descriptions.
 The REPL streams model output token-by-token with markdown rendering. Tool calls render as
 collapsible lane entries showing the tool name, arguments, and result. Extended thinking renders
 as a summary lane (or live, depending on `--thinking-ui`).
+
+## Ghost-text suggestions
+
+The REPL shows inline completions as dim text after the cursor. Two tiers produce suggestions:
+
+| Tier | Source | When it fires |
+|---|---|---|
+| **Tier 1 — history-based** | Previous inputs, slash-command flags, `@`-file paths | Synchronous; fires on every keystroke, always active |
+| **Tier 2 — LLM-based** | Debounced model call completing what you are typing | After a short pause, when Tier 1 has no match and `AFK_SUGGEST_ENABLED` is truthy (on by default) |
+
+### Accepting a suggestion
+
+| Key | Effect |
+|---|---|
+| **Tab** | Accept the full ghost suggestion |
+| **→** (right arrow at end of buffer) | Accept one word at a time — advances through the next word boundary, leaving the rest of the ghost visible |
+| **Esc** (at empty prompt) | Dismiss the empty-prompt proposal offered after each turn |
+
+### Controlling ghost text
+
+- **`/ghost off`** — suppress all ghost text for the rest of the session. `/ghost on` resumes.
+- **`/ghost`** (no args) — show whether ghost text is currently on or paused.
+- **`AFK_SUGGEST_GHOST=0`** — disable ghost text at boot (no-op for the `/ghost` toggle).
+- **`interactive.suggestGhost: false`** in `afk.config.json` — permanent off across all sessions.
+
+The `/suggestions` command lets you inspect and prune the history ring that feeds Tier 1. Prefix any input with a space to skip recording it.
 
 ## Type-ahead and queueing
 

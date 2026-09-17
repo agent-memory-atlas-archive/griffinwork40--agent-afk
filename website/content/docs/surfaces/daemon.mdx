@@ -157,6 +157,68 @@ The daemon writes state to `~/.afk/state/daemon/` and logs to `~/.afk/logs/`. Te
 (task ID, status, duration, cost, response excerpt) are appended to
 `~/.afk/agent-framework/forge-telemetry.jsonl`.
 
+## Durable handoffs
+
+When a daemon task raises a blocking question — via the `ask_question` tool — the daemon has no
+interactive surface to answer it. Instead of silently declining and continuing, the daemon persists
+the question as a **handoff record** on disk before sending a Telegram notification. If the Telegram
+bot is running, it routes the question to your chat with an inline keyboard (for confirm/choice
+questions) or a reply-to message (for text/number questions). Your answer is recorded back to the
+durable store, and the daemon task resumes with the response injected.
+
+The write-before-send order is load-bearing: a crash between persisting the record and delivering
+the Telegram message is recoverable. On the next daemon start, `recoverPendingHandoffs` scans
+`~/.afk/state/daemon/handoffs/` for unanswered records and re-presents them to the operator
+without losing the question.
+
+| Handoff lifecycle | Description |
+|---|---|
+| `pending` | Question written to disk; Telegram message sent |
+| `answered` | Operator replied; answer recorded via CAS lock |
+| `expired` | Not answered within 24 hours; task lease restored for re-enqueue |
+| `cancelled` | Task was cancelled before an answer arrived |
+
+```
+~/.afk/state/daemon/handoffs/<taskId>.json
+```
+
+**No Telegram, no problem (sort of).** If Telegram is not configured, the router still fires a
+best-effort push when no interactive handler is installed, then declines the elicitation so the
+task continues rather than hanging indefinitely. The operator won't be able to answer the
+question, but the run won't stall.
+
+## Done verification
+
+The daemon is unattended — there is no operator watching to catch a false completion claim.
+On each cron tick the daemon runs a **Done verification probe**: if the agent's final response
+self-certifies `Done` but no corroborating tool succeeded during that turn
+(`write_file`, `edit_file`, or `bash`), the completion is flagged as unverified.
+
+When `daemon.verifyDone` is enabled (the default), the Telegram notification header is
+downgraded from ✅ to ⚠️:
+
+```
+⚠️ Done (unverified) — daemon task: nightly-review (success)
+⚠️ Unverified: no file write/edit or successful command recorded this turn — confirm before relying on this.
+```
+
+This is a **human-tier config key** — the agent cannot disable it on its own. To turn it off
+explicitly (e.g. for a task that legitimately produces no file output):
+
+```json title="~/.afk/config/afk.config.json"
+{
+  "daemon": {
+    "verifyDone": false
+  }
+}
+```
+
+The verification is heuristic, not a re-run. It checks what tools succeeded in the *same tick*
+rather than spawning a secondary session. For tasks where the only honest Done is one that
+committed a file or ran a command, this catches the most common false-completion pattern
+(an agent that says "Done" after reading files but writing nothing) without adding any
+latency to clean runs.
+
 ## Crash notifications
 
 Uncaught exceptions and unhandled rejections push a crash notification to Telegram (rate-limited

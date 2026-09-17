@@ -34,7 +34,7 @@ A subagent brief with missing context produces unreliable output. Synthesize wha
 
 ## The `agent` tool
 
-The primary dispatch mechanism is the built-in `agent` tool (also called `Task` in the tool list). Pass a `prompt` describing the work:
+The primary dispatch mechanism is the built-in `agent` tool. Pass a `prompt` describing the work:
 
 ```
 agent({
@@ -83,7 +83,7 @@ In the REPL, background subagent jobs are surfaced through the `/bgsub` namespac
 
 The status bar at the bottom of the REPL shows running background task counts.
 
-Source: `src/cli/background-status-bar.ts`, `src/cli/commands/interactive/background.js`.
+Source: `src/cli/background-status-bar.ts`, `src/cli/commands/bg.ts`.
 
 ### `afk bg` — CLI background job inspection
 
@@ -174,3 +174,151 @@ For typed output, the `SubagentManager` accepts optional Zod schemas — the sub
 High-stakes subagent findings should not be trusted blindly. Use the `/shadow-verify` skill to dispatch parallel adversarial verifiers that re-derive 2–3 key claims from scratch using tool calls. Any disagreement is flagged before you act on the result.
 
 See the [Verification guide](/guides/verification) for the full workflow.
+
+## Child-to-parent progress events
+
+By default a running background subagent is opaque to its parent — the parent only learns the result when the child finishes. Opt into progress events to get live updates at each tool-call boundary while the child is still running.
+
+### Enabling `emit_progress`
+
+Pass `progress_events: true` when dispatching:
+
+```
+agent({
+  prompt: "Run the full test suite and summarise failures...",
+  mode: "background",
+  progress_events: true
+})
+// → returns { jobId: "abc123" }
+```
+
+This grants the child an extra `emit_progress` tool not available on non-opted-in subagents.
+
+### The `emit_progress` tool (child-side)
+
+When `progress_events: true` is set, the child calls:
+
+```
+emit_progress({
+  message: "Running unit tests — 142/500 complete, 3 failures so far.",
+  phase: "testing",        // optional label for the current stage
+  metadata: { passed: 142, failed: 3 }  // optional structured payload
+})
+// → { delivered: true }
+```
+
+Fields:
+- `message` (required) — free-text description of current status. Capped at 2048 bytes; truncated at the UTF-8 byte boundary if exceeded.
+- `phase` (optional) — short label for the current stage (e.g. `"scanning"`, `"testing"`, `"summarising"`).
+- `metadata` (optional) — arbitrary key/value object for structured data.
+
+### Delivery to the parent
+
+Each event is delivered to the parent's **next user turn** as a `<child-progress>` XML envelope:
+
+```xml
+<child-progress subagentId="sub_abc123" phase="testing" timestamp="2026-09-17T12:00:00.000Z">
+  Running unit tests — 142/500 complete, 3 failures so far.
+</child-progress>
+```
+
+Events are buffered in a ring per handle; the oldest are evicted on overflow rather than blocking the child. If the parent's abort signal has already fired, `emit_progress` returns `{ delivered: false, reason: "parent_aborted" }` and is otherwise a no-op.
+
+This is the reverse direction of `send_message_to_agent` (parent → child). Together they form a bidirectional steering channel.
+
+Source: `src/agent/tools/subagent/emit-progress.ts`, `src/agent/subagent/fork-progress-events.ts`.
+
+## Steering a running background child
+
+The parent can inject a message into a running background subagent at its next tool-call boundary using `send_message_to_agent`. This lets you redirect, correct, or update context in a child without cancelling and re-dispatching it.
+
+```
+send_message_to_agent({
+  jobId: "abc123",
+  message: "The spec changed — focus only on the auth module, skip everything else."
+})
+// → "Steering message queued for background job abc123."
+```
+
+The message arrives as a synthetic user turn before the child's next tool round. The child sees it the same way it would see any other instruction and can adjust its plan mid-execution.
+
+### Constraints
+
+- **Background jobs only** — foreground subagents are steered by the human via the interrupt picker (Ctrl+C → Steer), not through this tool.
+- **Model-created jobs only** — jobs that were user-backgrounded (the operator pressed Ctrl+B) are user-owned and the tool refuses them with a clear error.
+- **Same-session only** — a parent session cannot steer a job belonging to a different concurrent session.
+- **Anthropic provider only** — steering requires the provider's inter-round hook (`setBeforeNextRound`). OpenAI-compatible providers do not wire this hook; the tool returns a descriptive error rather than silently dropping the message.
+- **Terminal jobs** — if the child has already completed or failed, the tool returns a non-error acknowledgement (the job is done; no message is queued).
+
+Source: `src/agent/tools/subagent/send-message.ts`, `src/agent/tools/schemas.background-steer.ts`.
+
+## Workspace subscriptions
+
+Sibling agents in a `compose` DAG share a workspace via `workspace_publish` and `workspace_query`. Polling with `workspace_query` works, but a child that calls `workspace_subscribe` receives matching entries **pushed** to it at each tool-call boundary without repeated queries.
+
+### Subscribing
+
+```
+workspace_subscribe({
+  subject: "auth",          // optional — substring filter on entry subject
+  type: "finding"           // optional — restrict to one entry type
+})
+// → { subscriptionId: "ws_abc", active: true }
+```
+
+Both filters are optional. Omitting them subscribes to all entries published by any sibling in the same session.
+
+### Delivery
+
+Entries matching the subscription are accumulated in a ring buffer and delivered at the next tool-call boundary as a `<workspace-delivery>` envelope:
+
+```xml
+<workspace-delivery subscriptionId="ws_abc">
+  { "id": 7, "type": "finding", "subject": "auth refresh", "content": "..." }
+</workspace-delivery>
+```
+
+No polling needed — the child just reads normal tool-result context in its next round. If the ring fills before the child drains it, the oldest entry is evicted (dropped count is traced).
+
+### Availability
+
+`workspace_subscribe` is only available on **forked children** — the tool is not registered on top-level REPL, one-shot chat, Telegram, or daemon surfaces. The `workspace_query` poll is always available.
+
+The subscription is cancelled automatically when the child's handle is torn down.
+
+Source: `src/agent/workspace/workspace-tools.ts`, `src/agent/subagent/workspace-subscription-wiring.ts`.
+
+## Subagent result sidecar spill
+
+When a foreground subagent's final message exceeds the configured byte threshold, AFK does not silently truncate it. Instead, the full output is spilled to a sidecar file and the parent receives a head+tail slice with a pointer to the full text:
+
+```
+[Subagent output was 98304 bytes — full result at
+~/.afk/state/sessions/<sessionId>/subagent-handoffs/<subagentId>.txt.
+Use read_file to retrieve it.]
+```
+
+The parent can then call `read_file` on that path to retrieve the complete output.
+
+### Threshold
+
+The default cap is **32 KB** (`AFK_SUBAGENT_RESULT_CAP_BYTES=32768`). Tune it with:
+
+```bash
+AFK_SUBAGENT_RESULT_CAP_BYTES=65536   # raise to 64 KB
+AFK_SUBAGENT_RESULT_CAP_BYTES=0       # disable the cap entirely
+```
+
+Setting it to `0` disables the cap — the full result is returned to the parent verbatim, which can blow up the parent's context window if the child produces large output.
+
+### Spill layout
+
+Sidecar files are written under the parent session's state directory:
+
+```
+~/.afk/state/sessions/<sessionId>/subagent-handoffs/<subagentId>.txt
+```
+
+Both `sessionId` and `subagentId` are path-sanitized before the file is written. Spill is best-effort — if the write fails (disk full, permissions), the parent still receives the truncated view, but without the file pointer.
+
+Source: `src/agent/tools/subagent/foreground-promotion.result-cap.ts`.

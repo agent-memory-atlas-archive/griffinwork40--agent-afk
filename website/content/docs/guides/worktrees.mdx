@@ -118,9 +118,110 @@ Disable the sweep entirely (useful for long-running tests):
 AFK_WORKTREE_PRUNE_DISABLE=1 afk daemon
 ```
 
+## The `worktree` model tool
+
+During sessions, the agent has access to a `worktree` tool for managing the full lifecycle of afk-managed worktrees. This is distinct from the `afk worktree` CLI commands — it is the sanctioned API the agent uses inside a running session.
+
+Worktrees created through this tool write a `.afk-worktree-meta.json` file that the sweep engine uses to track ownership and age. Worktrees created with raw `git worktree add` in the shell lack this metadata and are eventually reaped as ghosts — or leak forever if created outside `.afk-worktrees/`.
+
+### Actions
+
+| Action | Description |
+|---|---|
+| `create` | New worktree + branch under `.afk-worktrees/<name>`. Returns `{ path, branch, base, note }` where `note` warns that dependencies are not installed. |
+| `keep` | Lock the worktree so the sweep engine never removes it. |
+| `release` | Unlock a previously kept worktree, returning it to normal sweep lifecycle. |
+| `list` | Dry-run sweep report: every managed worktree with its verdict, owner, and age in days. |
+| `remove` | Remove the checkout (branch ref is always preserved). Refuses dirty, locked, commits-ahead, and non-rebuildable-ignored-files trees unless `force: true`. |
+
+### Creating a worktree
+
+```
+worktree { action: "create", name: "my-feature", base: "HEAD" }
+→ { path: "/repo/.afk-worktrees/my-feature", branch: "afk/my-feature", base: "...", note: "..." }
+```
+
+Pass the returned `path` as `cwd` when dispatching subagents into the new tree:
+
+```
+agent { prompt: "...", cwd: "/repo/.afk-worktrees/my-feature" }
+```
+
+The `note` field in the create response names the install command (`pnpm install`, `npm install`, etc.) you must run before building or testing — dependencies are not shared across worktrees.
+
+### `keep` and `release`
+
+`keep` locks a worktree against the sweep engine with a human-readable reason:
+
+```
+worktree { action: "keep", path: "my-feature", reason: "WIP refactor — do not sweep" }
+→ { path: "...", locked: true, note: "Use action 'release' to unlock." }
+```
+
+A locked worktree is never automatically removed or warned about, regardless of age or cleanliness. Use `release` to return it to normal lifecycle:
+
+```
+worktree { action: "release", path: "my-feature" }
+→ { path: "...", locked: false }
+```
+
+The lock reason is stored in the git worktree lock file (`git worktree lock --reason`).
+
+### Removing a worktree
+
+`remove` drops the checkout; it never deletes the branch ref:
+
+```
+worktree { action: "remove", path: "my-feature" }
+→ { path: "...", removed: true, branchPreserved: "afk/my-feature" }
+```
+
+The tool refuses a locked tree — call `release` first. When a worktree was preserved with commits ahead of base it is locked automatically; the order is mandatory:
+
+```
+worktree { action: "release", path: "my-feature" }
+worktree { action: "remove",  path: "my-feature", force: true }
+```
+
+`force: true` is safe for commits (the branch ref survives) but is NOT safe for local state: it also deletes untracked and ignored files (`.env`, gitignored plans) that were never committed. The tool refuses removal for trees holding such files unless you pass `force: true` and confirm the content is expendable.
+
+---
+
+## Subagent isolation mode
+
+The `agent` tool supports `isolation: "worktree"`, which auto-creates a fresh managed worktree for the child and runs it there — without the parent having to call `worktree` first:
+
+```
+agent {
+  prompt: "...",
+  isolation: "worktree"
+}
+```
+
+When isolation is active, the runtime:
+
+1. Creates a new worktree under `.afk-worktrees/` branched from the dispatching session's HEAD.
+2. Runs the child inside that worktree (the child's `cwd` and write scope are confined to it).
+3. Tears down the worktree when the child finishes. If the tree is dirty, has commits ahead of base, or holds non-rebuildable ignored files, it is preserved and locked instead of removed — work in progress is never destroyed.
+
+This is the right mode for parallel write-capable subagents (speculative fixes, refactor lanes, independent experiments) where cross-contamination of edits or test runs would corrupt results. Read-only agents are silently unaffected — they have nothing to isolate.
+
+`isolation: "worktree"` is mutually exclusive with the `cwd` parameter (the runtime owns the child's working directory when isolating) and with `writeRoots` (write confinement is inherent to the isolated tree). `readRoots` works alongside isolation — widening reads inside an isolated worktree is legitimate.
+
+Recovering a preserved isolated tree is done with the `worktree` tool:
+
+```
+worktree { action: "list" }                         // find it
+worktree { action: "release", path: "iso-agent-..." }
+worktree { action: "remove",  path: "iso-agent-...", force: true }
+```
+
+---
+
 ## Tips
 
 - `afk worktree list` is always safe — it's a read-only dry run.
 - Run `git worktree list` directly to see the full git-level view including worktrees AFK didn't create.
 - Dirty worktrees (`stale-dirty`) generate a warning rather than an immediate prune. Review them before running `prune --apply` if you have uncommitted work.
 - Worktree branches starting with `afk/` are AFK-managed. Other branches are left alone.
+- When a session ends cleanly inside its own worktree, the runtime removes it automatically. If you are running inside a worktree, never call `worktree remove` on your own `cwd` — it strands every subsequent tool call on a path that no longer exists.

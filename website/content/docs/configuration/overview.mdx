@@ -93,7 +93,7 @@ this at startup.
 
 AFK's state directories (`~/.afk/`) are fully independent of Claude Code's
 `~/.claude/`. Plugin state for the plugin surface writes to
-`~/.claude/agent-framework/` independently — no shared state.
+`~/.afk/agent-framework/` independently — no shared state.
 
 ---
 
@@ -136,13 +136,14 @@ optional; unset fields fall through to env vars or built-in defaults.
 
 ### `models` — per-tier model bindings
 
-Bind specific models to the `small`, `medium`, and `large` quality tiers used
+Bind specific models to the `local`, `small`, `medium`, and `large` quality tiers used
 by skills and subagent dispatch. Each slot accepts a bare model id string or
 an object with optional provider credentials.
 
 ```json
 {
   "models": {
+    "local": "mlx-community/Qwen3-30B-A3B-4bit",
     "small": "claude-haiku-4-5-20251001",
     "medium": "claude-sonnet-4-6",
     "large": {
@@ -158,6 +159,7 @@ an object with optional provider credentials.
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `local` | `string \| object` | Model for locally-served inference (e.g. an MLX or llama.cpp shim). Unset by default — an unconfigured `local` slot is skipped rather than falling back. Env override: `AFK_MODEL_LOCAL`. |
 | `small` | `string \| object` | Model for cheap/fast work (e.g. classification, summarization). Env override: `AFK_MODEL_SMALL`. |
 | `medium` | `string \| object` | Model for general tasks. Env override: `AFK_MODEL_MEDIUM`. |
 | `large` | `string \| object` | Model for heavy reasoning or long-context work. Env override: `AFK_MODEL_LARGE`. |

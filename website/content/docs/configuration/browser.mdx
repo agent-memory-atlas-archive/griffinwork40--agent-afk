@@ -27,8 +27,9 @@ afk
 ```
 
 The agent issues `browser_open` → `browser_observe` → additional actions under
-the hood. In REPL mode, Chromium opens headed by default so you can watch the
-agent work.
+the hood. In REPL mode, Chromium is headless by default — the CLI entrypoint
+reports surface `afk`, which is in the headless set. Set `AFK_BROWSER_HEADLESS=0`
+to open a visible window and watch the agent work.
 
 ## The five tools
 
@@ -75,7 +76,7 @@ All browser environment variables are optional.
 | `AFK_BROWSER_ALLOWED_DOMAINS` | (empty — permissive) | Comma-separated host globs. Non-matching navigation is blocked. |
 | `AFK_BROWSER_BLOCKED_DOMAINS` | (empty) | Comma-separated host globs. Matching navigation is blocked regardless of the allowlist. |
 | `AFK_BROWSER_DOM_SNAPSHOTS` | off | `1` writes a gzipped DOM snapshot per `browser_act` to `~/.afk/state/witness/<sid>/browser/dom-snapshots/`. |
-| `AFK_BROWSER_BACKEND` | `playwright` | Reserved for future backends. Only `playwright` is supported. |
+| `AFK_BROWSER_BACKEND` | `auto` | Browser provider backend. `auto` (default) prefers Agent Browser and falls back to Playwright. `agent-browser` requires Agent Browser (fails if unavailable). `playwright` uses headless Playwright only. |
 | `AFK_BROWSER_CONFIG` | (none) | Absolute path to a JSON config file that overrides env-derived settings. |
 | `AFK_SESSION_ID` | `default` | Override the per-session BrowserContext key. Set when running multiple concurrent AFK processes that need isolated browser contexts. |
 
@@ -104,7 +105,7 @@ For per-project overrides, create `~/.afk/config/browser.json` (or point
   "allowedDomains": ["my-internal-tool.example.com"],
   "blockedDomains": [],
   "domSnapshots": false,
-  "backend": "playwright"
+  "backend": "auto"
 }
 ```
 

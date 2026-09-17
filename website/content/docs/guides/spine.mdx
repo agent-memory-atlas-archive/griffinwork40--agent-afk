@@ -1,0 +1,154 @@
+---
+title: "SPINE.md"
+description: "Agent-maintained codebase architecture manifest that keeps the agent grounded in your project's structure."
+---
+
+SPINE.md is a git-tracked file at your repo root that captures the architectural decisions the agent and your team have made: hard invariants, explicitly rejected patterns, and deliberate taste calls. The agent reads it during pre-flight recon and updates it automatically at the end of every session — so future sessions start knowing what the codebase considers non-negotiable.
+
+## What SPINE.md contains
+
+The file is organized into three sections, each keyed by a stable prefix:
+
+| Section | Prefix | What goes here |
+|---|---|---|
+| **Invariants** | `INV` | Load-bearing contracts and hard constraints — things that must always be true (e.g. "All env vars route through `env.ts`", "Files capped at 350 LOC") |
+| **Explicitly Rejected Patterns** | `REJ` | Approaches the project has actively decided not to use, often learned from a revert or a failed experiment |
+| **Taste Calls Made** | `TST` | Style or design decisions where alternatives exist but one was chosen deliberately |
+
+Each entry has a **stable ID** (`INV-001`, `REJ-002`, etc.), an ISO date, the originating session ID, and a single-line description:
+
+```
+## Invariants
+
+- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:`
+- **INV-002** (2026-09-17, spine-init): Every DECSTBM emit must be bracketed by save/restore or carry an explanatory comment
+
+## Explicitly Rejected Patterns
+
+- **REJ-001** (2026-09-17, spine-init): No raw process.env reads outside src/config/env.ts
+- **REJ-002** (2026-09-17, spine-init): No raw chalk.<color> calls outside src/cli/palette.ts
+
+## Taste Calls Made
+
+- **TST-001** (2026-09-17, spine-init): pnpm exclusively (lockfile is pnpm-specific); Node ≥22 required
+```
+
+IDs are stable across edits. If you change a description manually, the ID survives — other sessions and tools can still reference `INV-001` without breaking.
+
+## How the agent reads SPINE.md
+
+Every `/ground-state` pre-flight pass includes a **spine survey**: the agent reads `SPINE.md` from the repo root and folds its constraints into the grounding snapshot before any implementation work begins. Invariants, rejected patterns, and taste entries are surfaced alongside git state, CI config, and prior-session memory — so the session starts knowing what it must not break.
+
+The spine survey is silent when the file is absent or empty; no error is emitted. Once entries exist, they appear under the `Spine constraints` heading of the `ground-state` snapshot and are included in the Brief Anchor pasted into every sub-agent brief.
+
+## How SPINE.md is updated automatically
+
+At the end of every top-level session, the **SessionEnd hook** runs a single LLM call (using the cheapest available model — Haiku by default) to classify architectural signals in the session's git diff against the existing SPINE.md:
+
+```
+session ends → git diff HEAD captured → classifier runs → entries written or queued
+```
+
+The classifier assigns each finding one of four labels:
+
+| Label | What it means | What happens |
+|---|---|---|
+| `new-addition` | A new architectural principle worth recording | Auto-written to SPINE.md immediately |
+| `strengthens` | The diff reinforces an existing entry | Entry description updated with `(reinforced YYYY-MM-DD)` annotation |
+| `weakens` | The diff partially erodes an existing entry | Entry annotated `(partially weakened YYYY-MM-DD)`; logged to pending |
+| `contradicts` | The diff directly contradicts an existing entry | Held in `spine-pending.jsonl`; Telegram push sent for human review |
+
+Entries that can be written automatically are written atomically (temp file + rename) so a crash mid-write never corrupts the file. The hook is **best-effort** — it never blocks session teardown, and any error is logged to `spine-pending.jsonl` rather than thrown.
+
+### What the hook skips
+
+- **Subagent sessions** — only top-level sessions update SPINE.md. Child forks do not accumulate duplicate entries.
+- **Empty diffs** — if the session produced no changes to tracked files, the classifier is never called (zero cost).
+- **No-SPINE sessions** — if SPINE.md does not yet exist, the hook creates a fresh empty document when the first classifiable entry is found.
+
+## Bootstrapping with `/spine init`
+
+If you are adding SPINE.md to an existing codebase, run:
+
+```
+/spine init
+```
+
+The command gathers seed material from your repo automatically:
+
+1. `Invariant:`, `Contract:`, and `History:` comments found by ripgrep across `.ts`, `.js`, `.mjs`, and `.md` files
+2. `AFK.md` (project conventions — the richest seed source)
+3. Git revert history (`git log --grep=Revert`) — strong signal for `REJ` entries
+4. `CHANGELOG.md` (first 2,000 chars)
+5. Any ADR directory found at `docs/adr`, `adr`, or `docs/decisions`
+
+The collected material is sent through the init classifier, which proposes initial entries. Results are written to `SPINE.md` at the repo root. Review them with `/spine show` and commit the file to git.
+
+If SPINE.md already exists, `/spine init` refuses to overwrite it unless you pass `--force`:
+
+```
+/spine init --force
+```
+
+## Managing SPINE.md manually
+
+### Viewing entries
+
+```
+/spine show
+```
+
+Prints all three sections with IDs, dates, and session attribution.
+
+### Reviewing queued contradictions
+
+Daemon sessions and unattended runs cannot prompt you interactively, so `contradicts` items are held in a queue:
+
+```
+/spine pending
+```
+
+Each item shows the existing entry alongside the conflicting description and the session that produced it.
+
+To act on a contradiction, edit SPINE.md directly (the queued item is just a notification), then dismiss it:
+
+```
+/spine dismiss 2          # remove item 2 from the queue
+/spine dismiss-all        # clear the entire queue
+```
+
+### Direct edits
+
+SPINE.md is plain markdown — edit it like any other file. The parser is lenient; it only interprets lines matching the entry pattern:
+
+```
+- **PREFIX-NNN** (YYYY-MM-DD, session-id): description
+```
+
+Any other content is preserved verbatim in a trailer block. IDs you assign manually must follow the `INV-NNN`, `REJ-NNN`, or `TST-NNN` format with zero-padded numbers to avoid collisions with auto-generated IDs.
+
+## When to regenerate
+
+Run `/spine init --force` when:
+
+- The project has gone through a significant architectural shift and the existing entries are no longer representative
+- You want to re-seed from a heavily updated `AFK.md` or CHANGELOG
+- You are starting from a forked or cloned repo that has no SPINE.md yet
+
+Otherwise the SessionEnd hook keeps SPINE.md current incrementally — you rarely need to touch it manually.
+
+## Disabling the hook
+
+Set `AFK_DISABLE_SPINE_UPDATE=1` to skip the classifier at session end entirely. This is useful in CI environments where the LLM call is unwanted, or when you want to manage SPINE.md exclusively through `/spine init` and manual edits.
+
+```bash
+AFK_DISABLE_SPINE_UPDATE=1 afk chat "run the test suite"
+```
+
+Or set it permanently in `afk.env`:
+
+```
+AFK_DISABLE_SPINE_UPDATE=1
+```
+
+Source: `src/agent/spine/` (store, classifier, hook), `src/cli/slash/commands/spine.ts`, `src/config/env.ts` (`AFK_DISABLE_SPINE_UPDATE`).

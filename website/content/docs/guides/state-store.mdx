@@ -1,0 +1,302 @@
+---
+title: "State Store"
+description: "Durable key-value store for persisting structured data across sessions."
+---
+
+The state store is a namespaced JSON document store that persists across every AFK surface and session. Unlike [cross-session memory](/guides/memory), which stores natural-language facts for retrieval by relevance, the state store holds structured machine-readable values — progress checkpoints, shared task state, coordination flags, counters, lookup tables.
+
+Documents survive process restarts, surface switches, and parallel sessions out of the box. The store is backed by a WAL-mode SQLite file at `~/.afk/state/kv/kv.db`.
+
+## Key concepts
+
+### Namespace + key
+
+Every document lives at a `(namespace, key)` address. Both components follow the same rules:
+
+- Pattern: `[A-Za-z0-9_.-]+`
+- Max length: 128 characters
+
+Choose a namespace that groups related documents — one per concern, tool, or project. Keys identify individual documents within a namespace.
+
+```
+namespace: "migration-tracker"   key: "phase-1"
+namespace: "todos"               key: "2026-09-17"
+namespace: "my-plugin"           key: "last-run"
+```
+
+### Version tracking
+
+Every document carries a monotonically incrementing `version` counter. It starts at `1` on first write and increments by one on every subsequent `state_put`. The version is returned by `state_get` and `state_query`, and is the input to compare-and-swap writes.
+
+### TTL support
+
+Documents can be given a time-to-live by passing `ttl_ms` on any write. Expired documents are invisible to `state_get` and `state_query` — they are filtered at read time and garbage-collected when the store is next opened. Setting a new `ttl_ms` on an update resets the expiry clock from the moment of the write.
+
+## Operations
+
+Five tools cover the full operation surface.
+
+### state_get
+
+Retrieve a single document. Returns `null` if the document does not exist or has expired.
+
+```
+state_get(namespace, key) → { key, value, version, updated_at } | null
+```
+
+**Parameters:**
+- `namespace` — document namespace (`[A-Za-z0-9_.-]+`, max 128 chars)
+- `key` — document key (same rules)
+
+**Example:**
+
+```json
+// Input
+{ "namespace": "migration-tracker", "key": "phase-1" }
+
+// Output (found)
+{ "key": "phase-1", "value": { "status": "done", "rows": 14200 }, "version": 3, "updated_at": 1726531200000 }
+
+// Output (not found)
+null
+```
+
+### state_put
+
+Write or overwrite a document unconditionally. Creates the document on first write (version returns as `1`) and increments the version on every subsequent write. Prefer `state_cas` when you need to guard against concurrent overwrites.
+
+```
+state_put(namespace, key, value, [ttl_ms], [metadata]) → { version, created }
+```
+
+**Parameters:**
+- `namespace` — document namespace
+- `key` — document key
+- `value` — any JSON-serializable value: object, array, string, number, boolean, or null
+- `ttl_ms` *(optional)* — milliseconds until the document expires automatically
+- `metadata` *(optional)* — JSON-serializable audit metadata; stored on disk but not returned by `state_get`
+
+**Example:**
+
+```json
+// Input — first write
+{ "namespace": "todos", "key": "sprint-3", "value": { "open": 7, "closed": 12 } }
+
+// Output
+{ "version": 1, "created": true }
+
+// Input — second write (overwrite)
+{ "namespace": "todos", "key": "sprint-3", "value": { "open": 5, "closed": 14 } }
+
+// Output
+{ "version": 2, "created": false }
+```
+
+**With TTL:**
+
+```json
+{
+  "namespace": "rate-limit",
+  "key": "github-api",
+  "value": { "remaining": 4800 },
+  "ttl_ms": 3600000
+}
+```
+
+The document disappears automatically after one hour.
+
+### state_cas
+
+Compare-and-swap write. Updates the document **only if** its current version matches `expected_version`. Returns `{ matched: false }` when the version does not match or the document does not exist. This is the safe path for concurrent writes — read the document, capture its version, and use that version in the CAS call.
+
+```
+state_cas(namespace, key, expected_version, value, [ttl_ms], [metadata]) → { matched, newVersion? }
+```
+
+**Parameters:**
+- `namespace`, `key` — same as `state_put`
+- `expected_version` — version the document must currently have
+- `value`, `ttl_ms`, `metadata` — same as `state_put`
+
+**Example — safe counter increment:**
+
+```json
+// Step 1: read the current document
+state_get("counters", "processed-files")
+// → { "value": 142, "version": 7, ... }
+
+// Step 2: CAS — will succeed only if version is still 7
+state_cas("counters", "processed-files", 7, 143)
+// → { "matched": true, "newVersion": 8 }
+
+// If another session wrote in between, matched is false:
+// → { "matched": false }
+// Retry: re-read and try again.
+```
+
+<Callout type="info">
+When `matched` is `false`, the document was either modified by another session between your read and write, or it does not exist. Read the current state again and retry the CAS with the fresh version.
+</Callout>
+
+### state_delete
+
+Remove a document. Returns `{ deleted: true }` if it existed, `{ deleted: false }` if it did not.
+
+```
+state_delete(namespace, key) → { deleted }
+```
+
+**Example:**
+
+```json
+// Input
+{ "namespace": "migration-tracker", "key": "phase-1" }
+
+// Output (existed)
+{ "deleted": true }
+
+// Output (already gone)
+{ "deleted": false }
+```
+
+### state_query
+
+List documents in a namespace, sorted by key. Supports key prefix filtering and pagination. Expired documents are excluded.
+
+```
+state_query(namespace, [key_prefix], [limit]) → QueryRow[]
+```
+
+**Parameters:**
+- `namespace` — namespace to list
+- `key_prefix` *(optional)* — only return keys that start with this string
+- `limit` *(optional)* — max results; default 20, maximum 100
+
+**Example:**
+
+```json
+// All documents in a namespace
+{ "namespace": "migration-tracker" }
+// → [
+//   { "key": "phase-1", "value": { "status": "done" }, "version": 3, ... },
+//   { "key": "phase-2", "value": { "status": "running" }, "version": 1, ... },
+//   { "key": "phase-3", "value": { "status": "pending" }, "version": 1, ... }
+// ]
+
+// Filter by prefix
+{ "namespace": "migration-tracker", "key_prefix": "phase-1" }
+// → [{ "key": "phase-1", ... }]
+
+// Paginate
+{ "namespace": "large-namespace", "limit": 10 }
+```
+
+## On-disk location
+
+```
+~/.afk/state/kv/kv.db
+```
+
+The file is created on first use. Permissions are set to `0600` (owner read/write only). The directory is `0700`.
+
+Setting `AFK_STATE_DIR` relocates the entire state directory, which moves `kv.db` along with it:
+
+```bash
+export AFK_STATE_DIR=/path/to/shared/state
+# → kv.db lands at /path/to/shared/state/kv/kv.db
+```
+
+## Concurrent access
+
+The store uses WAL-mode SQLite with a 5-second busy timeout. Multiple AFK surfaces — REPL, Telegram bot, daemon sessions, and scheduled tasks — can all read and write safely when they share the same `AFK_STATE_DIR`.
+
+For **uncoordinated writes** from parallel sessions, use `state_cas` instead of `state_put`. CAS transactions are serialized by SQLite's exclusive write lock, so exactly one caller wins when two sessions race on the same version.
+
+## Access in subagents
+
+Top-level (coordinating) sessions have the full five-tool surface. Subagent children receive read-only access by default: `state_get` and `state_query` only. Write tools (`state_put`, `state_cas`, `state_delete`) are intentionally withheld to prevent parallel workers from producing uncoordinated fan-out into shared state.
+
+If a subagent needs to report results back to its coordinator, the coordinator should read the subagent's output and write to the store itself, or use the [workspace](/guides/subagents#workspace) for ephemeral per-session coordination.
+
+## Use cases
+
+### Checkpoint long-running work
+
+Store progress as you go so a session can resume after interruption without replaying completed steps:
+
+```json
+// Write after completing each phase
+state_put("etl-job", "checkpoint", {
+  "phase": "transform",
+  "rows_done": 50000,
+  "rows_total": 120000,
+  "last_id": "rec_0xAB4F"
+})
+
+// On resumption, read the checkpoint and skip completed work
+state_get("etl-job", "checkpoint")
+```
+
+### Cross-session coordination flags
+
+One session sets a flag; another checks it before proceeding:
+
+```json
+// Session A — before starting a destructive migration
+state_put("deploy-lock", "db-migration", { "held_by": "session-abc123", "started_at": 1726531200000 })
+
+// Session B — check before running a conflicting operation
+state_get("deploy-lock", "db-migration")
+// → null means safe to proceed; non-null means wait
+```
+
+### Shared counters with CAS
+
+Safely increment a shared counter across multiple parallel sessions:
+
+```json
+// Read current value
+state_get("metrics", "api-calls")  // → { "value": 142, "version": 5 }
+
+// CAS increment — retries on conflict
+state_cas("metrics", "api-calls", 5, 143)
+// On { "matched": false }: re-read and retry
+```
+
+### Ephemeral rate-limit tracking
+
+Use TTL to store state that should expire automatically:
+
+```json
+state_put("rate-limits", "github-search", {
+  "remaining": 9,
+  "reset_at": 1726534800000
+}, { "ttl_ms": 3600000 })
+```
+
+### Structured audit trail
+
+Use the key structure to create a time-ordered log within a namespace:
+
+```json
+state_put("audit", "2026-09-17T14:32:00Z", {
+  "action": "file-deleted",
+  "path": "/tmp/cache.json",
+  "session": "abc123"
+})
+
+// Later: list all audit entries for a day
+state_query("audit", { "key_prefix": "2026-09-17" })
+```
+
+## Comparison with cross-session memory
+
+| | State store | Cross-session memory |
+|---|---|---|
+| **Format** | Structured JSON documents | Natural-language text and facts |
+| **Retrieval** | Exact namespace + key lookup | Full-text search by relevance |
+| **Versioning** | Yes — monotonic version counter + CAS | No |
+| **TTL** | Yes — per-document millisecond TTL | No |
+| **Best for** | Machine-readable state, coordination, checkpoints | Preferences, conventions, decisions, learnings |
+| **Subagent writes** | Coordinator only (children read-only) | Coordinator only (children read-only) |
+| **On disk** | `~/.afk/state/kv/kv.db` | `~/.afk/state/memory/` |

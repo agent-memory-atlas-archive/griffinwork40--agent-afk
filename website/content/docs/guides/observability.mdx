@@ -10,8 +10,10 @@ Agent AFK records durable evidence of every unattended run so you can review exa
 Every agent session appends an append-only NDJSON record to:
 
 ```
-~/.afk/state/witness/<session-id>/trace.jsonl
+~/.afk/state/witness/<session-label>/trace.jsonl
 ```
+
+The `<session-label>` defaults to a UUID but can be a human-readable name when the caller supplies one (for example, when resuming a known session). `afk trace list` shows the label for each recorded session.
 
 The file is written event-by-event during the run, so it survives crashes and partially-written tails are tolerated — malformed trailing lines are counted and skipped, never fatal.
 
@@ -42,7 +44,7 @@ List all sessions that have a trace, most recent first:
 afk trace list
 ```
 
-Prints `<timestamp>  <session-id>` rows. Pass `-n` / `--max` to cap the output (default 20, max 200):
+Prints `<timestamp>  <session-label>` rows. Pass `-n` / `--max` to cap the output (default 20, max 200):
 
 ```bash
 afk trace list --max 50
@@ -54,7 +56,7 @@ Pretty-print a session's trace for human review. With no argument, shows the **m
 
 ```bash
 afk trace show            # latest run
-afk trace show <session>  # a specific session id
+afk trace show <session>  # a specific session label or id
 ```
 
 **Options:**
@@ -91,7 +93,7 @@ afk trace show --json | jq '.kind'
 Because the trace is written live, you can tail it while a long run is in progress:
 
 ```bash
-tail -f ~/.afk/state/witness/<session-id>/trace.jsonl | jq .
+tail -f ~/.afk/state/witness/<session-label>/trace.jsonl | jq .
 ```
 
 ---

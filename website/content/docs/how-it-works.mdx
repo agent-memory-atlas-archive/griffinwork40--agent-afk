@@ -100,15 +100,22 @@ All AFK state lives under `~/.afk/` — independent of `~/.claude/`:
 
 ```
 ~/.afk/
-  config/           afk.env, afk.config.json, mcp.json
-  state/            sessions/, todos/, transcripts/, daemon/, memory/ (SQLite)  ($AFK_STATE_DIR overrides this tier)
-  plugins/          user-installed plugins (starts empty)
-  agents/           user-defined subagents
-  commands/         user-defined slash commands
-  skills/           user-defined skills
+  config/           afk.env, afk.config.json, mcp.json, schedules.json
+  state/            ($AFK_STATE_DIR overrides this tier)
+    sessions/       session-store sidecars + per-session event ledgers
+    todos/          todo-panel data
+    transcripts/    autosaved REPL session transcripts
+    daemon/         per-instance daemon state
+    memory/         cross-session memory (SQLite)
+    witness/        per-session trace/evidence files (trace.jsonl, prompts/, outputs/)
+    bg/             background job logs (one subdir per job)
+    queue/          pull-mode task queue
+  plugins/          user-installed plugins
+  skills/           user-authored and generated skills
+  farms/            Speculative Branch Farm worktrees
   logs/
   cache/
-  agent-framework/  telemetry, briefs (JSONL)
+  agent-framework/  telemetry, pattern cards, briefs (JSONL)
 ```
 
 You can delete `~/.claude/` entirely and Agent AFK still runs.
