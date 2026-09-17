@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.219.1] - 2026-09-17
+
+### Fixed
+- remove double-slash prefix on slash-command autocomplete (#1654) (19dc7edb)
+
 ## [5.219.0] - 2026-09-17
 
 ### Added
