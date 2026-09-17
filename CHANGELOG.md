@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.215.0] - 2026-09-17
+
+### Added
+- offer to merge docs/test-only PRs after MERGE verdict (#1703) (36d3ee8e)
+
 ## [5.214.1] - 2026-09-17
 
 ### Fixed
