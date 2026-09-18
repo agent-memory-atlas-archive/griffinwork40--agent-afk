@@ -121,4 +121,4 @@ behavior. A killed trace is in `sealed-crashed` state, which readers can disting
 
 - ~~Abort-cascade correctness~~ -- shipped: [abort-cascade.md](./abort-cascade.md)
 - ~~Crash-to-resume~~ -- shipped: [crash-to-resume.md](./crash-to-resume.md)
-- Concurrent-emitter trace integrity (10 parallel writers, SIGKILL mid-batch)
+- ~~Concurrent-emitter trace integrity~~ -- shipped: [concurrent-emitter.md](./concurrent-emitter.md)
