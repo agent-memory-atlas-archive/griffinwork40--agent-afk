@@ -300,8 +300,8 @@ describe('CupFrameRenderer — no trailing-\\n scroll', () => {
     const doneOut = chunks.join('');
     void allWrites();
 
-    // done() must show the cursor.
-    expect(doneOut).toContain('\x1b[?25h');
+    // done() must emit the full atomic sync block: SYNC_START + CURSOR_SHOW + SYNC_END.
+    expect(doneOut).toContain('\x1b[?2026h\x1b[?25h\x1b[?2026l');
   });
 
   it('clamps to row 1 when targetBottomRow is 0 (pathological/resized-to-1-row)', () => {
@@ -340,27 +340,28 @@ describe('CupFrameRenderer — no trailing-\\n scroll', () => {
   // -------------------------------------------------------------------------
   // H1 regression: frame-write failure restores cursor visibility.
   //
-  // Scenario: CURSOR_HIDE is emitted as a separate write() call BEFORE the
-  // frame content (so terminals without synchronized-output still see the
-  // hide before flicker). If the subsequent frame-content write() throws
-  // (TTY closed mid-render, EPIPE on a closed pipe), the cursor is left
+  // Scenario: CURSOR_HIDE is emitted atomically inside the sync block together
+  // with frame content (SYNC_START + CURSOR_HIDE + erase/write + SYNC_END), so
+  // a single write() call carries both the hide and the frame. If that write()
+  // throws (TTY closed mid-render, EPIPE on a closed pipe), the cursor is left
   // invisible on the host terminal. The catch path must emit CURSOR_SHOW
   // best-effort so a partial teardown doesn't strand a phantom cursor.
   // -------------------------------------------------------------------------
   it('restores cursor visibility when the frame-content write throws', () => {
-    // Mock stream: CURSOR_HIDE write succeeds, frame-content write throws,
-    // recovery CURSOR_SHOW write succeeds. Capture which payloads were
-    // attempted so we can assert on the recovery write.
+    // Mock stream: frame write throws, recovery CURSOR_SHOW write succeeds.
+    // CURSOR_HIDE is now inside the sync block alongside frame content, so
+    // the single write contains both. The recovery write restores visibility.
     const writes: string[] = [];
+    let callCount = 0;
     const stream = {
       isTTY: true,
       columns: 80,
       rows: 24,
       write: (chunk: string): boolean => {
         writes.push(chunk);
-        // Frame content is the long multi-escape payload; the brief
-        // CURSOR_HIDE write is single-purpose. Distinguish by length.
-        if (chunk.length > 10) {
+        callCount++;
+        // First write is the sync-wrapped frame (includes CURSOR_HIDE).
+        if (callCount === 1) {
           throw new Error('EPIPE');
         }
         return true;
@@ -372,12 +373,12 @@ describe('CupFrameRenderer — no trailing-\\n scroll', () => {
     // Should not throw — catch block swallows the EPIPE and attempts recovery.
     expect(() => renderer.render('content that will fail', 23)).not.toThrow();
 
-    // First write: CURSOR_HIDE.
-    expect(writes[0]).toBe('\x1b[?25l');
-    // Second write: frame content (threw).
-    expect(writes[1]).toContain('content that will fail');
-    // Third write: recovery CURSOR_SHOW emitted from the catch path.
-    expect(writes[2]).toBe('\x1b[?25h');
+    // First write: sync-wrapped frame content with CURSOR_HIDE inside (threw).
+    expect(writes[0]).toContain('\x1b[?2026h'); // SYNC_START
+    expect(writes[0]).toContain('\x1b[?25l');   // CURSOR_HIDE inside sync
+    expect(writes[0]).toContain('content that will fail');
+    // Second write: recovery CURSOR_SHOW wrapped in sync block.
+    expect(writes[1]).toBe('\x1b[?2026h\x1b[?25h\x1b[?2026l');
   });
 
   it('does not attempt cursor restore on non-TTY when frame write throws', () => {
