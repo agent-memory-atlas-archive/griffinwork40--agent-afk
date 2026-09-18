@@ -62,7 +62,8 @@ export function registerCapturesCommand(program: Command): void {
     .action(
       async (options: { session?: string; limit: string; json: boolean }) => {
         try {
-          const limitN = Math.max(1, parseInt(options.limit, 10) || 20);
+          const n = parseInt(options.limit, 10);
+          const limitN = Number.isNaN(n) || n <= 0 ? 20 : n;
 
           const entries = await listCaptures({
             sessionId: options.session,

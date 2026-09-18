@@ -146,6 +146,9 @@ export async function listCaptures(options: ListCapturesOptions = {}): Promise<C
     throw err;
   }
 
+  // Guard against path traversal: keep only safe session directory names.
+  sessionDirs = sessionDirs.filter((d) => /^[a-zA-Z0-9_-]+$/.test(d));
+
   // Apply session filter if provided.
   if (filterSession !== undefined) {
     sessionDirs = sessionDirs.filter((d) => d === filterSession);
