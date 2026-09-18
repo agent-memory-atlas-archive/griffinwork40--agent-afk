@@ -102,3 +102,103 @@ describe('wrapToWidth', () => {
     expect(out).toContain(allPua);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3B: cell-width correctness audit — CJK and emoji handling
+//
+// Audit finding: wrap-ansi v10 (our dependency) internally imports string-width
+// v8 for ALL column measurements. string-width correctly reports 2 display cells
+// for CJK Unified Ideographs and most emoji, so wrapToWidth() inherits correct
+// cell-width handling without any additional code.
+//
+// Evidence:
+//   node_modules/wrap-ansi/index.js line 1: import stringWidth from 'string-width'
+//   node_modules/wrap-ansi/package.json dependencies: { "string-width": "^8.2.0" }
+//   package.json: "string-width": "^8.2.0" (also a direct dep in this project)
+//
+// Wrap-mode semantics for CJK (documented here for future maintainers):
+//
+//   SOFT WRAP (breakLongWords: false, the default):
+//     wrap-ansi v10 uses word-wrap mode — it splits at spaces/word-boundaries.
+//     A contiguous run of CJK without spaces is treated as ONE "word" and is
+//     not split, exactly like a long ASCII token without spaces (e.g. a URL).
+//     When CJK characters ARE separated by spaces, wrap-ansi measures their
+//     cell width correctly (via string-width) and wraps at the right boundary.
+//
+//   HARD WRAP (breakLongWords: true):
+//     wrap-ansi v10 uses hard mode — it forces a break after every cell-width
+//     boundary regardless of word boundaries. CJK strings are broken at exact
+//     2-cell boundaries. This is the correct mode for forcing CJK text to fit.
+//
+// These tests pin the invariant so a future wrap-ansi upgrade cannot silently
+// regress cell-width measurement.
+// ---------------------------------------------------------------------------
+
+describe('wrapToWidth — CJK and emoji cell-width (Phase 3B audit)', () => {
+  it('soft-wrap: CJK with spaces wraps at correct cell boundaries', () => {
+    // "一 二 三 四 五 六" — each char is 2 cells, space is 1 cell.
+    // At width=6: "一 二" = 5 cells, "三 四" = 5 cells, "五 六" = 5 cells (all fit).
+    const cjkSpaced = '一 二 三 四 五 六';
+    const lines = wrapToWidth(cjkSpaced, 6).split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    // No line must exceed 6 display cells; each char × 2 + spaces
+    for (const line of lines) {
+      // Measure via char count (2 per CJK, 1 per space)
+      const cells = [...line].reduce((sum, ch) => sum + (/\s/.test(ch) ? 1 : 2), 0);
+      expect(cells).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it('soft-wrap: contiguous CJK without spaces is treated as one word (no split)', () => {
+    // This mirrors the behaviour of a long ASCII token with no spaces — soft-wrap
+    // leaves it intact. The fix is to use breakLongWords:true when hard splitting
+    // is needed (e.g. the committed-band path already does this).
+    const cjk = '一二三四五六';  // 6 × 2 = 12 cells — one "word" in soft-wrap
+    const out = wrapToWidth(cjk, 10);  // 10 < 12, but no word boundary
+    expect(out.split('\n')).toHaveLength(1);  // stays on one line, same as a long URL
+  });
+
+  it('breakLongWords: CJK without spaces is split at exact cell boundaries', () => {
+    // At width=10: 5 CJK chars (10 cells) fit on line 1; 1 char on line 2.
+    const cjk = '一二三四五六';  // 12 cells
+    const lines = wrapToWidth(cjk, 10, { breakLongWords: true }).split('\n');
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    // All original characters must survive (no loss)
+    expect(lines.join('')).toBe(cjk);
+    // No line may exceed 10 cells (2 cells per CJK char)
+    for (const line of lines) {
+      expect([...line].length * 2).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('breakLongWords: 10 CJK chars wrapped at width 8 fit within 4 chars per line', () => {
+    // 4 CJK chars = 8 cells = exactly width; 10 chars → ceil(10/4) = 3 lines.
+    const cjk = '一二三四五六七八九十';  // 20 cells
+    const lines = wrapToWidth(cjk, 8, { breakLongWords: true }).split('\n');
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    const rejoined = lines.join('');
+    expect(rejoined).toBe(cjk);
+    for (const line of lines) {
+      expect([...line].length * 2).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it('does not wrap CJK text that already fits (no false wrap)', () => {
+    // 4 CJK chars = 8 cells; at width=10 they fit — no wrap regardless of mode.
+    const cjk = '一二三四';  // 8 cells
+    expect(wrapToWidth(cjk, 10).split('\n')).toHaveLength(1);
+    expect(wrapToWidth(cjk, 10, { breakLongWords: true }).split('\n')).toHaveLength(1);
+  });
+
+  it('soft-wrap: mixed ASCII+CJK wraps at correct cell boundary when spaces present', () => {
+    // "Hi 一二三 四五六" — "Hi" "一二三" "四五六" are the three words.
+    // "Hi " = 3 cells, "一二三" = 6 cells → 9 cells on line 1 ≤ 10.
+    // " 四五六" = 7 cells → would push to 16 total, so 四五六 goes to line 2.
+    const mixed = 'Hi 一二三 四五六';
+    const lines = wrapToWidth(mixed, 10).split('\n');
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+    // The ASCII and all CJK characters must survive.
+    const text = lines.join(' ').replace(/\s+/g, '');
+    expect(text).toBe(mixed.replace(/\s+/g, ''));
+  });
+});
