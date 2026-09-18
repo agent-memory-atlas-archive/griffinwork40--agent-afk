@@ -75,10 +75,18 @@ describe('formatPendingBuffer', () => {
       .join('\n');
 
     const out = formatPendingBuffer(tall, WIDTH, true);
+    const stripped = stripAnsi(out);
 
     // Live preview: the actual pipe-delimited rows must be visible (dimmed).
-    expect(stripAnsi(out)).toContain('Col A');
-    expect(stripAnsi(out)).toContain('value 39');
+    expect(stripped).toContain('Col A');
+    // Early rows are visible.
+    expect(stripped).toContain('value 0');
+    // The viewport-height cap prevents ghost-row overflow: rows beyond the cap
+    // (viewport default is process.stdout.rows ?? 24, minus 2 = 22 rows in
+    // test environments where stdout.rows is undefined) must NOT appear.
+    // This is the ghost-row regression guard — un-erasable overlay rows that
+    // linger as apparent "duplicate content" after the block commits.
+    expect(stripped).not.toContain('value 39');
     // The rendered table borders (│) from the commit-time table renderer must
     // NOT appear — alignment is deferred to commit time.
     expect(out).not.toContain('│');
@@ -122,6 +130,22 @@ describe('formatPendingBuffer', () => {
     const out = formatPendingBuffer('hello world', WIDTH, true);
     expect(out).toContain('hello world');
     expect(out).not.toContain('streaming');
+  });
+
+  it('caps plain prose to viewport height, preventing ghost-row overflow', () => {
+    // 50 lines of prose (no markdown markers) — well beyond the viewport
+    // default of (process.stdout.rows ?? 24) - 2 = 22 rows.
+    const tall = Array.from({ length: 50 }, (_, i) => `sentence ${i}`).join('\n');
+    const out = formatPendingBuffer(tall, WIDTH, true);
+    const stripped = stripAnsi(out);
+    // Early rows are visible.
+    expect(stripped).toContain('sentence 0');
+    // Rows beyond the viewport cap must NOT appear — un-erasable ghost rows.
+    expect(stripped).not.toContain('sentence 49');
+    // Sanity: output row count is at most viewportRows (22 in test env).
+    const outputLines = out.split('\n');
+    const viewportRows = Math.max(1, (process.stdout.rows ?? 24) - 2);
+    expect(outputLines.length).toBeLessThanOrEqual(viewportRows);
   });
 
   it('returns empty string when shouldRender is false', () => {

@@ -83,7 +83,21 @@ export function formatPendingBuffer(
   // breakLongWords: same contract as formatBlockForCommit — a long unbreakable
   // token must not overflow contentWidth, or the live overlay paints past the
   // right edge and the compositor's row accounting drifts.
-  return wrapToWidth(pendingRender, contentWidth, { breakLongWords: true });
+  const wrapped = wrapToWidth(pendingRender, contentWidth, { breakLongWords: true });
+
+  // Invariant: the overlay must never exceed the viewport height. Once any
+  // preview row scrolls into scrollback, CUP addresses become unreachable and
+  // the erase pass cannot reclaim those rows — they persist as ghost-row
+  // duplicates after the block commits. Cap AFTER wrapToWidth because wrapping
+  // can expand a single long line into multiple physical rows.
+  // The per-branch caps in previewCodeFence/previewTable guard their own
+  // content pre-wrap; this is the uniform post-wrap ceiling.
+  const viewportRows = Math.max(1, (process.stdout.rows ?? 24) - 2);
+  const lines = wrapped.split('\n');
+  if (lines.length > viewportRows) {
+    return lines.slice(0, viewportRows).join('\n');
+  }
+  return wrapped;
 }
 
 /**
