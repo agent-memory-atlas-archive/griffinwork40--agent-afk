@@ -13,7 +13,7 @@
  * borrows them through the host interface.
  */
 
-import type { LogUpdateFn, CompositorScrollRegionGuard, BandRowMeta } from './terminal-compositor.types.js';
+import type { LogUpdateFn, CompositorScrollRegionGuard, BandRowMeta, FramePlacementMode } from './terminal-compositor.types.js';
 import type { BandReflowCache } from './terminal-compositor.band-reflow.js';
 import {
   reflowCommittedBandToWidth,
@@ -57,6 +57,8 @@ export interface CommittedBandHost {
   commitInFlight: boolean;
   /** Whether any commit has happened this arm cycle (guards growthDeficit). */
   hasCommitted: boolean;
+  /** Frame placement regime — flipped to 'bottom-pinned' on first commit. */
+  placementMode: FramePlacementMode;
   /** Stale-guard for endTurnFlush: true when committed-band state has changed
    *  since the last flush. Cleared by clearCommittedBand(); mirrors bandGeometryStale. */
   lifecycleStateDirty: boolean;
@@ -171,6 +173,11 @@ export function commitAbove(self: CommittedBandHost, text: string): void {
   // Mark that a commit has happened this arm cycle so growthDeficit in
   // repaint() knows there is transcript content above the frame to protect.
   self.hasCommitted = true;
+  // Transition from cursor-follow to bottom-pinned: the first commit means
+  // streaming content is arriving, so the frame snaps to the viewport floor.
+  // This is the ONLY site that flips the mode; resetState() resets it back
+  // to 'cursor-follow' for the next arm cycle.
+  self.placementMode = 'bottom-pinned';
   // Mark the compositor state as dirty so endTurnFlush (lifecycle.ts) knows
   // a redraw is warranted. Mirrors the bandGeometryStale setter pattern.
   self.lifecycleStateDirty = true;
@@ -258,6 +265,9 @@ export function clearCommittedBand(self: CommittedBandHost): void {
  */
 export function resetCommittedBand(self: CommittedBandHost): void {
   self.hasCommitted = false;
+  // Reset placement to cursor-follow so a /clear yields the same
+  // banner-adjacent prompt as a fresh session start.
+  self.placementMode = 'cursor-follow';
   clearCommittedBand(self);
   self.commitInFlight = false;
 }

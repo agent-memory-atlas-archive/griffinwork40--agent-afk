@@ -26,6 +26,7 @@ import type {
   BandRowMeta,
   CompositorInputMode,
   CompositorScrollRegionGuard,
+  FramePlacementMode,
   LogUpdateFn,
   PickerController,
 } from './terminal-compositor.types.js';
@@ -83,6 +84,8 @@ export interface FrameHost {
   bandReflowCache: BandReflowCache | null;
   hasCommitted: boolean;
   anchorRow: number | undefined;
+  /** Frame placement regime — see {@link FramePlacementMode}. */
+  placementMode: FramePlacementMode;
   lastKnownRows: number;
   /** True while commitAbove is executing (Phase 1 → Phase 3). Guards Phase 2
    *  repaints from applying content-following, which would misplace the frame
@@ -232,28 +235,38 @@ export function repaint(self: FrameHost): void {
   // hard upper bound for targetBottomRow in ALL branches below.
   const absoluteBottom = Math.max(1, (self.stdout.rows ?? 24) - 1 - extraRows);
   const frame = frameLines.join('\n');
-  // Invariant: the input frame is ALWAYS bottom-pinned (targetBottomRow ===
-  // absoluteBottom), on a fresh session and after every commit alike. The
-  // input line is the last frameLines entry, so it sits on absoluteBottom; the
-  // dropdown / hint / streaming overlay grow UPWARD into the empty viewport
-  // above it ("input pinned, content rises") without ever shifting the row the
-  // user types on. This is what makes opening the slash-command menu on a
-  // brand-new session leave the prompt put instead of shoving it down to make
-  // headroom.
+  // Invariant: the input frame is bottom-pinned (targetBottomRow ===
+  // absoluteBottom) once committed content exists. On a FRESH session
+  // (placementMode === 'cursor-follow', no committed content yet), the frame
+  // instead sits just below the banner so the prompt appears directly under
+  // the welcome art — no large empty gap. The dropdown / hint / streaming
+  // overlay grow UPWARD from the input in both modes.
   //
-  // History: this used to be a two-regime placement — "content-following"
-  // (frame pinned just below the banner at min(absoluteBottom,
-  // max(anchorRow, committedBandBottomRow) + physicalRows)) while idle with a
-  // banner, bottom-anchored only during a commit or once enough committed
-  // content had marched the frame to the floor. The side effect was that on a
-  // fresh session the prompt sat one row under the banner with no room above
-  // it, so opening the completion dropdown grew physicalRows and pushed the
-  // whole frame DOWN. Unconditional bottom-pinning removes that regime; the
-  // banner is still protected as a ceiling by the anchorRow floor in
-  // frame-preserve.ts / committed-band-repin.ts, and committed text still lands
-  // in the above-frame region — it just accumulates upward from the bottom
-  // (newest hugging the input) instead of downward from the banner.
-  const targetBottomRow = absoluteBottom;
+  // Transition: cursor-follow → bottom-pinned fires once in commitAbove
+  // (committed-band-commit.ts) when hasCommitted first becomes true. After
+  // that the frame stays bottom-pinned for the remainder of the arm cycle.
+  //
+  // History: an earlier two-regime "content-following" placement pinned the
+  // frame just below the banner while idle, which caused opening the dropdown
+  // to push the whole frame DOWN (no headroom above the prompt). That was
+  // replaced with unconditional bottom-pinning, which fixed the dropdown but
+  // created a large empty gap on fresh sessions. placementMode restores the
+  // pre-commit top-flow layout without the dropdown-push bug: the frame pins
+  // at absoluteBottom even in cursor-follow when the dropdown is open
+  // (physicalRows > 1), so the menu grows into the empty viewport above
+  // instead of pushing down.
+  //
+  // Contract: cursor-follow computes targetBottomRow as
+  //   min(absoluteBottom, anchorRow + physicalRows - 1)
+  // so a 1-line idle frame lands at anchorRow (right below the banner) while
+  // a multi-line frame (dropdown open) extends downward toward absoluteBottom.
+  // Once physicalRows exceeds the gap, the frame naturally reaches
+  // absoluteBottom and the two modes converge.
+  const physicalRows = frameLines.length;
+  const targetBottomRow =
+    self.placementMode === 'cursor-follow' && self.anchorRow !== undefined
+      ? Math.min(absoluteBottom, (self.anchorRow - 1) + physicalRows)
+      : absoluteBottom;
   // Anchor-row enforcement: when an upper-bound was supplied (typically by
   // the surface that knows how many rows the welcome banner / update-
   // notice consumed before arm), make sure the frame's top row does not
