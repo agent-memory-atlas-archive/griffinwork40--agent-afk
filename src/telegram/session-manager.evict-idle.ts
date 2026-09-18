@@ -51,10 +51,20 @@ export async function evictIdleSessions(
     toEvict.push([key, session]);
   }
   for (const [key, session] of toEvict) {
+    // Recheck after the previous iteration's async close() yielded to the event
+    // loop — a new message may have replaced or reactivated this session since
+    // we collected it (TOCTOU race, #1715).
+    const currentSession = sessions.get(key);
+    // Skip if the map entry was replaced or removed since collection.
+    if (currentSession !== session) continue;
+    // Skip if the session became active since collection.
+    if (currentSession.state !== 'idle') continue;
     try { await session.close(); } catch (err) {
       console.error('[session-manager] idle-evict close error for', key, err);
     }
-    sessions.delete(key);
+    // Re-verify identity after close() — it yields to the event loop and a new
+    // session for this key may have been inserted concurrently (#1715).
+    if (sessions.get(key) === session) sessions.delete(key);
   }
   return toEvict.length;
 }
