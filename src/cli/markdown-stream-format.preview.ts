@@ -21,7 +21,6 @@
  *    sufficient and allows the outer gate to set the column limit uniformly.
  */
 
-import { wrapToWidth } from './wrap.js';
 import { palette } from './palette.js';
 
 // ---------------------------------------------------------------------------
@@ -50,7 +49,7 @@ function extractFenceLanguage(openerLine: string): string {
  * @param buffer      - The full pending buffer, known to be in an open fence.
  * @param contentWidth - Width for wrapping (code measure, not prose measure).
  */
-export function previewCodeFence(buffer: string, contentWidth: number): string {
+export function previewCodeFence(buffer: string, _contentWidth: number): string {
   const lines = buffer.split('\n');
 
   // Find the last fence opener (the one that is currently unclosed).
@@ -68,7 +67,7 @@ export function previewCodeFence(buffer: string, contentWidth: number): string {
   // Should never happen when called correctly (buffer is in an open fence),
   // but fall back gracefully.
   if (openerIdx === -1) {
-    return palette.dim('\n▍ streaming code…\n');
+    return palette.dim('\n\u258d streaming code\u2026\n');
   }
 
   const openerLine = lines[openerIdx] ?? '';
@@ -84,9 +83,10 @@ export function previewCodeFence(buffer: string, contentWidth: number): string {
   }
 
   if (codeBody.trim()) {
-    const wrapped = wrapToWidth(codeBody, contentWidth);
-    parts.push(palette.dim(wrapped));
+    parts.push(palette.dim(codeBody));
   }
+
+  if (parts.length === 0) return palette.dim('\n\u258d streaming code\u2026\n');
 
   // Always end with a trailing newline so the overlay doesn't abut the cursor.
   const content = parts.join('\n');
@@ -107,16 +107,15 @@ export function previewCodeFence(buffer: string, contentWidth: number): string {
  * @param buffer      - The full pending buffer, known to contain an open table.
  * @param contentWidth - Width for wrapping (code measure).
  */
-export function previewTable(buffer: string, contentWidth: number): string {
+export function previewTable(buffer: string, _contentWidth: number): string {
   const tableLines = buffer
     .split('\n')
     .filter((line) => line.includes('|'));
 
   if (tableLines.length === 0) {
-    return palette.dim('\n▍ streaming table…\n');
+    return palette.dim('\n\u258d streaming table\u2026\n');
   }
 
   const tableText = tableLines.join('\n');
-  const wrapped = wrapToWidth(tableText, contentWidth);
-  return '\n' + palette.dim(wrapped) + '\n';
+  return '\n' + palette.dim(tableText) + '\n';
 }
