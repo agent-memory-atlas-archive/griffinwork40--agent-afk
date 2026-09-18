@@ -12,7 +12,6 @@
  */
 
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources';
-import { debugLog } from '../../utils/debug.js';
 import { OutputBroadcast } from './output-broadcast.js';
 import { emitSessionPhase } from '../trace/emit.js';
 import type { TraceWriter } from '../trace/writer.js';
@@ -55,7 +54,6 @@ import { PlanExitBridge } from './plan-exit-bridge.js';
 import type { ElicitationRequest } from '../types/sdk-types.js';
 import { resolveModelId } from './model-resolution.js';
 import { deriveOrigin, deriveActor } from './session-identity.js';
-import { updatePresenceCwd } from '../awareness/presence.js';
 import { wireAbortSignal } from './session-setup.js';
 import { SessionStateManager } from './session-state.js';
 import { getSessionGrantsPath, sessionLabelFromTracePath } from '../../paths.js';
@@ -74,6 +72,7 @@ import { SessionShutdown } from './session-shutdown.js';
 import { resetSession } from './session-reset.js';
 import * as pt from './provider-passthrough.js';
 import * as ss from './session-send.js';
+import * as sc from './session-config.js';
 
 
 export class AgentSession implements IAgentSession {
@@ -386,62 +385,29 @@ export class AgentSession implements IAgentSession {
     }
   }
 
-  async setModel(model?: AgentModelInput): Promise<void> {
-    const resolved = resolveModelId(model);
-    // Contract: forward the *requested* model (alias or full id) to the
-    // provider — NOT the resolved wire id. Alias resolution is lossy for
-    // context-window purposes (opus_1m and opus share a wire id but differ in
-    // window), so the provider needs the alias to look up the right limit.
-    if (typeof model === 'string' && model.length > 0) await this.providerQuery.setModel(model);
-    if (resolved) this.stateManager.setSessionMetadata((prev) => ({ ...prev, model: resolved }));
+  private makeConfigDeps(): sc.ConfigDeps {
+    return {
+      getConfig: () => this.config,
+      setConfig: (patch) => { this.config = patch(this.config); },
+      getProviderQuery: () => this.providerQuery,
+      getStateManager: () => this.stateManager,
+      getPlanExit: () => this.planExit,
+      pushSidebandEvent: (event) => this.pushSidebandEvent(event),
+    };
   }
 
-  async setPermissionMode(mode: PermissionMode): Promise<void> {
-    const current = this.stateManager.getSessionMetadata().permissionMode;
-    this.planExit.recordModeTransition(mode, current);
-    await this.providerQuery.setPermissionMode(mode);
-    this.stateManager.setSessionMetadata((prev) => ({ ...prev, permissionMode: mode }));
-    this.pushSidebandEvent({ type: 'plan_mode', mode: mode === 'plan' ? 'plan' : 'default' });
-  }
+  async setModel(model?: AgentModelInput): Promise<void> { return sc.setModel(model, this.makeConfigDeps()); }
+  async setPermissionMode(mode: PermissionMode): Promise<void> { return sc.setPermissionMode(mode, this.makeConfigDeps()); }
+  setSystemPrompt(basePrompt: string | undefined): boolean { return sc.setSystemPrompt(basePrompt, this.makeConfigDeps()); }
+  setCwd(cwd: string): void { return sc.setCwd(cwd, this.makeConfigDeps()); }
+  async reauth(): Promise<{ accountId: string; swapped: boolean } | null> { return sc.reauth(this.makeConfigDeps()); }
 
   getPrePlanMode(): PermissionMode | undefined { return this.planExit.getPrePlanMode(); }
-
   // Invariant: called by the REPL after construction to wire a queue-check
   // predicate into exit_plan_mode — when it returns true the handler skips the
   // elicitation picker so the queued user message drains first.
   setPlanExitQueueCheck(fn: () => boolean): void { if (this.config.planExitControls) this.config.planExitControls.hasPendingUserMessage = fn; }
-
-  async takePendingPlanExitSeed(): Promise<{ message: string; mode: PermissionMode } | undefined> {
-    const seed = this.planExit.takeSeed();
-    if (seed === undefined) return undefined;
-    try {
-      await this.setPermissionMode(seed.mode);
-    } catch (err) {
-      debugLog(`⚠️ AgentSession: deferred plan-exit mode flip to '${seed.mode}' rejected; dropping implement-seed (staying in plan mode): ${err instanceof Error ? err.message : String(err)}`);
-      return undefined;
-    }
-    return { message: seed.message, mode: seed.mode };
-  }
-
-
-  setSystemPrompt(basePrompt: string | undefined): boolean {
-    this.config = { ...this.config, systemPrompt: basePrompt };
-    return this.providerQuery.setSystemPrompt?.(basePrompt) ?? false;
-  }
-
-  setCwd(cwd: string): void {
-    this.config = { ...this.config, cwd };
-    this.providerQuery.setCwd?.(cwd);
-    // Keep the session's presence record pointing at the CURRENT cwd. A born-
-    // named `afk -w` worktree is created on turn 1, AFTER presence was written
-    // with the launch dir; without this update presence.cwd stays stale and the
-    // worktree sweep's live-session guard can't see that the worktree is in use.
-    if (this.config.sessionId !== undefined) void updatePresenceCwd(this.config.sessionId, cwd);
-  }
-
-  async reauth(): Promise<{ accountId: string; swapped: boolean } | null> {
-    return (await this.providerQuery.reauth?.()) ?? null;
-  }
+  async takePendingPlanExitSeed(): Promise<{ message: string; mode: PermissionMode } | undefined> { return sc.takePendingPlanExitSeed(this.makeConfigDeps()); }
 
   waitForInitialization(): Promise<SessionMetadata> { return this.stateManager.waitForInitialization(); }
   getSessionIdentity(): SessionIdentity { return this.stateManager.getSessionIdentity(); }
