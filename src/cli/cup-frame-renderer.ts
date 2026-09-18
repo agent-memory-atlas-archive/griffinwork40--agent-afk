@@ -240,7 +240,7 @@ export class CupFrameRenderer {
       // inside the sync block, the cursor is left invisible on the host
       // terminal. Restore visibility best-effort so a partial teardown
       // doesn't strand a phantom-hidden cursor. Matches the silent-swallow
-      // pattern used in clear()/done() below.
+      // pattern used in done() below.
       try {
         if (this.stream.isTTY) this.stream.write(SYNC_START + CURSOR_SHOW + SYNC_END);
       } catch {
