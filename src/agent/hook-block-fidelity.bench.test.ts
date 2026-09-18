@@ -94,7 +94,13 @@ async function spawnAndWait(scriptPath: string): Promise<string> {
     child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`child timed out after 12s: ${scriptPath}`));
+    }, 12_000);
+
     child.on('exit', (code) => {
+      clearTimeout(timer);
       if (code !== 0) {
         reject(new Error(`child exited ${code}: ${stderr.slice(0, 500)}`));
         return;
@@ -102,6 +108,7 @@ async function spawnAndWait(scriptPath: string): Promise<string> {
       resolve(stdout);
     });
     child.on('error', (err: NodeJS.ErrnoException) => {
+      clearTimeout(timer);
       if (err.code === 'ENOENT') { reject(new Error(`tsx not found at: ${tsxBin}`)); return; }
       reject(err);
     });

@@ -86,7 +86,7 @@ async function readTrace(tracePath: string): Promise<TraceEvent[]> {
 
 /** Spawn child, wait for it to exit naturally (these are not kill tests). */
 async function spawnAndWait(scriptPath: string): Promise<{ code: number; stderr: string }> {
-  return new Promise<{ code: number; stderr: string }>((resolve) => {
+  return new Promise<{ code: number; stderr: string }>((resolve, reject) => {
     const child = spawn(tsxBin, [scriptPath], {
       env: { ...process.env },
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -97,8 +97,13 @@ async function spawnAndWait(scriptPath: string): Promise<{ code: number; stderr:
       stderr += chunk.toString();
     });
 
-    child.on('exit', (code) => resolve({ code: code ?? 1, stderr }));
-    child.on('error', () => resolve({ code: 1, stderr }));
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error(`child timed out after 12s: ${scriptPath}`));
+    }, 12_000);
+
+    child.on('exit', (code) => { clearTimeout(timer); resolve({ code: code ?? 1, stderr }); });
+    child.on('error', () => { clearTimeout(timer); resolve({ code: 1, stderr }); });
   });
 }
 
