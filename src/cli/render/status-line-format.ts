@@ -257,7 +257,7 @@ export function formatStatusLine(f: StatusLineFields, maxW: number): string {
   if (f.quotaWindows !== undefined) {
     const quota = formatQuotaIndicator(f.quotaWindows);
     if (quota !== undefined) {
-      const priority = quota.severity === 'critical' && !quota.stale ? 0 : 5;
+      const priority = quota.severity === 'critical' && !quota.stale ? 0 : 5; // 0 = drop-LAST (not undefined = never-drop)
       parts.push({ text: quota.text, droppablePriority: priority });
     }
   }
