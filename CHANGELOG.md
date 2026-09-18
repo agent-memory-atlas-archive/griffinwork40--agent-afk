@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.221.3] - 2026-09-18
+
+### Fixed
+- clarify droppablePriority: 0 intent with inline comment (#1771) (9092f83b)
+- validate --limit flag and session directory names (#1706) (8824fac7)
+
+### Changed
+- add child-process timeout to spawnAndWait in bench tests (#1747) (a540fe97)
+
 ## [5.221.2] - 2026-09-18
 
 ### Fixed
