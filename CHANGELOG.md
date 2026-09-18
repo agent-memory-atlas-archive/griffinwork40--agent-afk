@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.221.2] - 2026-09-18
+
+### Fixed
+- erase ghost status-line artifacts + consolidate TUI follow-ups (#1766) (2ec1a242)
+
+### Changed
+- move system-prompt.md to repo root — eliminate single-file prompts/ dir (#1763) (3d5e40e9)
+
 ## [5.221.1] - 2026-09-18
 
 ### Added
