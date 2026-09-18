@@ -137,4 +137,6 @@ listener would fire, and in a real session that would trigger incorrect
 
 - [Trace Completeness Under kill -9](./trace-completeness.md) -- validates event
   survival, which this benchmark depends on for reading back abort records.
-- Crash-to-resume (planned) -- validates DAG checkpoint correctness.
+- [Crash-to-Resume DAG Checkpoint](./crash-to-resume.md) -- validates DAG checkpoint correctness.
+- [Concurrent-Emitter Trace Integrity](./concurrent-emitter.md) -- validates the
+  flush-survives-kill property under 10 parallel writers.
