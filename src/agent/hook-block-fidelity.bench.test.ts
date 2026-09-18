@@ -44,7 +44,6 @@ async function readVerify(path: string): Promise<Record<string, unknown>> {
 const here = dirname(fileURLToPath(import.meta.url));
 const writerSrc = join(here, 'trace', 'writer.ts');
 const hookRegistrySrc = join(here, 'hook-registry.ts');
-const hooksSrc = join(here, 'hooks.ts');
 const subagentHooksSrc = join(here, 'subagent-hooks.ts');
 
 function resolveTsx(): string {
@@ -226,11 +225,16 @@ describe.skipIf(process.platform === 'win32')(
       expect(fp['errorReason'], 'reason preserved').toBe('benchmark-explicit-block');
       expect(fp['handler2Fired'], 'chain short-circuited').toBe(false);
 
-      results.push({
-        scenario: 'explicit block (decision:block)',
-        pass: true,
-        detail: 'blocked=true, chain short-circuited, traced',
-      });
+      try {
+        results.push({
+          scenario: 'explicit block (decision:block)',
+          pass: true,
+          detail: 'blocked=true, chain short-circuited, traced',
+        });
+      } catch (err) {
+        results.push({ scenario: 'explicit block (decision:block)', pass: false, detail: String(err) });
+        throw err;
+      }
     }, 15_000);
 
     // -----------------------------------------------------------------------
@@ -300,19 +304,24 @@ describe.skipIf(process.platform === 'win32')(
       expect(fp['errorName'], 'wrapped in HookBlockedError').toBe('HookBlockedError');
       expect(fp['causeMessage'], 'original error preserved as cause').toBe('handler-crash-simulated');
 
-      results.push({
-        scenario: 'fail-safe (handler throws)',
-        pass: true,
-        detail: 'throw -> HookBlockedError, cause preserved, traced',
-      });
+      try {
+        results.push({
+          scenario: 'fail-safe (handler throws)',
+          pass: true,
+          detail: 'throw -> HookBlockedError, cause preserved, traced',
+        });
+      } catch (err) {
+        results.push({ scenario: 'fail-safe (handler throws)', pass: false, detail: String(err) });
+        throw err;
+      }
     }, 15_000);
 
     // -----------------------------------------------------------------------
-    // Scenario C: allow path -- handler returns {} (no block).
-    // Verifies: dispatch resolves without throwing, no hook_decision trace
-    // event for allows (current behavior: allows are silent in the trace).
+    // Scenario C: allow path -- handler returns { decision: 'approve' }.
+    // Verifies: dispatch resolves without throwing, hook_decision trace event
+    // emitted with a non-block outcome.
     // -----------------------------------------------------------------------
-    it('allow path: non-blocking handler resolves cleanly with no trace event', async () => {
+    it('allow path: handler returning approve resolves cleanly', async () => {
       const traceDir = join(rootDir, 'allow-path');
       const scriptPath = join(rootDir, 'allow-path.mts');
 
@@ -358,8 +367,7 @@ describe.skipIf(process.platform === 'win32')(
 
       // Allow decisions emit a hook_decision with outcome 'allowed'.
       const hookEvents = events.filter((e) => e.kind === 'hook_decision');
-      // Current behavior: allows emit hook_decision with decision field.
-      // Verify the event has an 'allowed' or non-blocked outcome.
+      expect(hookEvents.length).toBe(1);
       for (const he of hookEvents) {
         const p = he.payload as Record<string, unknown>;
         expect(p['decision'], 'no block decision on allow path').not.toBe('block');
@@ -370,11 +378,16 @@ describe.skipIf(process.platform === 'win32')(
       expect(fp['resolved'], 'dispatch resolved').toBe(true);
       expect(fp['threw'], 'no throw on allow').toBe(false);
 
-      results.push({
-        scenario: 'allow path (no block)',
-        pass: true,
-        detail: 'resolved cleanly, no blocked trace event',
-      });
+      try {
+        results.push({
+          scenario: 'allow path (no block)',
+          pass: true,
+          detail: 'resolved cleanly, no blocked trace event',
+        });
+      } catch (err) {
+        results.push({ scenario: 'allow path (no block)', pass: false, detail: String(err) });
+        throw err;
+      }
     }, 15_000);
 
     // -----------------------------------------------------------------------
@@ -436,7 +449,7 @@ describe.skipIf(process.platform === 'win32')(
 
       // hook_decision should show blocked.
       const hookEvents = events.filter((e) => e.kind === 'hook_decision');
-      expect(hookEvents.length, 'hook_decision emitted').toBeGreaterThanOrEqual(1);
+      expect(hookEvents.length, 'hook_decision emitted').toBe(1);
       const blockEvent = hookEvents.find(
         (e) => (e.payload as Record<string, unknown>)['decision'] === 'block',
       );
@@ -448,11 +461,16 @@ describe.skipIf(process.platform === 'win32')(
       expect(fp['handler1Fired'], 'first handler ran').toBe(true);
       expect(fp['handler3Fired'], 'third handler short-circuited').toBe(false);
 
-      results.push({
-        scenario: 'multi-handler (allow, block, skip)',
-        pass: true,
-        detail: 'h1 ran, h2 blocked, h3 skipped, traced',
-      });
+      try {
+        results.push({
+          scenario: 'multi-handler (allow, block, skip)',
+          pass: true,
+          detail: 'h1 ran, h2 blocked, h3 skipped, traced',
+        });
+      } catch (err) {
+        results.push({ scenario: 'multi-handler (allow, block, skip)', pass: false, detail: String(err) });
+        throw err;
+      }
     }, 15_000);
   },
 );
