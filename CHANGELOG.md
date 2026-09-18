@@ -11,6 +11,22 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.219.3] - 2026-09-18
+
+### Fixed
+- guard surrogate-pair boundary in shell-task excerpt truncation (#1734) (#1743) (229a10c8)
+- trace-completeness benchmark test improvements (#1726) (#1741) (975173ae)
+- guard ToolLaneFlash onRepaint callback against throws (#1718) (#1739) (ed03f3bf)
+
+### Changed
+- consolidate legacy __BUILTIN_WORKTREE_PRUNE__ compat shim (#1736) (#1742) (bc321b78)
+- freeze time in eviction exact-boundary test (#1716) (#1738) (608b83f8)
+- add coverage for sort order, limit boundaries, escape stripping (#1707) (#1740) (5b4d3262)
+- add hook-block fidelity benchmark (#1745) (a8f650e2)
+- Merge pull request #1744 from griffinwork40/bench/concurrent-emitter-trace (6c26f932)
+- add concurrent-emitter trace integrity benchmark (2c828bb5)
+- fix mid-sequence scenario description in trace-completeness benchmark (#1727) (#1737) (49b21593)
+
 ## [5.219.2] - 2026-09-18
 
 ### Fixed
