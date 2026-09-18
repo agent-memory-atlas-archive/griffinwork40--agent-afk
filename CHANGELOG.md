@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.219.4] - 2026-09-18
+
+### Fixed
+- surface failed MCP servers in get_runtime_state and REPL startup (#1702) (#1748) (3bdf7c07)
+
 ## [5.219.3] - 2026-09-18
 
 ### Fixed
