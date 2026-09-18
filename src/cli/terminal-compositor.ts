@@ -419,6 +419,19 @@ export class TerminalCompositor {
   /** @internal Relaxed from `private` for the committed-band module (CommittedBandHost). */
   hasCommitted = false;
 
+  /**
+   * Frame placement regime — controls whether the live frame bottom-pins to
+   * the viewport floor or follows the cursor position (just below the banner).
+   * Starts as `'cursor-follow'` so a fresh session's prompt renders right below
+   * the welcome banner with no empty gap. Flipped to `'bottom-pinned'` by the
+   * first `commitAbove` (committed-band-commit.ts) and reset back to
+   * `'cursor-follow'` by `resetState()` for each arm cycle.
+   *
+   * See {@link import('./terminal-compositor.types.js').FramePlacementMode}.
+   */
+  /** @internal Relaxed from `private` for the frame module (FrameHost). */
+  placementMode: import('./terminal-compositor.types.js').FramePlacementMode = 'cursor-follow';
+
   // History: the committed-band re-pin closes the "weird gap" residual of PR
   // #557 — committed text painted above a tall frame was orphaned when the frame
   // collapsed beneath it. Full root-cause + design: docs/scrollback.md

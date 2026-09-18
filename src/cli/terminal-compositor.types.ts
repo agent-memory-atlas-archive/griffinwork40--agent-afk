@@ -166,6 +166,25 @@ export interface CompositorScrollRegionGuard {
 export type CompositorInputMode = 'idle' | 'streaming' | 'picker';
 
 /**
+ * Frame placement regime. Controls whether the live frame bottom-pins to the
+ * viewport floor or follows the cursor position (just below the banner).
+ *
+ * - `'cursor-follow'` — fresh session, no committed content yet. The input
+ *   prompt renders right below the banner (`anchorRow`) instead of at the
+ *   viewport bottom, eliminating the large empty gap between the banner and
+ *   the prompt. Dropdown / overlay grow downward from the prompt.
+ *
+ * - `'bottom-pinned'` — standard regime after the first `commitAbove`. The
+ *   input stays at `absoluteBottom`; committed content and overlay grow
+ *   upward into the viewport above it.
+ *
+ * Transition: `cursor-follow` → `bottom-pinned` fires once in `commitAbove`
+ * when `hasCommitted` first becomes `true`. Reset to `cursor-follow` by
+ * `resetState()` so each arm cycle starts fresh.
+ */
+export type FramePlacementMode = 'cursor-follow' | 'bottom-pinned';
+
+/**
  * Picker controller — supplied by `enterPickerMode()` to delegate
  * rendering and keystroke handling to a transient overlay.
  *

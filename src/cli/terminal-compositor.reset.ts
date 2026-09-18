@@ -11,7 +11,7 @@
 import { InputCore, type InputCoreState } from './input-core.js';
 import type { AutocompleteState } from './input/autocomplete-state.js';
 import type { ImageAttachment } from './input/attachments.js';
-import type { CompositorInputMode, PickerController, SubmissionPayload } from './terminal-compositor.types.js';
+import type { CompositorInputMode, FramePlacementMode, PickerController, SubmissionPayload } from './terminal-compositor.types.js';
 
 /**
  * Narrowest TerminalCompositor state slice {@link resetState} clears. Spans the
@@ -41,6 +41,7 @@ export interface ResetStateHost {
   activeGhost: string | null;
   anchorRow: number | undefined;
   hasCommitted: boolean;
+  placementMode: FramePlacementMode;
   commitInFlight: boolean;
   pendingResizeErase: { top: number; bottom: number } | null;
   bandGeometryStale: boolean;
@@ -95,6 +96,10 @@ export function resetState(self: ResetStateHost): void {
   // Reset commit-presence flag so growthDeficit in repaint() does not fire
   // on the new arm cycle until a commit actually happens.
   self.hasCommitted = false;
+  // Reset frame placement to cursor-follow so the fresh arm cycle starts
+  // with the prompt just below the banner (no empty gap). Flipped to
+  // 'bottom-pinned' by the first commitAbove (committed-band-commit.ts).
+  self.placementMode = 'cursor-follow';
   // Drop any retained above-frame committed block + the in-flight commit guard
   // so a fresh arm cycle never re-pins stale transcript from the previous one.
   self.clearCommittedBand();

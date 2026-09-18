@@ -17,26 +17,27 @@ beforeEach(() => {
   __resetStdinClaimForTests();
 });
 
-describe('TerminalCompositor — input bottom-pin placement', () => {
-  // These tests verify that the live input frame is ALWAYS bottom-pinned
-  // (targetBottomRow === absoluteBottom) — on a fresh session, with or without
-  // a banner, and after any number of commits.
+describe('TerminalCompositor — input placement (placementMode)', () => {
+  // These tests verify the two-regime frame placement controlled by
+  // `placementMode` (FramePlacementMode):
   //
-  // Core invariant: the input line is the last frameLines entry and always
-  // lands on absoluteBottom (rows-1-extraRows); the dropdown / hint / streaming
-  // overlay grow UPWARD into the empty viewport above it. This is what lets the
-  // slash-command completion menu open on a brand-new session without shoving
-  // the prompt down to make headroom.
+  //   'cursor-follow' — fresh session, no committed content. The input frame
+  //     sits just below the banner (anchorRow), eliminating the large empty
+  //     gap. Multi-line frames (dropdown open) grow downward toward
+  //     absoluteBottom. No-banner sessions stay bottom-pinned (anchorRow is
+  //     undefined, so cursor-follow falls through to absoluteBottom).
   //
-  // History: this used to be a two-regime "content-following" placement — the
-  // frame pinned just below the banner at
-  //   targetBottomRow = min(absoluteBottom, max(anchorRow, committedBandBottomRow) + physicalRows)
-  // while idle with a banner, marching down to absoluteBottom only as committed
-  // content accumulated. That left a fresh-session prompt one row under the
-  // banner with no headroom, so opening the dropdown grew physicalRows and
-  // pushed the whole frame down. The regime was removed in favour of
-  // unconditional bottom-pinning; the banner is still protected as a ceiling by
-  // the anchorRow floor (frame-preserve.ts / committed-band-repin.ts).
+  //   'bottom-pinned' — after the first commitAbove. The input is always at
+  //     absoluteBottom (rows-1-extraRows); committed content and overlay grow
+  //     upward.
+  //
+  // History: unconditional bottom-pinning was added to fix a dropdown-push
+  // bug in an earlier content-following regime. That fix created a large
+  // empty gap on fresh banner sessions. `placementMode` restores top-flow
+  // for the pre-commit idle state without the dropdown-push: cursor-follow
+  // computes targetBottomRow = min(absoluteBottom, anchorRow-1 + physicalRows),
+  // so a 1-line idle frame lands at anchorRow while a multi-line frame grows
+  // toward absoluteBottom naturally.
 
   let stdout: MockStdout;
   let stdin: MockStdin;
@@ -48,14 +49,54 @@ describe('TerminalCompositor — input bottom-pin placement', () => {
     writes = collectWrites(stdout);
   });
 
-  it('cold start: no banner, no content — frame stays bottom-pinned', async () => {
-    // Before any commit and without a banner, the frame must land at the
-    // standard bottom row (rows-1).
+  it('cold start: no banner, no content — frame stays bottom-pinned (cursor-follow with no anchorRow)', async () => {
+    // Without a banner (anchorRow undefined), cursor-follow falls through to
+    // absoluteBottom because the conditional requires anchorRow !== undefined.
     stdout.rows = 70;
     const c = new TerminalCompositor({ stdout, stdin, onCancel: vi.fn(), promptText: '> ' });
     await c.arm();
     const out = writes.all();
     // 1-line idle frame → bottom-pinned at row 69 (70-1).
+    expect(out).toContain('\x1b[69;1H');
+    c.disarm();
+  });
+
+  it('cold start WITH banner: cursor-follow places frame at anchorRow (no gap)', async () => {
+    // Fresh session with a 14-row banner (anchorRow=15). Before any commit,
+    // placementMode is 'cursor-follow', so the 1-line idle frame sits at
+    // anchorRow (row 15), not absoluteBottom (row 69). This eliminates the
+    // large empty gap between the banner and the prompt.
+    stdout.rows = 70;
+    const c = new TerminalCompositor({
+      stdout, stdin, onCancel: vi.fn(), promptText: '> ',
+      anchorRow: 15,
+    });
+    await c.arm();
+    const out = writes.all();
+    // 1-line idle frame → cursor-follow at row 15 (anchorRow).
+    expect(out).toContain('\x1b[15;1H');
+    // Must NOT be at row 69 (absoluteBottom).
+    expect(out).not.toContain('\x1b[69;1H');
+    c.disarm();
+  });
+
+  it('cursor-follow transitions to bottom-pinned after first commitAbove', async () => {
+    // After the first commit, the frame must snap to absoluteBottom regardless
+    // of where cursor-follow had placed it.
+    stdout.rows = 70;
+    const c = new TerminalCompositor({
+      stdout, stdin, onCancel: vi.fn(), promptText: '> ',
+      anchorRow: 15,
+    });
+    await c.arm();
+    // Verify cursor-follow is active (row 15).
+    expect(writes.all()).toContain('\x1b[15;1H');
+    // First commit flips placementMode to 'bottom-pinned'.
+    c.commitAbove('FIRST_COMMIT');
+    writes.clear();
+    c.setOverlay('AFTER_COMMIT');
+    const out = writes.all();
+    // Now at absoluteBottom = row 69 (70-1).
     expect(out).toContain('\x1b[69;1H');
     c.disarm();
   });
@@ -81,12 +122,16 @@ describe('TerminalCompositor — input bottom-pin placement', () => {
       committedBandTopRow: number;
       committedBandBottomRow: number;
       hasCommitted: boolean;
+      placementMode: string;
       logUpdate: { resetGeometry?: () => void };
     };
     internals.committedBand = ['COMMITTED'];
     internals.committedBandTopRow = 16;
     internals.committedBandBottomRow = 16;
     internals.hasCommitted = true;
+    // commitAbove flips placementMode to 'bottom-pinned' alongside
+    // hasCommitted; manual state injection must mirror both fields.
+    internals.placementMode = 'bottom-pinned';
     // Reset CupFrameRenderer geometry so its erase pass on the next render
     // doesn't re-visit the stale previous-frame row (row 69 from arm()).
     internals.logUpdate.resetGeometry?.();
