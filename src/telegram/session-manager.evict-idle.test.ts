@@ -158,6 +158,72 @@ describe('evictIdleSessions', () => {
     expect(session.closed).toBe(false);
   });
 
+  test('TOCTOU: session replaced in map during async close is not deleted (#1715)', async () => {
+    // The first session's close() replaces the map entry with a new session,
+    // simulating a message arriving mid-eviction cycle.
+    const replacementSession = makeSession('idle');
+    const originalSession: IAgentSession = {
+      state: 'idle',
+      sessionId: undefined,
+      async sendMessage() { return { role: 'assistant' as const, content: '', timestamp: new Date() }; },
+      async *getOutputStream() { yield { type: 'done' as const }; },
+      abort() { /* no-op */ },
+      async close() {
+        // Simulate a concurrent message arriving: replace the map entry.
+        sessions.set('key1', replacementSession as IAgentSession);
+      },
+      async reset() { /* no-op */ },
+    };
+
+    const sessions = new Map([['key1', originalSession]]);
+    const sessionData = new Map([['key1', makeData({ lastActivity: staleActivity() })]]);
+
+    await evictIdleSessions(sessions, sessionData, MAX_AGE_MS);
+
+    // The replacement session must survive in the map.
+    expect(sessions.get('key1')).toBe(replacementSession);
+  });
+
+  test('TOCTOU: session becomes non-idle between collection and close is not evicted (#1715)', async () => {
+    // The target session (key1) is idle at collection time. Before its iteration
+    // reaches the recheck, a prior session's close() transitions it to 'processing',
+    // simulating a message arriving mid-cycle. The recheck must then skip key1.
+    //
+    // Map iterates in insertion order, so we insert the trigger (key2) first so
+    // its close() fires before key1 is processed in the eviction loop.
+    const targetSession = makeSession('idle');
+
+    const triggerSession: IAgentSession = {
+      state: 'idle',
+      sessionId: undefined,
+      async sendMessage() { return { role: 'assistant' as const, content: '', timestamp: new Date() }; },
+      async *getOutputStream() { yield { type: 'done' as const }; },
+      abort() { /* no-op */ },
+      async close() {
+        // Simulate key1's session going active mid-cycle.
+        (targetSession as { state: SessionState }).state = 'processing';
+      },
+      async reset() { /* no-op */ },
+    };
+
+    // Insert key2 first so it is processed before key1 in iteration order.
+    const sessions = new Map<string, IAgentSession>([
+      ['key2', triggerSession],
+      ['key1', targetSession as IAgentSession],
+    ]);
+    const sessionData = new Map([
+      ['key2', makeData({ lastActivity: staleActivity() })],
+      ['key1', makeData({ lastActivity: staleActivity() })],
+    ]);
+
+    await evictIdleSessions(sessions, sessionData, MAX_AGE_MS);
+
+    // key1 must NOT have been removed because it went processing mid-cycle.
+    expect(sessions.has('key1')).toBe(true);
+    // key2 was legitimately evicted.
+    expect(sessions.has('key2')).toBe(false);
+  });
+
   test('boundary: lastActivity exactly at maxAgeMs is NOT evicted (> not >=)', async () => {
     // Freeze the clock so Date.now() cannot advance between setup and the function under test.
     const frozenNow = Date.now();
