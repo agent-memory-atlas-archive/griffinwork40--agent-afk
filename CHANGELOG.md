@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.221.0] - 2026-09-18
+
+### Added
+- streaming UX phase 2 — live code/table previews + atomic sync output (#1762) (7fb44015)
+
 ## [5.220.0] - 2026-09-18
 
 ### Added
