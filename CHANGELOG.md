@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.221.1] - 2026-09-18
+
+### Added
+- show live code and table content during streaming (4322cb07)
+- improve streaming text UX — atomic sync output + inline syntax close (59624176)
+
+### Fixed
+- streaming UX preview — remove double-wrap, add bare-fence fallback (#1764) (7999de38)
+
+### Changed
+- Merge pull request #1754 from griffinwork40/afk/streaming-ux-phase3 (7bbba997)
+- Merge remote-tracking branch 'origin/main' into afk/streaming-ux-phase3 (bae9f388)
+- Phase 3 render-path and cell-width invariant tests (51caafa4)
+
 ## [5.221.0] - 2026-09-18
 
 ### Added
