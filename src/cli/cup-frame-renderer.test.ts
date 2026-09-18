@@ -315,6 +315,14 @@ describe('CupFrameRenderer — no trailing-\\n scroll', () => {
     expect(clearOut).not.toContain('\x1b[0;1H');
   });
 
+  it('done() emits nothing on non-TTY stream', () => {
+    const stream = makeMockStream(false, 80, 24);
+    const allWrites = collectWrites(stream);
+    const renderer = new CupFrameRenderer(stream);
+    renderer.done();
+    expect(allWrites()).toBe('');
+  });
+
   it('done() shows the cursor (\\x1b[?25h) without bare \\n', () => {
     const stream = makeMockStream(true, 80, 24);
     const allWrites = collectWrites(stream);

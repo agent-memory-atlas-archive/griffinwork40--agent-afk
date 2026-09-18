@@ -99,6 +99,12 @@ describe('closePendingInlineSyntax', () => {
     expect(closePendingInlineSyntax('*italic ~~strike')).toBe('*italic ~~strike~~*');
   });
 
+  // ── reverse-nested markers ─────────────────────────────────────────────────
+
+  it('closes reverse-nested italic+bold (known approximation: *** suffix)', () => {
+    expect(closePendingInlineSyntax('*italic **bold')).toBe('*italic **bold***');
+  });
+
   // ── pure-function guarantee ─────────────────────────────────────────────────
 
   it('does not mutate the input string', () => {
