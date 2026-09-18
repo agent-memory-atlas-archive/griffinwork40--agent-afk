@@ -72,8 +72,11 @@ export function previewCodeFence(buffer: string, _contentWidth: number): string 
 
   const openerLine = lines[openerIdx] ?? '';
   const lang = extractFenceLanguage(openerLine);
-  // Everything after the opener (may be empty if only the opening line arrived)
-  const codeLines = lines.slice(openerIdx + 1);
+  // Everything after the opener (may be empty if only the opening line arrived).
+  // Cap to viewport height so the overlay never overflows into scrollback and
+  // leaves un-erasable ghost rows that re-appear when the block commits.
+  const viewportRows = Math.max(1, (process.stdout.rows ?? 24) - 2);
+  const codeLines = lines.slice(openerIdx + 1).slice(0, viewportRows);
   const codeBody = codeLines.join('\n');
 
   const parts: string[] = [];
@@ -108,9 +111,13 @@ export function previewCodeFence(buffer: string, _contentWidth: number): string 
  * @param contentWidth - Width for wrapping (code measure).
  */
 export function previewTable(buffer: string, _contentWidth: number): string {
+  // Cap to viewport height so the overlay never overflows into scrollback and
+  // leaves un-erasable ghost rows that re-appear when the block commits.
+  const viewportRows = Math.max(1, (process.stdout.rows ?? 24) - 2);
   const tableLines = buffer
     .split('\n')
-    .filter((line) => line.includes('|'));
+    .filter((line) => line.includes('|'))
+    .slice(0, viewportRows);
 
   if (tableLines.length === 0) {
     return palette.dim('\n\u258d streaming table\u2026\n');

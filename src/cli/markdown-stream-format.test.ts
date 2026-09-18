@@ -75,10 +75,18 @@ describe('formatPendingBuffer', () => {
       .join('\n');
 
     const out = formatPendingBuffer(tall, WIDTH, true);
+    const stripped = stripAnsi(out);
 
     // Live preview: the actual pipe-delimited rows must be visible (dimmed).
-    expect(stripAnsi(out)).toContain('Col A');
-    expect(stripAnsi(out)).toContain('value 39');
+    expect(stripped).toContain('Col A');
+    // Early rows are visible.
+    expect(stripped).toContain('value 0');
+    // The viewport-height cap prevents ghost-row overflow: rows beyond the cap
+    // (viewport default is process.stdout.rows ?? 24, minus 2 = 22 rows in
+    // test environments where stdout.rows is undefined) must NOT appear.
+    // This is the ghost-row regression guard — un-erasable overlay rows that
+    // linger as apparent "duplicate content" after the block commits.
+    expect(stripped).not.toContain('value 39');
     // The rendered table borders (│) from the commit-time table renderer must
     // NOT appear — alignment is deferred to commit time.
     expect(out).not.toContain('│');
