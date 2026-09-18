@@ -5,7 +5,7 @@
 
 ## Invariants
 
-- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:`
+- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:` (reinforced 2026-09-18)
 - **INV-002** (2026-09-17, spine-init): Every DECSTBM emit must be bracketed by `\x1b[s`/`\x1b[u` save/restore or carry a comment explaining why cursor-home is 
 - **INV-003** (2026-09-17, spine-init): Before first `log-update.render()` of a session, cursor must be at the target row (typically `stdout.rows - 1`)
 - **INV-004** (2026-09-17, spine-init): Lifecycle flag must be set synchronously before any `await` that could trigger interval timer or resize handler re-entry
@@ -26,6 +26,7 @@
 - **INV-019** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Hook block decisions must be traced with hook_decision events; blocks/throws always emit trace records
 - **INV-020** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Handler exception caught in hook dispatch must wrap in HookBlockedError (fail-safe, not fail-open)
 - **INV-021** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Hook handler return { decision: 'block' } must short-circuit the handler chain immediately
+- **INV-022** (2026-09-18, f1884bb2-c075-46d5-b0ea-f61d48342e64): Overlay content must not exceed viewport height; cap after word-wrap to prevent ghost-row duplicates in scrollback
 
 
 ## Explicitly Rejected Patterns

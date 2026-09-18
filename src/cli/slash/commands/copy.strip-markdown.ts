@@ -27,13 +27,7 @@
 // renderer fragments that escaped stripping). Output is pure UTF-8 plaintext
 // with no ANSI codes and no markdown syntax characters for the transforms above.
 
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /\x1b\[[0-9;]*m/g;
-
-/** Strip all ANSI SGR escape sequences. */
-function stripAnsi(s: string): string {
-  return s.replace(ANSI_RE, '');
-}
+import { stripAnsi } from '../../display.js';
 
 /** Convert a heading line's text to uppercase (H1/H2 only). */
 function headingToUppercase(text: string): string {

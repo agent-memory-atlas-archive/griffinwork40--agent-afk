@@ -126,16 +126,30 @@ widen; tmux never sends SIGWINCH itself (`TIOCSWINSZ` → kernel), and resizes
 are debounced; multi-client `window-size latest` (default since 3.2) makes
 mid-stream width flapping a normal condition, not an edge case.
 
-## Follow-ups (deliberately out of scope here)
+## Follow-ups
 
-- `cup-frame-renderer.ts` reimplements `hardWrapToWidth` inline (~:40,:93) —
-  consolidate on `wrap.ts`.
-- Five independent home-grown ANSI-strip regexes exist (`display.ts`,
-  `terminal-sanitize.ts`, `_lib/sanitize.ts`, `input/history.ts`,
-  `input/suggest.ts`); consolidate.
-- `stream-renderer-subagent.ts` width fallback is `?? 100` vs the canonical
-  helper's `?? 80`.
-- `docs/scrollback.md:108-111` still names the deepest gap: no end-to-end
-  PTY test verifies actual scrollback contents. A real-PTY (or
-  `@xterm/headless`-driven, real-timer) harness would catch the class this
-  incident belongs to before release.
+### Resolved
+
+- ~~`cup-frame-renderer.ts` reimplements `hardWrapToWidth` inline~~ —
+  consolidated to import `hardWrapToWidth` from `wrap.ts` (2026-09-18).
+- ~~`stream-renderer-subagent.ts` width fallback is `?? 100`~~ — now uses
+  `getTerminalWidth()` (canonical `?? 80`). CI fallback-guard test
+  (`terminal-size.fallback-guard.test.ts`) prevents regression.
+- ~~Five independent ANSI-strip regexes~~ — two of five consolidated
+  (`_lib/sanitize.ts` and `input/history.ts` now delegate to
+  `terminal-sanitize.ts`). `copy.strip-markdown.ts` straggler consolidated
+  to import `stripAnsi` from `display.ts` (2026-09-18). Three remain by
+  design: `display.ts` (display-width helper), `terminal-sanitize.ts`
+  (security boundary, covers 8-bit C1/C0 bytes), `suggest-sanitize.ts`
+  (ghost-text acceptance, strips bidi + Unicode line separators). These
+  serve genuinely different threat models and should not be merged.
+
+### Open
+
+- `docs/scrollback.md:108-111` names the deepest gap: no end-to-end PTY
+  test covers resize-during-active-turn (status-line ghost artifacts,
+  in-flight scroll archive writes). Four real-PTY resize scenarios exist
+  (`tests/pty/scenarios.ts:421-579`) covering band-hold and grow-eviction
+  archive sites, but the resize-during-active-turn class — where the two
+  ghost-status-line fixes (9d2aa8da, 2377337d) found real bugs — has only
+  unit-test coverage via `terminal-compositor.resize-ghost.test.ts`.
