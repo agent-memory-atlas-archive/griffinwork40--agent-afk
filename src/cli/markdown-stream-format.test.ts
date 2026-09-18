@@ -132,6 +132,22 @@ describe('formatPendingBuffer', () => {
     expect(out).not.toContain('streaming');
   });
 
+  it('caps plain prose to viewport height, preventing ghost-row overflow', () => {
+    // 50 lines of prose (no markdown markers) — well beyond the viewport
+    // default of (process.stdout.rows ?? 24) - 2 = 22 rows.
+    const tall = Array.from({ length: 50 }, (_, i) => `sentence ${i}`).join('\n');
+    const out = formatPendingBuffer(tall, WIDTH, true);
+    const stripped = stripAnsi(out);
+    // Early rows are visible.
+    expect(stripped).toContain('sentence 0');
+    // Rows beyond the viewport cap must NOT appear — un-erasable ghost rows.
+    expect(stripped).not.toContain('sentence 49');
+    // Sanity: output row count is at most viewportRows (22 in test env).
+    const outputLines = out.split('\n');
+    const viewportRows = Math.max(1, (process.stdout.rows ?? 24) - 2);
+    expect(outputLines.length).toBeLessThanOrEqual(viewportRows);
+  });
+
   it('returns empty string when shouldRender is false', () => {
     expect(formatPendingBuffer('| A |\n|---|\n| 1 |', WIDTH, false)).toBe('');
   });
