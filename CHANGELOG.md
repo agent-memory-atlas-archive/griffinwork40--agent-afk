@@ -11,6 +11,21 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.221.4] - 2026-09-18
+
+### Fixed
+- revalidate eviction candidates after async close (#1715) (784548d2)
+- remove stale clear() reference in cup-frame-renderer catch comment (#1758) (28e6dc95)
+
+### Changed
+- Merge pull request #1776 from griffinwork40/afk/iso-1756-session-shrink-1-z5fyzt (0f7d17e2)
+- Merge pull request #1774 from griffinwork40/fix/bench-assertions-1746 (6e4a4264)
+- Merge pull request #1773 from griffinwork40/fix/stale-clear-comment-1758 (0c5c810e)
+- Merge pull request #1772 from griffinwork40/afk/test-pin-1759 (3bd36f22)
+- extract config-mutation methods into session-config.ts (#1756) (540ee3ea)
+- tighten hook-block-fidelity assertions and cleanup (#1746) (a35d6a74)
+- pin reverse-nested marker and non-TTY done() branch (#1759) (18e88742)
+
 ## [5.221.3] - 2026-09-18
 
 ### Fixed
