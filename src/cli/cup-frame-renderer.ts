@@ -190,7 +190,7 @@ export class CupFrameRenderer {
     let out = '';
 
     if (useSyncOutput) {
-      out += SYNC_START;
+      out += SYNC_START + CURSOR_HIDE;
     }
 
     // Erase the previous frame's rows. Covers cases where the new frame is
@@ -218,27 +218,16 @@ export class CupFrameRenderer {
       out += SYNC_END;
     }
 
-    // Hide cursor during render (mirrors log-update's showCursor=false default).
-    // Written outside the sync block so terminals that don't support synchronized
-    // output still see the hide before the frame content flashes.
-    if (this.stream.isTTY) {
-      try {
-        this.stream.write(CURSOR_HIDE);
-      } catch {
-        // noop
-      }
-    }
-
     try {
       this.stream.write(out);
     } catch {
-      // Invariant: if the frame write fails AFTER CURSOR_HIDE was emitted
-      // successfully (two distinct write() calls — see line 135), the cursor
-      // is left invisible on the host terminal. Restore visibility best-
-      // effort so a partial teardown doesn't strand a phantom-hidden cursor.
-      // Matches the silent-swallow pattern used in clear()/done() below.
+      // Invariant: if the frame write fails after CURSOR_HIDE was emitted
+      // inside the sync block, the cursor is left invisible on the host
+      // terminal. Restore visibility best-effort so a partial teardown
+      // doesn't strand a phantom-hidden cursor. Matches the silent-swallow
+      // pattern used in clear()/done() below.
       try {
-        if (this.stream.isTTY) this.stream.write(CURSOR_SHOW);
+        if (this.stream.isTTY) this.stream.write(SYNC_START + CURSOR_SHOW + SYNC_END);
       } catch {
         // Terminal fully gone — nothing more we can do.
       }
@@ -364,7 +353,7 @@ export class CupFrameRenderer {
     this.previousRawLineCount = 0;
     if (this.stream.isTTY) {
       try {
-        this.stream.write(CURSOR_SHOW);
+        this.stream.write(SYNC_START + CURSOR_SHOW + SYNC_END);
       } catch {
         // noop
       }

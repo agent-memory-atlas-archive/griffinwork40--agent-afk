@@ -2,6 +2,7 @@ import { getTerminalWidth } from './terminal-size.js';
 import { renderMarkdownToTerminal } from './formatter.js';
 import { wrapToWidth } from './wrap.js';
 import { capToMeasure, capToProseMeasure } from './render/measure.js';
+import { closePendingInlineSyntax } from './markdown-stream-inline-close.js';
 
 /**
  * Pure markdown formatting and analysis helpers for StreamingMarkdownRenderer.
@@ -74,7 +75,7 @@ export function formatPendingBuffer(
     // The full table still renders once at commit via formatBlockForCommit.
     pendingRender = '\n▍ streaming table…\n';
   } else {
-    pendingRender = renderTextBlock(buffer, contentWidth);
+    pendingRender = renderTextBlock(closePendingInlineSyntax(buffer), contentWidth);
   }
 
   // breakLongWords: same contract as formatBlockForCommit — a long unbreakable
