@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.221.5] - 2026-09-18
+
+### Fixed
+- cap all preview paths to viewport height, not just fences/tables (690b173b)
+- cap streaming preview height to viewport, preventing ghost-row duplicates (616836b4)
+- eliminate empty gap between banner and prompt on fresh sessions (9b56cfe6)
+
+### Changed
+- Merge pull request #1779 from griffinwork40/fix/docstring-dispatcher-1761-v2 (5b8d953f)
+- Merge pull request #1749 from griffinwork40/afk/20260917-195714-9ab821 (033e00a6)
+- Merge pull request #1765 from griffinwork40/afk/fix-preview-ghost-rows (15b78d2f)
+- fix TurnRunnerDeps docstring inaccuracy and hoist coreExecDeps (#1761) (3f4e934b)
+
 ## [5.221.4] - 2026-09-18
 
 ### Fixed
