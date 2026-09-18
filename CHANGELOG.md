@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.221.6] - 2026-09-18
+
+### Fixed
+- update invariant example list and epistemic-scope for prior-feedback (#1724) (#1788) (8ff3fd57)
+- clarify timestamp normalization and cap pagination (#1723) (#1785) (52ca1042)
+- add timeout guard to spawnAndKill helpers (#1747) (#1784) (b48c1b34)
+- validate filenames against path traversal (#1706) (#1783) (bed5e465)
+- correct JSDoc and add unit tests for session-config (#1778) (#1789) (66a7c8de)
+
+### Changed
+- add #1720 structural invariant test and changelog comment (#1725) (#1787) (7814c0af)
+- use getter for providerIterator in runInitialization (#1760) (#1786) (ce82003b)
+- clarify droppablePriority: 0 intent (#1771) (#1782) (347ea693)
+
 ## [5.221.5] - 2026-09-18
 
 ### Fixed
