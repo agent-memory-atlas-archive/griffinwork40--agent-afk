@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.2] - 2026-09-19
+
+### Fixed
+- sort spine roots by SSE arrival order (closes #1647) (#1808) (98b1b455)
+
+### Changed
+- add unit tests for builtin-task.ts (#1805) (b741f5b2)
+- export filename regex as named constant for test import (#1806) (c0a44af5)
+
 ## [5.222.1] - 2026-09-19
 
 ### Fixed
