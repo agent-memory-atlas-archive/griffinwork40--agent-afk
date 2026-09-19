@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.5] - 2026-09-19
+
+### Fixed
+- upgradeService preserves existing env vars on restart (#1717) (#1810) (1284b282)
+
+### Changed
+- clarify parentId must be a tool_use_id in ForkSubagentOptions (#1804) (3656d895)
+- add direct unit tests for formatStatusLine (#1809) (891aecbb)
+
 ## [5.222.4] - 2026-09-19
 
 ### Fixed
