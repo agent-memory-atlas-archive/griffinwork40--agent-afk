@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.7] - 2026-09-19
+
+### Fixed
+- increase inline comment per_page from 25 to 100 (#1807) (39efa207)
+
+### Changed
+- PR #1686 low-severity follow-ups (testability, docs, observability) (#1812) (c6ad6909)
+- add xai/xai-oauth providers, annotate openai-codex deprecated (#1803) (cd8a45ea)
+- clarify AGENT_SURFACE registry entry and setter comment (#1830) (e30e2888)
+
 ## [5.222.6] - 2026-09-19
 
 ### Fixed
