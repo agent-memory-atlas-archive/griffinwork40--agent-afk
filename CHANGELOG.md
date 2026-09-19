@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.3] - 2026-09-19
+
+### Fixed
+- erase slash-command dropdown rows on cursor-follow close (#1817) (3f65c1f6)
+
 ## [5.222.2] - 2026-09-19
 
 ### Fixed
