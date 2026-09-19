@@ -39,9 +39,11 @@ if (!process.argv.includes('shell-init')) {
 // ~/.afk/agent-framework/, not ~/.claude/agent-framework/.
 process.env['AFK_FRAMEWORK_DIR'] ??= getAgentFrameworkDir();
 
-// Expose AGENT_SURFACE so Python plugin scripts invoked via the bash tool
-// can detect the calling surface for telemetry attribution. Uses ??= to
-// respect any pre-set value (e.g. for testing or alternative surfaces).
+// Expose AGENT_SURFACE so subprocesses (e.g. Python plugin scripts) can
+// detect the calling surface for telemetry attribution. Always 'afk' at
+// runtime -- per-surface discrimination (cli/telegram/daemon) lives on
+// AgentConfig.surface, not this env var. Uses ??= to respect pre-set
+// values in tests.
 process.env['AGENT_SURFACE'] ??= 'afk';
 
 import { Command } from 'commander';

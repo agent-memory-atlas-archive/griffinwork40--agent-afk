@@ -1259,10 +1259,11 @@
     },
     {
       "name": "AGENT_SURFACE",
-      "description": "Internal surface marker propagated to subprocesses. Identifies which AFK surface (cli, telegram, daemon) spawned the process.",
+      "description": "Process-level surface identity propagated to subprocesses (e.g. Python plugin scripts) that cannot read the in-memory AgentConfig.surface field. The CLI entrypoint defaults it to 'afk' via ??=; no surface overrides it at runtime today, so the env var is effectively a static 'afk' constant. Per-surface discrimination ('cli', 'telegram', 'daemon') lives on AgentConfig.surface instead. The browser headless-routing check in src/browser/config.ts reads this as a secondary fallback after AFK_BROWSER_HEADLESS.",
       "type": "string",
       "required": false,
-      "example": "cli",
+      "default": "afk",
+      "example": "afk",
       "category": "process"
     },
     {
