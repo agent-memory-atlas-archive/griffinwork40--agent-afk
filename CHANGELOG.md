@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.6] - 2026-09-19
+
+### Fixed
+- scroll banner to scrollback to eliminate idle-state gap (#1823) (f2b1e4e3)
+
 ## [5.222.5] - 2026-09-19
 
 ### Fixed
