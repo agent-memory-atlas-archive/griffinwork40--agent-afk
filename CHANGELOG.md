@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.4] - 2026-09-19
+
+### Fixed
+- bound live-session growth and reload settings on eviction (#1687) (#1816) (b9485001)
+- fix 3 bugs in on-demand shiki grammar loading (#1644) (#1819) (3b1e11f0)
+- restore claimed-tool roots and comprehensive topology tests (#1818) (3c0a5f39)
+
+### Changed
+- add tests for /spine slash command, idempotency guard, and pending-log writes (#1679) (#1813) (c847a1ac)
+
 ## [5.222.3] - 2026-09-19
 
 ### Fixed
