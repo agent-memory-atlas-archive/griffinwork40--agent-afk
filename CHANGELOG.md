@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.1] - 2026-09-19
+
+### Fixed
+- add trust-boundary guards to classifier prompt (#1678) (#1811) (048ac326)
+
 ## [5.222.0] - 2026-09-19
 
 ### Added
