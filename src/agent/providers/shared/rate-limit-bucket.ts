@@ -21,7 +21,7 @@
  */
 
 import { env } from '../../../config/env.js';
-import { sleep } from './sleep-with-abort.js';
+import { sleepWithAbort } from './sleep-with-abort.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -196,11 +196,7 @@ export class RateLimitBucket {
       // Hard freeze from a 429 — wait out the retry-after.
       if (this.frozenUntil > now) {
         const waitMs = this.frozenUntil - now;
-        if (signal) {
-          await Promise.race([sleep(waitMs), new Promise<void>((r) => signal.addEventListener('abort', () => r(), { once: true }))]);
-        } else {
-          await sleep(waitMs);
-        }
+        await sleepWithAbort(waitMs, signal ?? new AbortController().signal);
         continue;
       }
 
@@ -239,11 +235,7 @@ export class RateLimitBucket {
       const nextReset = candidates.length > 0 ? Math.min(...candidates) : now + defaultWaitMs;
       const sleepMs = Math.max(1, nextReset - now) + staggerJitterMs();
 
-      if (signal) {
-        await Promise.race([sleep(sleepMs), new Promise<void>((r) => signal.addEventListener('abort', () => r(), { once: true }))]);
-      } else {
-        await sleep(sleepMs);
-      }
+      await sleepWithAbort(sleepMs, signal ?? new AbortController().signal);
     }
   }
 }
