@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.223.1] - 2026-09-20
+
+### Changed
+- rename skills/index.ts to skill-registry.ts, extract types (#1862) (#1890) (ca4b9b64)
+
 ## [5.223.0] - 2026-09-20
 
 ### Added
