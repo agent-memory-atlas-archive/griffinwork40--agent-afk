@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.12] - 2026-09-20
+
+### Changed
+- bump the fumadocs group across 1 directory with 3 updates (#1868) (fcc7c9ca)
+- extract mint phase fork helper (#1852) (#1881) (a55ae542)
+- bump next from 16.3.4 to 16.3.5 in /website (#1870) (52cdd37f)
+
 ## [5.222.11] - 2026-09-20
 
 ### Changed
