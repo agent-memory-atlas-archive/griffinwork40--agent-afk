@@ -115,6 +115,17 @@ describe('multiline idle input does not duplicate the stage rail', () => {
     expect(topRow1, 'topRow must be stable across repaints (no drift)').toBe(topRow2);
     expect(topRow2, 'topRow must be stable across repaints (no drift)').toBe(topRow3);
 
+    // In cursor-follow mode, targetBottomRow grows with the measured physical
+    // row count, so the same count cancels out when the renderer calculates the
+    // frame top. The corrected frame therefore starts exactly at anchorRow. If
+    // targetBottomRow regresses to using the logical row count while rendering
+    // still hard-wraps the input, the frame instead starts above anchorRow.
+    const anchorRow = (c as unknown as { anchorRow: number }).anchorRow;
+    expect(
+      topRow1,
+      'frame top must equal anchorRow when measured input wraps',
+    ).toBe(anchorRow);
+
     statusLine.stop(); c.disarm();
   }, 15_000);
 });
