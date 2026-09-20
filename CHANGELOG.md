@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.11] - 2026-09-20
+
+### Changed
+- consolidate double measure() call in cursor-follow repaint (#1842) (#1877) (b037e62d)
+
 ## [5.222.10] - 2026-09-20
 
 ### Fixed
