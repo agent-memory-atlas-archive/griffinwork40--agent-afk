@@ -19,17 +19,10 @@ import type { SweepOptions } from '../../agent/worktree/worktree-sweep.js';
 import { loadConfig } from '../config.js';
 import type { ExecFileFn } from '../../agent/worktree/worktree-sweep.js';
 import { errorMessage } from '../../utils/errors.js';
+import { resolveRepoRoot } from '../../utils/git.js';
 
 const execFile = promisify(execFileCallback) as ExecFileFn;
 
-async function resolveRepoRoot(): Promise<string> {
-  try {
-    const result = await execFile('git', ['rev-parse', '--show-toplevel']);
-    return result.stdout.trim();
-  } catch {
-    throw new Error('Not in a git repository.');
-  }
-}
 
 function verdictWouldPrune(v: string): string {
   // 'stale-clean' is preserved + warned by the sweep engine (commits ahead
