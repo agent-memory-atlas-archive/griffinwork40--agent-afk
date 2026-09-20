@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.18] - 2026-09-20
+
+### Changed
+- bump @types/node from 26.5.1 to 26.6.1 in /website (#1869) (39a8ca8a)
+- extract resolveBrowserProvider from browser handlers (#1832) (#1888) (73c6656c)
+
 ## [5.222.17] - 2026-09-20
 
 ### Changed
