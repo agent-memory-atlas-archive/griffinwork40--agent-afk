@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.16] - 2026-09-20
+
+### Changed
+- add errorMessage() utility, replace 65 inline casts (#1837) (#1883) (140a2faf)
+
 ## [5.222.15] - 2026-09-20
 
 ### Changed
