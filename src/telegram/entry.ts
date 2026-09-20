@@ -163,7 +163,7 @@ export async function main(): Promise<void> {
     // Bot-global cwd fallback used by SessionManager when no per-chat
     // override is set via /cd. Per-session `data.cwd` takes precedence.
     ...(telegramCwd !== undefined && telegramCwd.length > 0 ? { botCwd: telegramCwd } : {}),
-    ...(idleSessionMs !== undefined && !isNaN(idleSessionMs) ? { idleSessionMs } : {}),
+    ...(idleSessionMs !== undefined && !isNaN(idleSessionMs) && idleSessionMs > 0 ? { idleSessionMs } : {}),
     createSession: createTelegramSessionFactory({
       config,
       frameworkBase,
