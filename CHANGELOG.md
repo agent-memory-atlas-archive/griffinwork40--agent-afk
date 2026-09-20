@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.13] - 2026-09-20
+
+### Fixed
+- remove CompletedCache double-write in forkSubagent (#1841) (#1876) (aa691277)
+- add reflection cue to end-of-turn protocol (#1846) (73b4cb02)
+
+### Changed
+- consolidate Tier-1 duplicate code (8 items) (#1845) (97e9baf5)
+
 ## [5.222.12] - 2026-09-20
 
 ### Changed
