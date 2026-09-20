@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.223.2] - 2026-09-20
+
+### Fixed
+- use shared parseRetryAfterMs in OpenAI provider (#1851) (#1874) (dfe6aa7d)
+
 ## [5.223.1] - 2026-09-20
 
 ### Changed
