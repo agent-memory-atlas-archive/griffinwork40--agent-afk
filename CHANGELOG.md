@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.223.4] - 2026-09-20
+
+### Fixed
+- remove session ID from delegation-budget refusal messages (#1900) (#1908) (a30a47ec)
+
 ## [5.223.3] - 2026-09-20
 
 ### Fixed
