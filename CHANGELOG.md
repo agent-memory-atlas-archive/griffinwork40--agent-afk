@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.15] - 2026-09-20
+
+### Changed
+- collapse createHookRegistry indirection chain (#1855) (#1873) (10398d96)
+
 ## [5.222.14] - 2026-09-20
 
 ### Changed
