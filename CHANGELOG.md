@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.14] - 2026-09-20
+
+### Changed
+- collapse trace emit 12-way repetition into generic (#1840) (#1878) (12cd680d)
+- extract browser handler provider acquisition (#1853) (#1882) (ebef899b)
+- remove deprecated cli/keychain.ts shim (#1857) (#1871) (5345fb90)
+
 ## [5.222.13] - 2026-09-20
 
 ### Fixed
