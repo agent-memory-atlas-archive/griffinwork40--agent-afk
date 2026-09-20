@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.223.0] - 2026-09-20
+
+### Added
+- add tree-wide delegation budget (maxChildren/concurrent/total agents) (#1894) (d936c080)
+
 ## [5.222.18] - 2026-09-20
 
 ### Changed
