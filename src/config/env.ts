@@ -374,6 +374,15 @@ export const ENV_REGISTRY = [
     category: 'model',
   },
   {
+    name: 'AFK_MICROCOMPACT_DELEGATION_BYTES',
+    description: 'Byte threshold for delegation tool results (agent/compose/skill). These results carry pre-compressed subagent findings that are expensive to re-derive -- clearing them destroys irreplaceable synthesized knowledge. A delegation tool result must be at least this large before microcompaction considers clearing it. Default 16384 (16KB, vs 2KB for ordinary tools). Set to match AFK_MICROCOMPACT_TOOL_RESULT_BYTES to disable the elevated threshold.',
+    type: 'number',
+    required: false,
+    default: '16384',
+    example: '32768',
+    category: 'model',
+  },
+  {
     name: 'AFK_MODEL',
     description: 'Default model for agent turns. Accepts slot names (local, small, medium, large), fixed-identity aliases (opus, sonnet, haiku, fable), or full model IDs. Migration: AFK_MODEL=sonnet now pins the fixed Sonnet identity rather than following a rebound medium tier.',
     type: 'string',

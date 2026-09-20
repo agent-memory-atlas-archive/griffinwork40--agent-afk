@@ -52,6 +52,7 @@ import type { OpenAIMessage } from './messages.js';
 
 /** Minimal structural view of an assistant `tool_calls[]` entry (runtime-present). */
 interface OpenAIToolCallView {
+  id?: string;
   function?: { name?: string; arguments?: string };
 }
 
@@ -157,12 +158,28 @@ function isToolMessagePlaceholder(content: OpenAIMessage['content']): boolean {
  */
 export const openaiMicrocompactOps: MicrocompactOps<OpenAIMessage> = {
   listToolResults(messages: ReadonlyArray<OpenAIMessage>): ToolResultRef[] {
+    // Build a map from tool_call_id -> tool name by scanning assistant messages.
+    // This lets microcompaction apply a higher threshold to delegation tools
+    // (agent/compose/skill) whose results carry pre-compressed subagent findings.
+    const toolNameById = new Map<string, string>();
+    for (const msg of messages) {
+      if (msg.role !== 'assistant') continue;
+      const calls = toolCallsOf(msg);
+      if (!calls) continue;
+      for (const tc of calls) {
+        if (tc.id && tc.function?.name) {
+          toolNameById.set(tc.id, tc.function.name);
+        }
+      }
+    }
+
     const refs: ToolResultRef[] = [];
     for (const msg of messages) {
       if (msg.role !== 'tool') continue;
       refs.push({
         byteLength: toolMessageContentBytes(msg.content),
         isPlaceholder: isToolMessagePlaceholder(msg.content),
+        toolName: msg.tool_call_id !== undefined ? toolNameById.get(msg.tool_call_id) : undefined,
         clear(placeholder: string): void {
           // Only the content payload changes; role:'tool' and tool_call_id stay.
           msg.content = placeholder;
@@ -291,6 +308,7 @@ export async function compactOpenAIHistory(
   const opts = resolveMicrocompactOptions(
     env.AFK_MICROCOMPACT_TOOL_RESULT_BYTES,
     env.AFK_MICROCOMPACT_KEEP_LAST,
+    env.AFK_MICROCOMPACT_DELEGATION_BYTES,
   );
   const { blocksCleared, bytesReclaimed } = microcompactToolResults(deps.priorTurns, opts);
   if (blocksCleared > 0 && !result.compacted) {

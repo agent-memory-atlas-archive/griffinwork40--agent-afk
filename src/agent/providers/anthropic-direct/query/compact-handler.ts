@@ -283,10 +283,11 @@ function runMicrocompactFallback(
 }
 
 /** Resolve the microcompaction threshold/keep-last from env (see shared resolver). */
-function readMicrocompactOptions(): { thresholdBytes: number; keepLast: number } {
+function readMicrocompactOptions(): { thresholdBytes: number; keepLast: number; delegationThresholdBytes: number } {
   return resolveMicrocompactOptions(
     env.AFK_MICROCOMPACT_TOOL_RESULT_BYTES,
     env.AFK_MICROCOMPACT_KEEP_LAST,
+    env.AFK_MICROCOMPACT_DELEGATION_BYTES,
   );
 }
 

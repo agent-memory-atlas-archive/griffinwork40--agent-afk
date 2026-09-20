@@ -181,16 +181,32 @@ function isToolResultPlaceholder(content: unknown): boolean {
  */
 export const anthropicMicrocompactOps: MicrocompactOps<MessageParam> = {
   listToolResults(messages: ReadonlyArray<MessageParam>): ToolResultRef[] {
+    // Build a map from tool_use_id -> tool name by scanning assistant messages.
+    // This lets microcompaction apply a higher threshold to delegation tools
+    // (agent/compose/skill) whose results carry pre-compressed subagent findings.
+    const toolNameById = new Map<string, string>();
+    for (const msg of messages) {
+      if (msg.role !== 'assistant' || !Array.isArray(msg.content)) continue;
+      for (const block of msg.content as ContentBlockParam[]) {
+        const b = block as { type?: string; id?: string; name?: string };
+        if (b.type === 'tool_use' && b.id && b.name) {
+          toolNameById.set(b.id, b.name);
+        }
+      }
+    }
+
     const refs: ToolResultRef[] = [];
     for (const msg of messages) {
       if (msg.role !== 'user' || !Array.isArray(msg.content)) continue;
       const content = msg.content as ContentBlockParam[];
       for (const block of content) {
         if ((block as { type?: string }).type !== 'tool_result') continue;
-        const resultBlock = block as { content?: unknown };
+        const resultBlock = block as { content?: unknown; tool_use_id?: string };
+        const toolUseId = resultBlock.tool_use_id;
         refs.push({
           byteLength: toolResultContentBytes(resultBlock.content),
           isPlaceholder: isToolResultPlaceholder(resultBlock.content),
+          toolName: toolUseId !== undefined ? toolNameById.get(toolUseId) : undefined,
           clear(placeholder: string): void {
             // Replace content in place with a single text-string payload. Keeps
             // the tool_result block (and its tool_use_id) exactly where it was.
