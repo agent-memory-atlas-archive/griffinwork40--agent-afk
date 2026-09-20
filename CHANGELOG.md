@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.223.3] - 2026-09-20
+
+### Fixed
+- make maxChildrenPerAgent a concurrent cap + rename to maxConcurrentChildrenPerAgent (#1904) (3447b55d)
+
 ## [5.223.2] - 2026-09-20
 
 ### Fixed
