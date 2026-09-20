@@ -104,6 +104,22 @@ export interface RunForegroundArgs {
    * tree is preserved and locked, not removed.
    */
   isolationTeardown?: { repoRoot: string; worktreePath: string };
+  /**
+   * Item 4: optional delegation-budget release callback. When set and the
+   * foreground run is promoted to background, this callback is deferred to
+   * the registry's `onSettled` hook so the concurrent slot stays charged
+   * until the promoted job actually settles — not when this function returns.
+   * When not promoted (normal foreground completion), the CALLER releases via
+   * this same reference after `runForegroundWithPromotion` resolves.
+   */
+  budgetRelease?: () => void;
+  /**
+   * Item 4: mutable flag flipped synchronously when promotion succeeds and
+   * `budgetRelease` ownership is transferred to the registry's `onSettled`
+   * hook. The executor checks this after the call to decide whether to release
+   * the slot itself (`true` → registry owns it; `false` → caller releases).
+   */
+  promotionTookBudget?: { value: boolean };
 }
 
 /**
@@ -128,6 +144,8 @@ export async function runForegroundWithPromotion(args: RunForegroundArgs): Promi
     registry,
     promotionTriggers,
     activeForegroundHandles,
+    budgetRelease,
+    promotionTookBudget,
   } = args;
 
   // Wire abort: if signal fires, cancel the handle (foreground only —
@@ -232,8 +250,16 @@ export async function runForegroundWithPromotion(args: RunForegroundArgs): Promi
                 debugLog(`background worktree teardown: ${JSON.stringify(result)}`);
               },
             } : {}),
+            // Item 4: defer the budget-slot release to registry settlement so a
+            // promoted agent's concurrent slot is held until the job finishes,
+            // matching the accounting of natively-backgrounded jobs.
+            ...(budgetRelease !== undefined ? { onSettled: budgetRelease } : {}),
           });
           promoted = true;
+          // Item 4: signal the caller that the registry owns budgetRelease now.
+          if (promotionTookBudget !== undefined && budgetRelease !== undefined) {
+            promotionTookBudget.value = true;
+          }
           // Detach the end-of-turn abort bridge — the promoted job must
           // outlive the turn that spawned it, exactly like mode:'background'.
           signal.removeEventListener('abort', abortListener);

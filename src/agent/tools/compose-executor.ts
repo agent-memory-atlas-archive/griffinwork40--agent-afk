@@ -149,6 +149,8 @@ export interface ComposeExecutorContext {
   getReadScopeInputs?: () => ReadScopeInputs;
   /** Shared workspace store so compose DAG nodes can publish/receive findings. */
   workspaceStore?: WorkspaceStore;
+  /** Tree-wide delegation budget. Opt-in: undefined when no budget env vars set. */
+  delegationBudget?: import('./delegation-budget.js').DelegationBudget;
   /**
    * Callback wired to the per-call compose {@link SubagentManager} so every
    * successfully-completed DAG node's token usage and USD cost rolls up into
@@ -637,6 +639,12 @@ export class ComposeExecutor {
       };
     }
 
+    // Delegation budget: per-node accounting is handled in runSubagentDAG
+    // (dag-subagent.ts) via the delegationBudget option threaded below. The
+    // single canSpawn check here was removed (Item 2) because it was never
+    // paired with recordSpawn — a 20-node DAG would have passed the gate once
+    // but recorded zero spawns. Per-node checks in dag-subagent supersede it.
+
     // Contract: the per-node tool budget is enforced BY THE PROVIDER LOOP, not
     // by this executor. `max_tool_rounds_per_node` is forwarded to each node's
     // fork config as `maxToolUseIterations`, where the shared wind-down policy
@@ -851,6 +859,8 @@ export class ComposeExecutor {
         edges: parsed.edges ?? [],
         failFast: parsed.fail_fast,
         nodeTimeoutMs: parsed.node_timeout_ms,
+        // Item 2: thread the budget so every DAG node is counted individually.
+        ...(this.ctx.delegationBudget !== undefined ? { delegationBudget: this.ctx.delegationBudget } : {}),
       });
 
       void appendRoutingDecision({
