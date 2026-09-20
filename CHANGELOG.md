@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.222.9] - 2026-09-20
+
+### Fixed
+- preserve identifier names in published bundles (#1844) (423f984d)
+
+### Changed
+- update boot-warning-survives-clear to inScrollback after #1823 banner-scroll (#1866) (dc4284a9)
+
 ## [5.222.8] - 2026-09-19
 
 ### Fixed
