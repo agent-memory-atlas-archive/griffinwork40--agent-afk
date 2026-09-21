@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.223.6] - 2026-09-21
+
+### Fixed
+- clamp negative idle-ms, add eviction threshold test, fix formatting (#1825) (925be557)
+
+### Changed
+- Merge pull request #1914 from griffinwork40/afk/issue-1825-bocf (825b623b)
+- Merge pull request #1912 from griffinwork40/afk/resolve-repo-root-1834 (52c41c4f)
+- consolidate resolveRepoRoot() into single canonical implementation (#1834) (19cd2e90)
+
 ## [5.223.5] - 2026-09-21
 
 ### Changed
