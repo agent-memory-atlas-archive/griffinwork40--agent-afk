@@ -160,6 +160,26 @@ export const DEFAULT_MICROCOMPACT_TOOL_RESULT_BYTES = 2_048;
 export const DEFAULT_MICROCOMPACT_KEEP_LAST = 4;
 
 /**
+ * Tool names whose results carry pre-compressed subagent findings and should
+ * be cleared at a higher byte threshold than ordinary tool results. These
+ * tools return synthesized, already-distilled output from child agents --
+ * clearing them destroys irreplaceable knowledge that cannot be re-derived
+ * without re-dispatching.
+ */
+export const DELEGATION_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'agent', 'compose', 'skill',
+]);
+
+/**
+ * Default byte threshold for delegation tool results (agent/compose/skill).
+ * Set at 16KB (vs 2KB for ordinary tool results) because delegation results
+ * are already compressed by the child agent's handoff contract, carry high
+ * information density, and are expensive to re-derive. Overridable via
+ * `AFK_MICROCOMPACT_DELEGATION_BYTES`.
+ */
+export const DEFAULT_MICROCOMPACT_DELEGATION_BYTES = 16_384;
+
+/**
  * Sentinel that marks a `tool_result` whose content microcompaction already
  * cleared. Detection of this exact prefix is what makes the pass IDEMPOTENT: a
  * second run skips any block whose content already starts with it, so bytes are
@@ -203,6 +223,16 @@ export interface ToolResultRef {
    * the block/message or alter its id — only swap the content payload.
    */
   clear(placeholder: string): void;
+  /**
+   * Name of the tool that produced this result. Set by the provider's
+   * {@link MicrocompactOps.listToolResults} when it can correlate the
+   * tool_result to its originating tool_use/tool_call. Used by
+   * {@link microcompactToolResults} to apply a higher clearing threshold
+   * to delegation tool results (agent, compose, skill) whose content carries
+   * pre-compressed subagent findings that are expensive to re-derive.
+   * Absent when the correlation cannot be established (defensive).
+   */
+  toolName?: string;
 }
 
 /**
@@ -222,6 +252,15 @@ export interface MicrocompactOptions {
   thresholdBytes?: number;
   /** Keep this many of the most-recent tool_result blocks intact regardless of size. */
   keepLast?: number;
+  /**
+   * Byte threshold for delegation tool results (agent/compose/skill). These
+   * results carry pre-compressed subagent findings that are expensive to
+   * re-derive. A ref whose {@link ToolResultRef.toolName} is in
+   * {@link DELEGATION_TOOL_NAMES} uses this threshold instead of
+   * {@link thresholdBytes}. Defaults to
+   * {@link DEFAULT_MICROCOMPACT_DELEGATION_BYTES} (16KB).
+   */
+  delegationThresholdBytes?: number;
 }
 
 /** Outcome of one {@link microcompactToolResults} pass. */
@@ -270,6 +309,7 @@ export function microcompactToolResults<M>(
   opts: MicrocompactOptions = {},
 ): MicrocompactResult {
   const thresholdBytes = opts.thresholdBytes ?? DEFAULT_MICROCOMPACT_TOOL_RESULT_BYTES;
+  const delegationThresholdBytes = opts.delegationThresholdBytes ?? DEFAULT_MICROCOMPACT_DELEGATION_BYTES;
   const keepLast = Math.max(0, opts.keepLast ?? DEFAULT_MICROCOMPACT_KEEP_LAST);
 
   const refs = ops.listToolResults(messages);
@@ -281,9 +321,18 @@ export function microcompactToolResults<M>(
   // Protect the most-recent `keepLast` results: everything at index
   // >= (length - keepLast) is off-limits. The rest (older) are candidates.
   const protectedFrom = Math.max(0, refs.length - keepLast);
+  // Delegation tool results (agent/compose/skill) carry pre-compressed
+  // subagent findings that are expensive to re-derive. Apply a higher byte
+  // threshold to these so they survive microcompaction longer than ordinary
+  // tool results (file reads, shell output, grep dumps).
   const candidates = refs
     .slice(0, protectedFrom)
-    .filter((ref) => !ref.isPlaceholder && ref.byteLength >= thresholdBytes);
+    .filter((ref) => {
+      if (ref.isPlaceholder) return false;
+      const isDelegation = ref.toolName !== undefined && DELEGATION_TOOL_NAMES.has(ref.toolName);
+      const effectiveThreshold = isDelegation ? delegationThresholdBytes : thresholdBytes;
+      return ref.byteLength >= effectiveThreshold;
+    });
 
   // Largest first so the biggest window-fillers are reclaimed with priority;
   // tie-break is irrelevant since every candidate is cleared in a single pass.
@@ -309,20 +358,25 @@ export function byteLengthOf(text: string): number {
 }
 
 /**
- * Parse the two microcompaction env strings into a validated
+ * Parse the microcompaction env strings into a validated
  * {@link MicrocompactOptions}. Pure (no `process.env` read) so it unit-tests
  * without touching the environment — each provider handler reads
- * `AFK_MICROCOMPACT_TOOL_RESULT_BYTES` / `AFK_MICROCOMPACT_KEEP_LAST` through
- * `config/env.ts` and passes the raw strings here.
+ * `AFK_MICROCOMPACT_TOOL_RESULT_BYTES` / `AFK_MICROCOMPACT_KEEP_LAST` /
+ * `AFK_MICROCOMPACT_DELEGATION_BYTES` through `config/env.ts` and passes
+ * the raw strings here.
  *
  *   - `rawBytes`: a finite integer `>= 1` overrides the threshold; anything else
  *     falls back to {@link DEFAULT_MICROCOMPACT_TOOL_RESULT_BYTES}.
  *   - `rawKeepLast`: a finite integer `>= 0` overrides keepLast (0 = protect
  *     nothing); anything else falls back to {@link DEFAULT_MICROCOMPACT_KEEP_LAST}.
+ *   - `rawDelegationBytes`: a finite integer `>= 1` overrides the delegation
+ *     threshold; anything else falls back to
+ *     {@link DEFAULT_MICROCOMPACT_DELEGATION_BYTES}.
  */
 export function resolveMicrocompactOptions(
   rawBytes: string | undefined,
   rawKeepLast: string | undefined,
+  rawDelegationBytes?: string | undefined,
 ): Required<MicrocompactOptions> {
   let thresholdBytes = DEFAULT_MICROCOMPACT_TOOL_RESULT_BYTES;
   if (rawBytes !== undefined && rawBytes.length > 0) {
@@ -334,7 +388,12 @@ export function resolveMicrocompactOptions(
     const n = Number.parseInt(rawKeepLast, 10);
     if (Number.isFinite(n) && n >= 0) keepLast = n;
   }
-  return { thresholdBytes, keepLast };
+  let delegationThresholdBytes = DEFAULT_MICROCOMPACT_DELEGATION_BYTES;
+  if (rawDelegationBytes !== undefined && rawDelegationBytes.length > 0) {
+    const n = Number.parseInt(rawDelegationBytes, 10);
+    if (Number.isFinite(n) && n >= 1) delegationThresholdBytes = n;
+  }
+  return { thresholdBytes, keepLast, delegationThresholdBytes };
 }
 
 /**

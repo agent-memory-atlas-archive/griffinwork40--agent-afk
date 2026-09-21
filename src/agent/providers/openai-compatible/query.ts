@@ -1109,6 +1109,7 @@ export class OpenAICompatibleQuery implements ProviderQuery {
       const microOpts = resolveMicrocompactOptions(
         env.AFK_MICROCOMPACT_TOOL_RESULT_BYTES,
         env.AFK_MICROCOMPACT_KEEP_LAST,
+        env.AFK_MICROCOMPACT_DELEGATION_BYTES,
       );
       const { blocksCleared, bytesReclaimed } = microcompactToolResults(this.priorTurns, microOpts);
       if (blocksCleared > 0) {
