@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.224.0] - 2026-09-21
+
+### Added
+- delegation-aware microcompaction preserves subagent findings (a3e2d2ea)
+
+### Changed
+- Merge pull request #1902 from griffinwork40/afk/20260920-163857-b4d985 (b34fef08)
+- Merge remote-tracking branch 'origin/main' into afk/20260920-163857-b4d985 (739e20ab)
+
 ## [5.223.6] - 2026-09-21
 
 ### Fixed
