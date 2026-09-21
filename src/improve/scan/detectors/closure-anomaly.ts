@@ -25,6 +25,17 @@
  * one session at 14:32 hit it." Grouping by reason converts dozens of
  * sessions into one card with N evidence rows.
  *
+ * ## Scoping to root sessions
+ *
+ * Only sessions whose `session_init_start` event carries `actor === 'main'`
+ * are considered. Subagent forks (`actor === 'subagent'`) share their parent's
+ * trace file and emit closure events for every in-flight child cancelled by a
+ * parent timeout or Ctrl+C — counting those as independent anomalies produced
+ * false positives (156 occurrences across 29 sessions decomposed into rate-limit
+ * cascades, user Ctrl+C, compose-timeout, zero-turn daemon, and REPL exit after
+ * clean completion — all root sessions succeeded). Sessions predating the `actor`
+ * field (no `session_init_start`) are conservatively treated as root.
+ *
  * ## Caveats
  *
  *   - Emission is live for every reason this detector groups on. The
@@ -56,6 +67,26 @@
 import type { DetectorResult, FailureEvidence, Severity } from '../../schemas.js';
 import type { SessionRead } from '../reader.js';
 import { clampExcerpt, MAX_EVIDENCE_PER_CARD } from './_lib.js';
+
+/**
+ * Invariant: a session is a root session when its `session_init_start` event
+ * carries `actor === 'main'`. Subagent forks carry `actor === 'subagent'`.
+ *
+ * When no `session_init_start` is present (pre-actor traces), we conservatively
+ * treat the session as root so older data is never silently discarded.
+ */
+function isRootSession(session: SessionRead): boolean {
+  for (const item of session.events) {
+    const ev = item.event;
+    if (ev.kind !== 'session_phase') continue;
+    if (ev.payload.phase !== 'session_init_start') continue;
+    // actor is optional — absent on old traces; treat as root (conservative).
+    const { actor } = ev.payload;
+    return actor === undefined || actor === 'main';
+  }
+  // No session_init_start found — old trace; treat as root.
+  return true;
+}
 
 /** Default minimum sessions sharing a reason before a card fires. */
 export const DEFAULT_CLOSURE_ANOMALY_MIN_OCCURRENCES = 1;
@@ -99,9 +130,11 @@ export function detectClosureAnomaly(
     throw new Error(`minOccurrences must be >= 1 (got ${minOccurrences})`);
   }
 
-  // Bucket by reason.
+  // Bucket by reason. Only root sessions are considered — subagent closures
+  // within a recovered parent session produce false positives (issue #1919).
   const byReason = new Map<string, ClosureSighting[]>();
   for (const session of sessions) {
+    if (!isRootSession(session)) continue;
     for (const item of session.events) {
       const ev = item.event;
       if (ev.kind !== 'closure') continue;
