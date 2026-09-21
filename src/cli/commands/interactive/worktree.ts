@@ -14,8 +14,10 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { env } from '../../../config/env.js';
 import { promisify } from 'node:util';
 import { promises as fs } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+
+import { resolveRepoRoot as resolveRepoRootCanonical } from '../../../utils/git.js';
 
 import { recordCdIntent, shellWrapperActive } from '../../../utils/cd-on-exit.js';
 import { detectShellFromEnv } from '../shell-init.js';
@@ -213,18 +215,11 @@ function validateBranchName(name: string): void {
 }
 
 async function resolveRepoRoot(execFile: ExecFileFn): Promise<string> {
-  let raw: string;
   try {
-    const result = await execFile('git', ['rev-parse', '--git-common-dir']);
-    raw = result.stdout.trim();
+    return await resolveRepoRootCanonical({ mode: 'git-common-dir', execFile });
   } catch {
     throw new Error('Not in a git repository (run from inside a git checkout).');
   }
-  if (!raw) {
-    throw new Error('Not in a git repository (run from inside a git checkout).');
-  }
-  const absoluteGitDir = isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
-  return dirname(absoluteGitDir);
 }
 
 /**

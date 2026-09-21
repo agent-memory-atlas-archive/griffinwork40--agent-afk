@@ -12,6 +12,17 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFileCallback);
 
+/**
+ * Minimal shape expected by the injectable `execFile` option of
+ * `resolveRepoRoot`. Compatible with the `ExecFileFn` type defined in
+ * `src/cli/commands/interactive/worktree.ts` and `worktree-sweep.ts` so
+ * those callers can pass their own promisified `execFile` for test isolation.
+ */
+export type ExecFileForGit = (
+  file: string,
+  args: string[],
+) => Promise<{ stdout: string; stderr: string }>;
+
 // ---------------------------------------------------------------------------
 // Repo-root resolution
 // ---------------------------------------------------------------------------
@@ -40,7 +51,25 @@ export interface ResolveRepoRootOptions {
   cwd?: string;
   /** Which git flag to use. Defaults to `'show-toplevel'`. */
   mode?: RepoRootMode;
+  /**
+   * Injectable executor — replaces the default `promisify(execFile)`. Used by
+   * callers (e.g. the `/worktree` slash command, boot-prune) that already carry
+   * a test-stub `ExecFileFn` and want consistent behaviour without forking a
+   * real child process in unit tests.
+   */
+  execFile?: ExecFileForGit;
 }
+
+/**
+ * Minimal shape expected by the injectable `execFileSync` option of
+ * `resolveRepoRootSync`. Compatible with the Node.js `execFileSync` signature
+ * for the subset of options this module uses.
+ */
+export type ExecFileSyncForGit = (
+  file: string,
+  args: string[],
+  options: { cwd: string; encoding: 'utf8'; stdio: ['ignore', 'pipe', 'ignore'] },
+) => string;
 
 /**
  * Options for the sync `resolveRepoRootSync()`.
@@ -55,6 +84,11 @@ export interface ResolveRepoRootSyncOptions {
    * absent). When `undefined` (the default) the error is re-thrown.
    */
   fallback?: string;
+  /**
+   * Injectable executor — replaces the default `execFileSync`. Used by unit
+   * tests to avoid spawning real child processes.
+   */
+  execFileSync?: ExecFileSyncForGit;
 }
 
 /**
@@ -68,16 +102,17 @@ export interface ResolveRepoRootSyncOptions {
 export async function resolveRepoRoot(options?: ResolveRepoRootOptions): Promise<string> {
   const cwd = options?.cwd ?? process.cwd();
   const mode = options?.mode ?? 'show-toplevel';
+  const exec: ExecFileForGit = options?.execFile ?? ((file, args) => execFileAsync(file, args, { cwd }));
 
   try {
     if (mode === 'git-common-dir') {
-      const result = await execFileAsync('git', ['rev-parse', '--git-common-dir'], { cwd });
+      const result = await exec('git', ['rev-parse', '--git-common-dir']);
       const raw = result.stdout.trim();
       if (!raw) throw new Error('Not in a git repository.');
       const absoluteGitDir = isAbsolute(raw) ? raw : resolvePath(cwd, raw);
       return dirname(absoluteGitDir);
     } else {
-      const result = await execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd });
+      const result = await exec('git', ['rev-parse', '--show-toplevel']);
       const root = result.stdout.trim();
       if (!root) throw new Error('Not in a git repository.');
       return root;
@@ -98,10 +133,11 @@ export async function resolveRepoRoot(options?: ResolveRepoRootOptions): Promise
 export function resolveRepoRootSync(options?: ResolveRepoRootSyncOptions): string {
   const cwd = options?.cwd ?? process.cwd();
   const mode = options?.mode ?? 'show-toplevel';
+  const execSync: ExecFileSyncForGit = options?.execFileSync ?? execFileSync;
 
   try {
     if (mode === 'git-common-dir') {
-      const raw = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      const raw = execSync('git', ['rev-parse', '--git-common-dir'], {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
@@ -110,7 +146,7 @@ export function resolveRepoRootSync(options?: ResolveRepoRootSyncOptions): strin
       const absoluteGitDir = isAbsolute(raw) ? raw : resolvePath(cwd, raw);
       return dirname(absoluteGitDir);
     } else {
-      const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      const root = execSync('git', ['rev-parse', '--show-toplevel'], {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],

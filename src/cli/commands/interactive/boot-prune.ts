@@ -16,9 +16,9 @@
  */
 
 import { execFile as execFileCallback } from 'node:child_process';
-import { dirname, isAbsolute, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
+import { resolveRepoRoot } from '../../../utils/git.js';
 import { runSweep } from '../../../agent/worktree/worktree-sweep.js';
 import type { ExecFileFn } from '../../../agent/worktree/worktree-sweep.js';
 
@@ -61,14 +61,6 @@ export interface BootPruneResult {
   skippedReason?: 'not-in-repo' | 'lock-contested' | 'timeout' | 'error' | 'disabled';
 }
 
-async function resolveRepoRoot(): Promise<string> {
-  const result = await execFile('git', ['rev-parse', '--git-common-dir']);
-  const raw = result.stdout.trim();
-  if (!raw) throw new Error('Not in a git repository.');
-  const absoluteGitDir = isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
-  return dirname(absoluteGitDir);
-}
-
 /**
  * Run the boot-time sweep. Returns synchronously-resolvable info about
  * what happened so the caller can decide whether to log a one-line
@@ -89,7 +81,9 @@ export async function bootPruneWorktrees(opts?: {
 
   let repoRoot: string;
   try {
-    repoRoot = await resolveRepoRoot();
+    // Pass the module-scope execFile so the existing test suite's
+    // vi.mock('node:child_process') stub is honoured.
+    repoRoot = await resolveRepoRoot({ mode: 'git-common-dir', execFile });
   } catch {
     return { ran: false, removedCount: 0, skippedReason: 'not-in-repo' };
   }
