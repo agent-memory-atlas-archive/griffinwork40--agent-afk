@@ -125,6 +125,19 @@ export type PermissionResult =
       decisionClassification?: PermissionDecisionClassification;
     };
 
+/**
+ * Permission callback invoked before each tool use.
+ *
+ * Contract: implementations may be invoked **concurrently** for safe-classified
+ * tools (those that pass the parallel-gate path in the dispatcher). Implementations
+ * must therefore be concurrency-safe — avoid shared mutable state across calls.
+ * In particular, implementations built with {@link createCanUseToolHook} that
+ * supply an interactive `onAsk` callback must not assume sequential invocation
+ * order; the `onAsk` handler itself must be safe for concurrent entry.
+ *
+ * @since Parallel gate dispatch (PR #1901). Before this change, all
+ * `CanUseTool` invocations were serialized in Phase 1 of `executeBatch`.
+ */
 export type CanUseTool = (
   toolName: string,
   input: Record<string, unknown>,

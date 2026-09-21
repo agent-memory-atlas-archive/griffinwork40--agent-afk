@@ -590,7 +590,8 @@ export class SessionManager {
    * @returns Current model
    */
   getModel(target: RouteTarget): AgentModelInput {
-    const route = toRoute(target); const data = this.sessionData.get(routeKey(route)) ?? demandLoadSidecar(this.options.dataDir, this.sessionData, route);
+    const route = toRoute(target);
+    const data = this.sessionData.get(routeKey(route)) ?? demandLoadSidecar(this.options.dataDir, this.sessionData, route);
     return data?.model || this.options.defaultModel;
   }
 
@@ -642,7 +643,8 @@ export class SessionManager {
    * @returns Effective cwd, or undefined when no override is configured
    */
   getCwd(target: RouteTarget): string | undefined {
-    const route = toRoute(target); const data = this.sessionData.get(routeKey(route)) ?? demandLoadSidecar(this.options.dataDir, this.sessionData, route);
+    const route = toRoute(target);
+    const data = this.sessionData.get(routeKey(route)) ?? demandLoadSidecar(this.options.dataDir, this.sessionData, route);
     return data?.cwd ?? this.options.botCwd;
   }
 

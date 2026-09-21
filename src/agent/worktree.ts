@@ -34,6 +34,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { getFarmDir, getFarmsDir } from '../paths.js';
+import { resolveRepoRoot } from '../utils/git.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -201,11 +202,7 @@ async function git(
   }
 }
 
-async function resolveRepoRoot(cwd: string): Promise<string> {
-  const { stdout } = await git(cwd, ['rev-parse', '--show-toplevel']);
-  if (!stdout) throw new WorktreeError(`not a git repository: ${cwd}`);
-  return stdout;
-}
+
 
 async function resolveBaseRef(
   repoRoot: string,
@@ -280,7 +277,12 @@ export async function createFarm(opts: CreateFarmOptions): Promise<FarmManifest>
   }
 
   const sourceCwd = opts.cwd ?? process.cwd();
-  const repoRoot = await resolveRepoRoot(sourceCwd);
+  let repoRoot: string;
+  try {
+    repoRoot = await resolveRepoRoot({ cwd: sourceCwd });
+  } catch {
+    throw new WorktreeError(`not a git repository: ${sourceCwd}`);
+  }
   const { sha: baseRef, branch: baseBranch } = await resolveBaseRef(repoRoot, opts.baseRef);
 
   // Slug derivation is delegated to `buildFarmSlug` so external callers

@@ -133,15 +133,6 @@ export const ENV_REGISTRY = [
     category: 'model',
   },
   {
-    name: 'AFK_DIAGNOSE_BASELINE',
-    description: 'Kill switch for /diagnose reproducer baseline execution. When set to \'0\', the /diagnose skill skips executing the detected reproducer command for a ground-truth baseline; default enabled (runs). Set to \'0\' to disable.',
-    type: 'boolean',
-    required: false,
-    default: '1',
-    example: '0',
-    category: 'debug',
-  },
-  {
     name: 'AFK_DISABLE_PROMPT_CACHE',
     description: 'Disable Anthropic prompt caching when set to 1/true/yes/on. Unset = caching enabled.',
     type: 'boolean',
@@ -269,10 +260,10 @@ export const ENV_REGISTRY = [
     category: 'model',
   },
   {
-    name: 'AFK_MAX_CHILDREN_PER_AGENT',
+    name: 'AFK_MAX_CONCURRENT_CHILDREN_PER_AGENT',
     description:
-      'Maximum number of child agents a single agent may spawn over its lifetime (per-agent child limit, not concurrent). ' +
-      'Part of the delegation budget: guards against a single agent fanning out too many children. ' +
+      'Maximum number of child agents a single agent may have running concurrently (per-agent concurrent child cap). ' +
+      'Part of the delegation budget: guards against a single agent fanning out too many simultaneous children. ' +
       'Accepted range 1-20; unset or unparseable means no per-agent child limit. ' +
       'Works alongside AFK_MAX_CONCURRENT_AGENTS and AFK_MAX_TOTAL_AGENTS.',
     type: 'number',
@@ -286,7 +277,7 @@ export const ENV_REGISTRY = [
       'Maximum number of simultaneously-running agents across the entire session tree. ' +
       'Part of the delegation budget: prevents rate-limit (429) cascades from too many parallel children. ' +
       'Accepted range 1-64; unset or unparseable means no concurrent limit. ' +
-      'Works alongside AFK_MAX_CHILDREN_PER_AGENT and AFK_MAX_TOTAL_AGENTS.',
+      'Works alongside AFK_MAX_CONCURRENT_CHILDREN_PER_AGENT and AFK_MAX_TOTAL_AGENTS.',
     type: 'number',
     required: false,
     example: '16',
@@ -298,7 +289,7 @@ export const ENV_REGISTRY = [
       'Maximum total agents spawned across the entire session tree (lifetime, not concurrent). ' +
       'Part of the delegation budget: absolute ceiling preventing runaway recursive delegation. ' +
       'Accepted range 1-200; unset or unparseable means no total limit. ' +
-      'Works alongside AFK_MAX_CHILDREN_PER_AGENT and AFK_MAX_CONCURRENT_AGENTS.',
+      'Works alongside AFK_MAX_CONCURRENT_CHILDREN_PER_AGENT and AFK_MAX_CONCURRENT_AGENTS.',
     type: 'number',
     required: false,
     example: '48',

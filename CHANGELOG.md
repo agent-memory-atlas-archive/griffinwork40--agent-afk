@@ -11,6 +11,35 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.223.5] - 2026-09-21
+
+### Changed
+- parallelize Phase 1 pre-dispatch gates for safe tools (#1901) (d745ac79)
+- fix half-verifications, add cwd never-drop test, remove unused helper (#1827) (#1913) (227e376e)
+- update stale fromConfig mock shape in chat tests (#1821) (#1886) (3837ff95)
+- strengthen multiline idle-dup test with value assertions (#1843) (#1880) (4293e2a3)
+- remove confirmed dead code (AFK_DIAGNOSE_BASELINE, loadXaiCredential, PlaywrightHintOptions) (#1849) (#1909) (38121d9d)
+
+## [5.223.4] - 2026-09-20
+
+### Fixed
+- remove session ID from delegation-budget refusal messages (#1900) (#1908) (a30a47ec)
+
+## [5.223.3] - 2026-09-20
+
+### Fixed
+- make maxChildrenPerAgent a concurrent cap + rename to maxConcurrentChildrenPerAgent (#1904) (3447b55d)
+
+## [5.223.2] - 2026-09-20
+
+### Fixed
+- use shared parseRetryAfterMs in OpenAI provider (#1851) (#1874) (dfe6aa7d)
+
+## [5.223.1] - 2026-09-20
+
+### Changed
+- rename skills/index.ts to skill-registry.ts, extract types (#1862) (#1890) (ca4b9b64)
+
 ## [5.223.0] - 2026-09-20
 
 ### Added

@@ -21,7 +21,7 @@
 
 import { execFile as execFileCallback } from 'node:child_process';
 import { promises as fs } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { runSweep } from '../../../agent/worktree/worktree-sweep.js';
@@ -29,6 +29,7 @@ import type { ExecFileFn, SweepOptions } from '../../../agent/worktree/worktree-
 import { palette } from '../../palette.js';
 import type { SlashCommand, SlashContext, SlashResult, Writer } from '../types.js';
 import { errorMessage } from '../../../utils/errors.js';
+import { resolveRepoRoot } from '../../../utils/git.js';
 
 const execFile: ExecFileFn = promisify(execFileCallback) as ExecFileFn;
 
@@ -49,13 +50,6 @@ const WARNING_VERDICTS = new Set([
   'stale-dirty',
 ]);
 
-async function resolveRepoRoot(): Promise<string> {
-  const result = await execFile('git', ['rev-parse', '--git-common-dir']);
-  const raw = result.stdout.trim();
-  if (!raw) throw new Error('Not in a git repository.');
-  const absoluteGitDir = isAbsolute(raw) ? raw : resolve(process.cwd(), raw);
-  return dirname(absoluteGitDir);
-}
 
 function formatAge(ageMs: number): string {
   if (ageMs <= 0) return '-';

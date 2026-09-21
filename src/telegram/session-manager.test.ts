@@ -1530,6 +1530,37 @@ describe('SessionManager — elicitation route registry cleanup (#1662)', () => 
     await customManager.closeAll().catch(() => {});
   });
 
+  test('idleSessionMs is the controlling threshold when it is smaller than maxAgeMs', async () => {
+    // Build a manager with idleSessionMs=1 so the idle-eviction window is 1ms.
+    const idleManager = new SessionManager({
+      dataDir: testDataDir,
+      apiKey: 'test-key',
+      defaultModel: 'sonnet',
+      idleSessionMs: 1,
+      createSession: async () =>
+        ({ state: 'idle', sessionId: `sdk-${Math.random().toString(36).slice(2)}`, async close() {}, async reset() {}, abort() {}, async sendMessage() { return { role: 'assistant' as const, content: '', timestamp: new Date() }; }, async *getOutputStream() { yield { type: 'done' as const }; } } as unknown as IAgentSession),
+    });
+
+    const session = await idleManager.getSession(7007);
+    const sid = session.sessionId!;
+
+    // Wait so that Date.now() - lastActivity > idleSessionMs (1ms).
+    await new Promise((r) => setTimeout(r, 2));
+
+    // Call _evictStaleSessionData with a very large maxAgeMs (999999 ms) so
+    // Math.min(maxAgeMs, idleSessionMs) = idleSessionMs = 1 drives Phase 1.
+    await (idleManager as unknown as { _evictStaleSessionData(ms: number): Promise<void> })._evictStaleSessionData(999999);
+
+    // Phase 1 should have closed and removed the idle session from the live map.
+    expect((idleManager as unknown as { sessions: Map<string, IAgentSession> }).sessions.has('7007')).toBe(false);
+    // Phase 2 should not have evicted sessionData yet (maxAgeMs=999999 is far future).
+    // The elicitation-route entry may still be present; the key assertion is
+    // that the live session was closed by the idleSessionMs threshold, not maxAgeMs.
+    expect(getElicitationRoute(sid)).toBeDefined();
+
+    await idleManager.closeAll().catch(() => {});
+  });
+
   test('registry does not grow across multiple record-then-closeAll cycles', async () => {
     const before = elicitationRegistrySize();
 
