@@ -2533,6 +2533,74 @@ describe('SessionToolDispatcher — canUseTool (Dim 8 in-process permission poli
     await d.execute(makeCall());
     expect(writer.events.filter((e) => e.kind === 'hook_decision')).toHaveLength(0);
   });
+
+  // -------------------------------------------------------------------------
+  // Gap 1: stateful canUseTool counter via executeBatch (safe-classified tools)
+  // -------------------------------------------------------------------------
+  it('executeBatch: stateful canUseTool counter is incremented once per safe call (#1923)', async () => {
+    // The policy tracks how many times it was invoked. Because read_file is
+    // safe-classified, executeBatch runs gates in parallel — the counter must
+    // still reach N (one increment per call), proving canUseTool is not skipped
+    // on the parallel gate path.
+    const N = 4;
+    let callCount = 0;
+    const countingPolicy: CanUseTool = async () => {
+      callCount += 1;
+      return { behavior: 'allow' };
+    };
+    const handler = vi.fn(async () => ({ content: 'read' }));
+    const d = makeDispatcher({
+      handlers: new Map<string, ToolHandler>([['read_file', handler]]),
+      permissions: { allowedTools: ['read_file'] },
+      canUseTool: countingPolicy,
+    });
+    const calls = Array.from({ length: N }, (_, i) => ({
+      id: `r${i}`,
+      name: 'read_file',
+      input: {},
+      signal: new AbortController().signal,
+    }));
+    const results = await d.executeBatch(calls);
+    expect(results).toHaveLength(N);
+    expect(results.every((r) => !r.isError)).toBe(true);
+    // canUseTool must have been invoked exactly once per safe call.
+    expect(callCount).toBe(N);
+    expect(handler).toHaveBeenCalledTimes(N);
+  });
+
+  // -------------------------------------------------------------------------
+  // Gap 2: canUseTool returning updatedInput via executeBatch (safe-classified)
+  // -------------------------------------------------------------------------
+  it('executeBatch: canUseTool updatedInput rewrites handler input for safe calls (#1923)', async () => {
+    // The policy appends a suffix to message so we can distinguish the
+    // rewritten value from the original. Each call gets a different original
+    // message, and the handler is the echo handler that returns message as
+    // content — so if updatedInput is applied, the content will be rewritten.
+    const rewritePolicy: CanUseTool = async (_name, input) => {
+      const original = (input as { message?: string }).message ?? '';
+      return {
+        behavior: 'allow',
+        updatedInput: { message: `${original}-rewritten` },
+      };
+    };
+    const d = makeDispatcher({
+      handlers: new Map<string, ToolHandler>([['echo', echoHandler()]]),
+      permissions: { allowedTools: ['echo'] },
+      canUseTool: rewritePolicy,
+    });
+    const calls = ['a', 'b', 'c'].map((msg, i) => ({
+      id: `call-${i}`,
+      name: 'echo',
+      input: { message: msg },
+      signal: new AbortController().signal,
+    }));
+    const results = await d.executeBatch(calls);
+    expect(results).toHaveLength(3);
+    // Handler must receive the rewritten message, not the original.
+    expect(results[0]!.content).toBe('a-rewritten');
+    expect(results[1]!.content).toBe('b-rewritten');
+    expect(results[2]!.content).toBe('c-rewritten');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -114,6 +114,13 @@ describe('denial-circuit-breaker pure helpers', () => {
     expect(isSubagentContainmentDenial(undefined)).toBe(false);
     expect(isSubagentContainmentDenial('')).toBe(false);
   });
+
+  // Gap 3 (#1923): dedicated assertion for the undefined guard — the function
+  // accepts `string | undefined` and must not throw or return true for an
+  // absent reason (e.g. a hook that omits `reason` from its block decision).
+  it('isSubagentContainmentDenial(undefined) === false (#1923)', () => {
+    expect(isSubagentContainmentDenial(undefined)).toBe(false);
+  });
 });
 
 // ---- Dispatcher integration ----------------------------------------------
