@@ -402,6 +402,52 @@ export function resetDenialBreaker(state: PreDispatchGateMutableState): void {
 }
 
 /**
+ * Post-parallel denial-breaker accounting for blocked safe calls.
+ *
+ * When `runPreDispatchGates` runs with `parallelSafe: true`, it skips the
+ * `recordForkReadDenial` read-modify-write to avoid a race. This function
+ * re-runs that accounting sequentially after `runParallelGates` returns, so
+ * the denial breaker still fires when the threshold is reached — just counted
+ * AFTER the parallel wave settles rather than inside it.
+ *
+ * Callers: {@link executeBatchImpl} iterates the `blocked` set for safe
+ * indices and calls this once per blocked safe call whose gate result
+ * indicates a hook-block denial.
+ *
+ * Returns the (potentially upgraded) `ToolResult`: at the threshold it
+ * replaces the original block with a `denial-breaker` error, identical to
+ * what `recordForkReadDenial` would have returned in the sequential path.
+ */
+export function accountDenialBreakerPostGate(
+  call: ToolCall,
+  blockReason: string | undefined,
+  blockResult: ToolResult,
+  deps: PreDispatchGateDeps,
+): ToolResult {
+  return recordForkReadDenial(call, blockReason, blockResult, deps);
+}
+
+/**
+ * Options for {@link runPreDispatchGates}.
+ */
+export interface RunPreDispatchGatesOpts {
+  /**
+   * When true, skip the `checkRepeatCircuitBreaker` and `recordForkReadDenial`
+   * read-modify-write counter updates. Set by {@link executeBatchImpl} for the
+   * parallel gate path (concurrency-safe calls) so simultaneous gate closures
+   * do not race on `state.repeatBreaker` or `state.denialBreaker`.
+   *
+   * Invariant: only the parallel-gate path in executeBatch sets this to true.
+   * The sequential paths — the unsafe-call loop and the single `execute()` —
+   * always use the default (false), so counter accounting stays sequential and
+   * correct for those callers.
+   *
+   * @internal
+   */
+  parallelSafe?: boolean;
+}
+
+/**
  * Shared 7-step pre-dispatch gate chain used by both {@link execute} and
  * {@link executeBatch}'s phase-1 admission loop: PreToolUse hook, static
  * allowlist, in-process `canUseTool` callback, read-only-bash gate, repeat
@@ -421,6 +467,7 @@ export async function runPreDispatchGates(
   deps: PreDispatchGateDeps,
   repeatBreakerExemptTools: ReadonlySet<string>,
   repeatCircuitBreakerThreshold: number,
+  opts?: RunPreDispatchGatesOpts,
 ): Promise<ToolResult | null> {
   // 1. PreToolUse hook — can block. Routed through dispatchPreToolUse
   // so the witness-layer hook_decision event lands automatically.
@@ -452,19 +499,27 @@ export async function runPreDispatchGates(
       });
     } catch (err) {
       if (err instanceof HookBlockedError) {
-        return recordForkReadDenial(
-          call,
-          err.reason,
-          {
-            content:
-              `Tool "${call.name}" blocked by PreToolUse hook` +
-              `${err.reason ? `: ${err.reason}` : ''}` +
-              `${err.injectContext ? `\n\n${err.injectContext}` : ''}`,
-            isError: true,
-            failureClass: 'hook-block',
-          },
-          deps,
-        );
+        const blockResult: ToolResult = {
+          content:
+            `Tool "${call.name}" blocked by PreToolUse hook` +
+            `${err.reason ? `: ${err.reason}` : ''}` +
+            `${err.injectContext ? `\n\n${err.injectContext}` : ''}`,
+          isError: true,
+          failureClass: 'hook-block',
+        };
+        // Skip the read-modify-write on state.denialBreaker when called from
+        // the parallel-gate path — concurrent closures would race on the shared
+        // counter. The caller (executeBatchImpl) handles denial accounting
+        // sequentially after runParallelGates returns.
+        // Preserve err.reason as blockReason so accountDenialBreakerPostGate
+        // can pass the original reason string to isSubagentContainmentDenial
+        // rather than the composite content string (which could false-positive
+        // if injectContext also contains the containment-denial prefix).
+        if (opts?.parallelSafe) {
+          if (err.reason !== undefined) blockResult.blockReason = err.reason;
+          return blockResult;
+        }
+        return recordForkReadDenial(call, err.reason, blockResult, deps);
       }
       throw err;
     }
@@ -492,30 +547,46 @@ export async function runPreDispatchGates(
 
   // 2c. Repeat-loop circuit breaker. Short-circuits no-progress loops where
   // the model calls the same tool with byte-identical input N times in a row.
-  const repeatBlock = checkRepeatCircuitBreaker(
-    call,
-    repeatBreakerExemptTools,
-    deps.state,
-    repeatCircuitBreakerThreshold,
-  );
-  if (repeatBlock) return repeatBlock;
+  // Skipped on the parallel-gate path (parallelSafe) to avoid a race on
+  // state.repeatBreaker — concurrent closures cannot safely share a
+  // read-modify-write counter. The sequential paths still run this gate.
+  if (!opts?.parallelSafe) {
+    const repeatBlock = checkRepeatCircuitBreaker(
+      call,
+      repeatBreakerExemptTools,
+      deps.state,
+      repeatCircuitBreakerThreshold,
+    );
+    if (repeatBlock) return repeatBlock;
+  }
 
   // 2c-bis. Enforcing repeat-FAILURE guard (#723). Unlike the advisory
   // breaker above, this one stops execution: a call that has already failed
   // identically N times is refused with the prior error quoted back.
-  const failureRefusal = checkRepeatFailureGuard(
-    call,
-    repeatBreakerExemptTools,
-    deps.repeatFailureGuard,
-  );
-  if (failureRefusal) return failureRefusal;
+  // Skipped on the parallel-gate path for the same reason as checkRepeatCircuitBreaker
+  // above: consecutive ordering is undefined for parallel calls, so the
+  // read-modify-write state inside repeatFailureGuard is not safe to share
+  // across concurrent closures.
+  if (!opts?.parallelSafe) {
+    const failureRefusal = checkRepeatFailureGuard(
+      call,
+      repeatBreakerExemptTools,
+      deps.repeatFailureGuard,
+    );
+    if (failureRefusal) return failureRefusal;
+  }
 
   // 2d. OBSERVE-ONLY suspected-loop telemetry (forked children only). Records
   // the fingerprint and emits a `suspected_loop` trace signal on first
   // recurrence past threshold. Pure observability — never blocks, never
   // alters the result, never changes control flow. Runs after the repeat
   // breaker so a short-circuited call is not counted twice.
-  observeSuspectedLoop(call, deps);
+  // Skipped on the parallel-gate path: the loop detector is observe-only,
+  // so skipping it here loses no enforcing signal; the sequential path still
+  // runs it.
+  if (!opts?.parallelSafe) {
+    observeSuspectedLoop(call, deps);
+  }
 
   return null;
 }

@@ -12,6 +12,7 @@ import type { CanUseTool } from '../types/sdk-types.js';
 import { createHookRegistry } from '../hook-registry.js';
 import { InMemoryTraceWriter } from '../trace/writer.js';
 import { REPEAT_FAILURE_REFUSAL_THRESHOLD } from './repeat-failure-guard.js';
+import { DENIAL_CIRCUIT_BREAKER_THRESHOLD } from './denial-circuit-breaker.js';
 
 function makeCall(overrides?: Partial<ToolCall>): ToolCall {
   return {
@@ -1310,6 +1311,206 @@ describe('SessionToolDispatcher', () => {
         // Default cap (8) applies → all 3 run at once.
         expect(state.peak).toBe(3);
       });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // executeBatch Phase 1 — parallel pre-dispatch gates for safe calls
+  // ---------------------------------------------------------------------------
+  describe('executeBatch Phase 1 — parallel gates for safe calls', () => {
+    const signal = new AbortController().signal;
+
+    function makeBatchCall(name: string, id?: string): ToolCall {
+      return {
+        id: id ?? `call-${name}`,
+        name,
+        input: name === 'echo' ? { message: name } : {},
+        signal,
+      };
+    }
+
+    it('runs PreToolUse hooks in parallel for concurrency-safe calls', async () => {
+      const hookTimeline: { name: string; phase: string; time: number }[] = [];
+      const origin = Date.now();
+      const registry = createHookRegistry();
+      registry.register('PreToolUse', async (ctx) => {
+        if (ctx.event !== 'PreToolUse') return {};
+        hookTimeline.push({ name: ctx.toolName, phase: 'start', time: Date.now() - origin });
+        await new Promise((r) => setTimeout(r, 50));
+        hookTimeline.push({ name: ctx.toolName, phase: 'end', time: Date.now() - origin });
+        return {};
+      });
+
+      const dispatcher = makeDispatcher({
+        handlers: new Map([
+          ['read_file', async () => ({ content: 'read' })],
+          ['glob', async () => ({ content: 'glob' })],
+          ['grep', async () => ({ content: 'grep' })],
+        ]),
+        permissions: { allowedTools: ['read_file', 'glob', 'grep'] },
+        hookRegistry: registry,
+      });
+
+      const start = Date.now();
+      await dispatcher.executeBatch([
+        makeBatchCall('read_file', 'r1'),
+        makeBatchCall('glob', 'g1'),
+        makeBatchCall('grep', 'g2'),
+      ]);
+      const totalElapsed = Date.now() - start;
+
+      // With 3 calls each taking ~50ms hooks:
+      // Sequential would take ~150ms for gates alone.
+      // Parallel should take ~50ms for gates (then execution adds more).
+      // Allow generous margin but assert that gates overlapped.
+      const starts = hookTimeline.filter((e) => e.phase === 'start');
+      expect(starts).toHaveLength(3);
+      // All three starts should fire before any end — overlapping.
+      const allEnds = hookTimeline.filter((e) => e.phase === 'end');
+      const firstEnd = Math.min(...allEnds.map((e) => e.time));
+      const lastStart = Math.max(...starts.map((e) => e.time));
+      // In parallel, the last start fires before (or around) the first end.
+      // In sequential, lastStart would be ~100ms after firstEnd.
+      expect(lastStart).toBeLessThan(firstEnd + 20);
+      // Structural upper bound: total elapsed time for executeBatch must be well
+      // below the sequential worst-case (3 × 50ms = 150ms). 120ms gives a
+      // generous margin for CI jitter while still confirming actual parallelism.
+      expect(totalElapsed).toBeLessThan(120);
+    });
+
+    it('keeps unsafe calls sequential while safe calls run parallel', async () => {
+      const hookTimeline: { name: string; phase: string; time: number }[] = [];
+      const origin = Date.now();
+      const registry = createHookRegistry();
+      registry.register('PreToolUse', async (ctx) => {
+        if (ctx.event !== 'PreToolUse') return {};
+        hookTimeline.push({ name: ctx.toolName, phase: 'start', time: Date.now() - origin });
+        await new Promise((r) => setTimeout(r, 30));
+        hookTimeline.push({ name: ctx.toolName, phase: 'end', time: Date.now() - origin });
+        return {};
+      });
+
+      const dispatcher = makeDispatcher({
+        handlers: new Map([
+          ['read_file', async () => ({ content: 'read' })],
+          ['bash', async () => ({ content: 'bash' })],
+        ]),
+        permissions: { allowedTools: ['read_file', 'bash'] },
+        hookRegistry: registry,
+      });
+
+      await dispatcher.executeBatch([
+        makeBatchCall('read_file', 'r1'),
+        makeBatchCall('bash', 'b1'),
+      ]);
+
+      // read_file is safe → parallel gates; bash is unsafe → sequential.
+      // Both should have their hooks run, just at different times.
+      const readEntries = hookTimeline.filter((e) => e.name === 'read_file');
+      const bashEntries = hookTimeline.filter((e) => e.name === 'bash');
+      expect(readEntries).toHaveLength(2); // start + end
+      expect(bashEntries).toHaveLength(2); // start + end
+    });
+
+    it('parallel path skips repeat-breaker — N identical safe calls all pass', async () => {
+      // Validates the parallel gate path passes parallelSafe:true which skips
+      // checkRepeatCircuitBreaker. N = THRESHOLD: with the old sequential loop,
+      // the Nth call would trip the breaker; with the new parallel path it
+      // passes because the repeat-breaker counter is not incremented.
+      const N = REPEAT_CIRCUIT_BREAKER_THRESHOLD;
+      const dispatcher = makeDispatcher({
+        handlers: new Map([
+          ['read_file', async () => ({ content: 'read' })],
+        ]),
+        permissions: { allowedTools: ['read_file'] },
+      });
+      // Submit N identical read_file calls in one executeBatch (parallel gate path).
+      const calls = Array.from({ length: N }, (_, idx) =>
+        makeBatchCall('read_file', `r${idx}`),
+      );
+      const results = await dispatcher.executeBatch(calls);
+      // None should be circuit-breaker-blocked — the parallel path skips the counter.
+      for (const r of results) {
+        expect(r.isError).toBeUndefined();
+        expect(r.content).toBe('read');
+      }
+    });
+
+    it('permission-denied on parallel safe path does not feed denial breaker', async () => {
+      // Validates fix for Item 2: post-parallel accountDenialBreakerPostGate
+      // runs sequentially, so the denial breaker state is updated correctly
+      // even though the gate closures ran in parallel.
+      //
+      // Test strategy: confirm that a non-hook-block gate result (permission-denied)
+      // does NOT feed the denial breaker. The denial breaker only counts
+      // containment denials (hook-block with isSubagentContainmentDenial reason).
+      // Here we verify that permission-denied blocks on the safe parallel path
+      // leave the dispatcher functional (no erroneous breaker trip).
+      const dispatcher = makeDispatcher({
+        handlers: new Map([
+          ['read_file', async () => ({ content: 'read' })],
+          ['glob', async () => ({ content: 'glob' })],
+        ]),
+        // glob is intentionally NOT in the allowlist — will be permission-denied.
+        permissions: { allowedTools: ['read_file'] },
+      });
+      const results = await dispatcher.executeBatch([
+        makeBatchCall('read_file', 'r1'),
+        makeBatchCall('glob', 'g1'),
+      ]);
+      // read_file should succeed.
+      expect(results[0]?.isError).toBeUndefined();
+      expect(results[0]?.content).toBe('read');
+      // glob should be permission-denied (not a denial-breaker upgrade).
+      expect(results[1]?.isError).toBe(true);
+      expect(results[1]?.failureClass).toBe('permission-denied');
+      // The denial breaker threshold was not reached — content is a denial message,
+      // not a denial-breaker escalation (which would carry failureClass 'denial-breaker').
+      expect(results[1]?.failureClass).not.toBe('denial-breaker');
+    });
+
+    it('denial-breaker upgrade fires through the parallel gate path at threshold', async () => {
+      // Validates that the denial-breaker upgrade path (hook-block → denial-breaker)
+      // works correctly when gates run in parallel. Specifically:
+      //   - The hook blocks read_file calls with the containment denial reason.
+      //   - accountDenialBreakerPostGate runs sequentially after the parallel wave.
+      //   - At DENIAL_CIRCUIT_BREAKER_THRESHOLD consecutive denials, the last
+      //     result is upgraded from 'hook-block' to 'denial-breaker'.
+      const registry = createHookRegistry();
+      registry.register('PreToolUse', async (ctx) => {
+        if (ctx.event !== 'PreToolUse' || ctx.toolName !== 'read_file') return {};
+        return {
+          decision: 'block' as const,
+          reason: 'Sub-agent path access denied: /secret is outside the session\'s granted read roots',
+        };
+      });
+
+      // parentSessionId required: the denial breaker only fires for forked children.
+      const dispatcher = makeDispatcher({
+        handlers: new Map([
+          ['read_file', async () => ({ content: 'read' })],
+        ]),
+        permissions: { allowedTools: ['read_file'] },
+        hookRegistry: registry,
+        parentSessionId: 'parent-session-id',
+      });
+
+      // Submit exactly DENIAL_CIRCUIT_BREAKER_THRESHOLD identical read_file calls
+      // in one executeBatch so all gates run in parallel.
+      const calls = Array.from({ length: DENIAL_CIRCUIT_BREAKER_THRESHOLD }, (_, idx) =>
+        makeBatchCall('read_file', `r${idx}`),
+      );
+      const results = await dispatcher.executeBatch(calls);
+
+      // All should be errors (all hook-blocked).
+      for (const r of results) {
+        expect(r.isError).toBe(true);
+      }
+      // Pre-threshold results retain hook-block failureClass.
+      expect(results[0]!.failureClass).toBe('hook-block');
+      // The last result should be upgraded to denial-breaker at the threshold.
+      const last = results[DENIAL_CIRCUIT_BREAKER_THRESHOLD - 1]!;
+      expect(last.failureClass).toBe('denial-breaker');
     });
   });
 
