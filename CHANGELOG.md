@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.224.1] - 2026-09-21
+
+### Fixed
+- update stale childrenByAgent references in dag-subagent.ts (#1910) (e77370a8)
+
+### Changed
+- fix reset scoping and dedup setupDiffMock helpers (#1826) (efeba056)
+- thread warn parameter through scalar concurrency resolvers (#1907) (b3833563)
+- add @internal annotation to accountDenialBreakerPostGate (#1925) (b4da5f56)
+
 ## [5.224.0] - 2026-09-21
 
 ### Added
