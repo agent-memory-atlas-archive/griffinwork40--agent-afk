@@ -28,6 +28,7 @@ import type { HookHandler } from '../hooks.js';
 import { env } from '../../config/env.js';
 import { pushIfConfigured } from '../../telegram/push.js';
 import { getAfkStateDir } from '../../paths.js';
+import { resolveRepoRootSync } from '../../utils/git.js';
 import {
   readSpine,
   writeSpine,
@@ -74,7 +75,8 @@ export function createSpineSessionEndHook(options: SpineHookOptions = {}): HookH
     const sessionId = context.sessionId ?? 'unknown-session';
 
     try {
-      const repoRoot = resolveRepoRoot(options.repoRoot ?? process.cwd());
+      const _rootCwd = options.repoRoot ?? process.cwd();
+      const repoRoot = resolveRepoRootSync({ cwd: _rootCwd, fallback: _rootCwd });
 
       // ── Git diff guard ────────────────────────────────────────────────
       const diff = getGitDiff(repoRoot);
@@ -256,17 +258,7 @@ function handleContradiction(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function resolveRepoRoot(cwd: string): string {
-  try {
-    return execFileSync('git', ['rev-parse', '--show-toplevel'], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return cwd;
-  }
-}
+
 
 function getGitDiff(repoRoot: string): string {
   try {
