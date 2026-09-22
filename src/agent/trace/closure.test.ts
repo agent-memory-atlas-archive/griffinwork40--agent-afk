@@ -8,16 +8,17 @@
  * `session_sealed` in the trace: closure first (what happened), then
  * seal (the trace's terminal record).
  *
- * Scope: PR #2 commit 6. Exercises the four reasons we can derive
- * today from the dispatch reason + abort signal state:
- *   - model_end_turn   (clean close, no abort)
- *   - abort            (external abort with no richer context)
- *   - budget_exceeded  (BudgetExceededError signal reason)
- *   - timeout          (TimeoutError signal reason)
+ * Covers all ClosureReason values reachable through AgentSession:
+ *   - model_end_turn     (clean close, no abort)
+ *   - abort              (external abort with no richer context)
+ *   - budget_exceeded    (BudgetExceededError on the abort signal)
+ *   - timeout            (TimeoutError on the abort signal)
+ *   - hook_blocked       (SessionStart hook returns decision:'block' — #2013)
+ *   - max_turns_exceeded (config.maxTurns cap reached in assertCanSend — #2013)
  *
- * The other ClosureReason values (iteration_cap, hook_blocked,
- * max_turns_exceeded) require explicit signaling from their origin
- * sites and are deferred to follow-up work.
+ * `iteration_cap` is exercised in the provider-level loop tests where the
+ * tool-use round budget fires; `truncated` is exercised in the stream-consumer
+ * tests where max_tokens stop reasons land.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -26,6 +27,7 @@ import { createMockProvider, type MockProviderHandle } from '../__fixtures__/moc
 import { InMemoryTraceWriter } from './writer.js';
 import { BudgetExceededError, TimeoutError } from '../../utils/errors.js';
 import { CLOSURE_ABORT_RECOVERY_HINT } from '../session/closure-guidance.js';
+import { createHookRegistry } from '../hooks.js';
 
 vi.mock('../../utils/debug.js', () => ({
   debugLog: vi.fn(),
@@ -385,5 +387,112 @@ describe('AgentSession + closure trace event', () => {
     // First writer (close → 'closed') won; deriveClosureReason returned
     // 'model_end_turn' because signal.reason === 'closed'.
     expect(ev.payload.reason).toBe('model_end_turn');
+  });
+
+  // ── #2013: hook_blocked ─────────────────────────────────────────────────────
+  // The flag is set in provider-lifecycle.ts (runInitialization) when
+  // dispatchSessionStart throws HookBlockedError. The session then dispatches
+  // its end with reason 'error', but the hookBlocked flag takes precedence in
+  // classifyClosureReason so the final label is 'hook_blocked'.
+  //
+  // Timing note: runInitialization rejects initializationPromise FIRST (so
+  // waitForInitialization() returns), then awaits shutdown.dispatchOnce('error')
+  // which writes the closure + seal. A single setTimeout(0) round-trip flushes
+  // the in-flight async writes before we inspect the trace.
+
+  it('reason=hook_blocked when a SessionStart hook returns decision:block', async () => {
+    const registry = createHookRegistry();
+    registry.register('SessionStart', () => ({ decision: 'block', reason: 'policy violation' }));
+
+    const blockedConfig: AgentConfig = { ...config, hookRegistry: registry };
+    const session = new AgentSession(blockedConfig, writer);
+
+    // waitForInitialization() rejects because the hook blocked — swallow the
+    // error so the test can inspect the trace rather than throw.
+    await session.waitForInitialization().catch(() => {});
+    // Flush in-flight dispatchOnce writes (closure + seal) before inspecting.
+    await new Promise((r) => setTimeout(r, 0));
+
+    const ev = writer.events.find((e) => e.kind === 'closure');
+    if (ev?.kind !== 'closure') throw new Error('expected closure event');
+    expect(ev.payload.reason).toBe('hook_blocked');
+  });
+
+  it('session_sealed.status is failed when a SessionStart hook blocks', async () => {
+    // dispatchSessionStart threw with reason='error' → deriveSealStatus → 'failed'.
+    const registry = createHookRegistry();
+    registry.register('SessionStart', () => ({ decision: 'block', reason: 'policy' }));
+
+    const blockedConfig: AgentConfig = { ...config, hookRegistry: registry };
+    const session = new AgentSession(blockedConfig, writer);
+    await session.waitForInitialization().catch(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+
+    const seal = writer.events.find((e) => e.kind === 'session_sealed');
+    if (seal?.kind !== 'session_sealed') throw new Error('expected session_sealed');
+    // dispatchReason='error' (hook blocked init) → 'failed'.
+    expect(seal.payload.status).toBe('failed');
+  });
+
+  // ── #2013: max_turns_exceeded ───────────────────────────────────────────────
+  // The flag is set in turn-stream-runner.ts (assertCanSend) when the session
+  // has consumed all config.maxTurns. The throw propagates to the caller
+  // (sendMessageStream iterator) — the session is still alive and healthy.
+  // A subsequent close() dispatches with reason='close', but markMaxTurnsHit()
+  // makes classifyClosureReason return 'max_turns_exceeded' rather than
+  // 'model_end_turn'.
+  //
+  // Seal status: the turn-cap throw does NOT trigger dispatchReason='error' or
+  // sawProviderError — the session ends cleanly via close(). deriveSealStatus
+  // therefore returns 'succeeded': the session itself was healthy; only the
+  // configured turn budget was exhausted.
+
+  it('reason=max_turns_exceeded after the turn cap is reached', async () => {
+    // maxTurns:1 — the first sendMessageStream succeeds; the second hits the cap.
+    const cappedConfig: AgentConfig = { ...config, maxTurns: 1 };
+    const session = new AgentSession(cappedConfig, writer);
+    await session.waitForInitialization();
+
+    const drain = async (gen: AsyncIterable<OutputEvent>): Promise<void> => {
+      for await (const _ of gen) void _;
+    };
+
+    // First turn: completes normally within the cap.
+    await drain(session.sendMessageStream('first'));
+
+    // Second turn: assertCanSend detects turnCount >= maxTurns and throws.
+    // sendMessageStream itself returns the async iterable without calling
+    // assertCanSend — the throw happens when we iterate.
+    await expect(drain(session.sendMessageStream('second'))).rejects.toThrow(
+      /Maximum turns/,
+    );
+
+    await session.close();
+
+    const ev = writer.events.find((e) => e.kind === 'closure');
+    if (ev?.kind !== 'closure') throw new Error('expected closure event');
+    expect(ev.payload.reason).toBe('max_turns_exceeded');
+  });
+
+  it('session_sealed.status is succeeded when the turn cap fires (session ended cleanly)', async () => {
+    // The turn-cap throw propagates to the caller — the session itself is healthy
+    // and is closed normally via close(). Seal status reflects the session's own
+    // outcome (clean), not the caller's error: 'succeeded'.
+    const cappedConfig: AgentConfig = { ...config, maxTurns: 1 };
+    const session = new AgentSession(cappedConfig, writer);
+    await session.waitForInitialization();
+
+    const drain = async (gen: AsyncIterable<OutputEvent>): Promise<void> => {
+      for await (const _ of gen) void _;
+    };
+
+    await drain(session.sendMessageStream('first'));
+    await drain(session.sendMessageStream('second')).catch(() => {});
+    await session.close();
+
+    const seal = writer.events.find((e) => e.kind === 'session_sealed');
+    if (seal?.kind !== 'session_sealed') throw new Error('expected session_sealed');
+    // The session closed cleanly despite hitting the cap → 'succeeded'.
+    expect(seal.payload.status).toBe('succeeded');
   });
 });
