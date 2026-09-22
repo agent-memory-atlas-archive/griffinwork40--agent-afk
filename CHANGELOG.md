@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.227.1] - 2026-09-22
+
+### Added
+- scope goals per-project instead of global (97a25810)
+
+### Fixed
+- cap slug in projectKeyForCwd to preserve hash suffix (b92a35e4)
+- replace local sleep with sleepWithAbort in rate-limit-bucket (#1850) (fd0abe13)
+
+### Changed
+- Merge pull request #1999 from griffinwork40/afk/iso-impl-per-project-goals-1-xxs0dj (2d893dbc)
+- Merge pull request #1872 from griffinwork40/afk/fix-1850-sleep-unref (0e266c58)
+
 ## [5.227.0] - 2026-09-22
 
 ### Added
