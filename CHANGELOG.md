@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.225.3] - 2026-09-22
+
+### Fixed
+- increase idleSessionMs timer margin to avoid macOS CI race (#1959) (bcd869cf)
+
+### Changed
+- Merge pull request #1959 from griffinwork40/test/banner-scroll-coverage-1829 (e94d82cd)
+- test(tui)(#1829): cover banner-scroll path in ordering-invariant and protocol tests (f79b5af1)
+
 ## [5.225.2] - 2026-09-22
 
 ### Fixed
