@@ -69,11 +69,17 @@ import type { SessionRead } from '../reader.js';
 import { clampExcerpt, MAX_EVIDENCE_PER_CARD } from './_lib.js';
 
 /**
+ * Returns true if this session is a root (actor:'main') session.
+ *
  * Invariant: a session is a root session when its `session_init_start` event
  * carries `actor === 'main'`. Subagent forks carry `actor === 'subagent'`.
  *
- * When no `session_init_start` is present (pre-actor traces), we conservatively
- * treat the session as root so older data is never silently discarded.
+ * Conservative fallback: if no session_init_start event is present,
+ * the session is treated as root. This covers pre-actor traces but also
+ * applies to subagent traces where session_init_start was partially written
+ * at crash time and excluded by the schema reader. Prevalence is expected
+ * to be very low; this trade-off is accepted in favor of not silencing
+ * pre-actor traces.
  */
 function isRootSession(session: SessionRead): boolean {
   for (const item of session.events) {
@@ -133,8 +139,12 @@ export function detectClosureAnomaly(
   // Bucket by reason. Only root sessions are considered — subagent closures
   // within a recovered parent session produce false positives (issue #1919).
   const byReason = new Map<string, ClosureSighting[]>();
+  let skippedSubagentSessions = 0;
   for (const session of sessions) {
-    if (!isRootSession(session)) continue;
+    if (!isRootSession(session)) {
+      skippedSubagentSessions++;
+      continue;
+    }
     for (const item of session.events) {
       const ev = item.event;
       if (ev.kind !== 'closure') continue;
@@ -165,7 +175,7 @@ export function detectClosureAnomaly(
     // evidence rows count EVENTS. See distinctSessionIds and buildResult.
     const sessionIds = distinctSessionIds(sightings);
     if (sessionIds.length < minOccurrences) continue;
-    results.push(buildResult(reason, sessionIds, sightings));
+    results.push(buildResult(reason, sessionIds, sightings, skippedSubagentSessions));
   }
   return results;
 }
@@ -218,6 +228,7 @@ function buildResult(
   reason: string,
   sessionIds: string[],
   allSightings: ClosureSighting[],
+  skippedSubagentSessions: number,
 ): DetectorResult {
   const slug = makeSlug(reason);
   const observedAt = new Date().toISOString();
@@ -263,6 +274,10 @@ function buildResult(
       // persisted card (a live card on disk already carries 386 entries).
       sessionIds,
       seqs: capped.map((s) => s.seq),
+      // Audit counter: how many sessions were skipped by the isRootSession guard
+      // during this scan. Allows operators to quantify the subagent-filtering
+      // effect without re-running with disabled filters.
+      skippedSubagentSessions,
     },
   };
 }

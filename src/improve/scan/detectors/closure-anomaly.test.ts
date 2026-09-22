@@ -70,6 +70,21 @@ function sessionInitLine(actor: 'main' | 'subagent'): string {
   });
 }
 
+/**
+ * Build a `session_phase` line with an arbitrary phase name (NOT
+ * `session_init_start`). Used to exercise the `continue` branch in
+ * `isRootSession` — the loop skips non-`session_init_start` phase events
+ * and falls through to the conservative-root fallback.
+ */
+function phaseEventLine(phase: string): string {
+  return JSON.stringify({
+    ts: new Date(1_700_000_000_000).toISOString(),
+    seq: seqCounter++,
+    kind: 'session_phase',
+    payload: { phase },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -490,5 +505,21 @@ describe('detectClosureAnomaly — root-session scoping (issue #1919)', () => {
       closureLine('budget_exceeded', 50, 20),
     ]);
     expect(detectClosureAnomaly([subagentSession])).toEqual([]);
+  });
+
+  it('treats session with non-session_init_start phase events but no session_init_start as root (conservative fallback)', () => {
+    // Exercises the `continue` branch in isRootSession: the loop sees a
+    // session_phase event but its phase is NOT session_init_start, so it
+    // continues without returning. After the loop exhausts all events with no
+    // session_init_start found, isRootSession returns true (conservative root),
+    // so the closure IS detected.
+    resetSeq();
+    const sessionWithOtherPhase = makeSession('bootstrap-only', [
+      phaseEventLine('bootstrap_start'),
+      closureLine('abort'),
+    ]);
+    const results = detectClosureAnomaly([sessionWithOtherPhase]);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.detail['closureReason']).toBe('abort');
   });
 });
