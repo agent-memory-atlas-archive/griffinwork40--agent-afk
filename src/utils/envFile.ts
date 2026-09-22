@@ -12,9 +12,9 @@
  * @module utils/envFile
  */
 
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync, unlinkSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, readFileSync } from 'fs';
 import { escapeRegExp } from './regexp.js';
+import { atomicWriteFile as _atomicWriteFile } from './atomic-write.js';
 
 /**
  * Write `contents` to `filePath` atomically: write a sibling temp file, then
@@ -24,26 +24,14 @@ import { escapeRegExp } from './regexp.js';
  * `mode` so the secret is never briefly world-readable.
  *
  * Invariant: temp and target must share a directory (same filesystem) for the
- * rename to be atomic — we derive the temp path from `filePath` to guarantee it.
+ * rename to be atomic — delegated to `utils/atomic-write.ts` which guarantees
+ * this by construction.
  *
  * Exported so the config-mutation engine can reuse one atomic-write
  * implementation for both afk.env and afk.config.json.
  */
 export function atomicWriteFile(filePath: string, contents: string, mode = 0o600): void {
-  mkdirSync(dirname(filePath), { recursive: true });
-  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    writeFileSync(tmp, contents, { mode });
-    renameSync(tmp, filePath);
-  } catch (err) {
-    // Best-effort cleanup of the temp file on failure; ignore unlink errors.
-    try {
-      if (existsSync(tmp)) unlinkSync(tmp);
-    } catch {
-      /* ignore */
-    }
-    throw err;
-  }
+  _atomicWriteFile(filePath, contents, { mode });
 }
 
 /**
