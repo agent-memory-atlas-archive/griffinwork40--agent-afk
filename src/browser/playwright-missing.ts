@@ -36,8 +36,31 @@ export const PLAYWRIGHT_MISSING_HINTS = [
   "Executable doesn't exist",
 ] as const;
 
-/** Fallback when the bundled Playwright CLI cannot be located (see `playwrightInstallCommand`). */
-const STATIC_INSTALL_COMMAND = 'pnpm exec playwright install chromium';
+/**
+ * Playwright's default download timeout is 30 s, which is too short for the
+ * ~200 MB chromium binary on typical connections. Setting this env var to 120 s
+ * matches the failure pattern in issue #1998 (download timeout on first install).
+ * The variable is documented in Playwright's BrowserType.launch() API reference.
+ */
+const PLAYWRIGHT_DOWNLOAD_TIMEOUT_MS = 120_000;
+
+/**
+ * Env-var prefix to prepend to every install command we advertise.  A plain
+ * `export` in the user's shell is intentionally NOT used here — the prefix
+ * form is copy-paste safe and works in any POSIX shell without side effects.
+ */
+const TIMEOUT_ENV_PREFIX = `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=${PLAYWRIGHT_DOWNLOAD_TIMEOUT_MS}`;
+
+/**
+ * Fallback install command when the bundled Playwright CLI cannot be resolved.
+ *
+ * Uses `pnpm exec` so the playwright version is the one pinned in the project's
+ * lock file, not a globally-installed version that may have a different chromium
+ * revision.  `npx playwright install` is deliberately NOT used here because
+ * `npx --yes` resolves the LATEST playwright package, whose pinned chromium
+ * revision can differ from the one this build expects (issue #1998).
+ */
+const STATIC_INSTALL_COMMAND = `${TIMEOUT_ENV_PREFIX} pnpm exec playwright install chromium`;
 
 /** Depth limit when walking `error.cause` — guards against a self-referential chain. */
 const MAX_CAUSE_DEPTH = 4;
@@ -123,7 +146,9 @@ function resolveBundledInstallCommand(): string | undefined {
 
     // Quote defensively: a global install can sit under a path with spaces.
     const arg = /\s/.test(cli) ? `"${cli}"` : cli;
-    return `node ${arg} install chromium`;
+    // Prepend the connection-timeout override so slow-network installs do not
+    // time out at Playwright's default 30 s limit (issue #1998).
+    return `${TIMEOUT_ENV_PREFIX} node ${arg} install chromium`;
   } catch {
     return undefined;
   }
@@ -132,6 +157,10 @@ function resolveBundledInstallCommand(): string | undefined {
 /**
  * The install command to advertise, preferring the bundled Playwright CLI and
  * degrading to `pnpm exec playwright install chromium` when it cannot be found.
+ *
+ * Both forms are prefixed with `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000`
+ * to extend Playwright's default 30 s download limit for the ~200 MB chromium
+ * binary on slow connections (issue #1998).
  */
 export function playwrightInstallCommand(): string {
   cachedInstallCommand ??= resolveBundledInstallCommand() ?? STATIC_INSTALL_COMMAND;
@@ -193,6 +222,14 @@ export function playwrightMissingHint(err: unknown, opts?: PlaywrightHintOptions
   const text = flattenErrorText(err);
   const resetNote = opts?.latched === true ? ` ${LATCH_RESET_NOTE}` : '';
 
+  // Warning included in both branches: `npx playwright install` resolves the
+  // LATEST playwright package, whose pinned chromium revision can differ from
+  // the one this build expects (issue #1998).  The command we emit already uses
+  // the bundled CLI (version-safe) and sets PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT
+  // to avoid the default 30 s download timeout on slow connections.
+  const versionNote =
+    ' Do NOT use `npx playwright install chromium` — it installs the wrong version.';
+
   if (text.includes("Executable doesn't exist")) {
     // Package is installed; the chromium browser binary was never downloaded.
     let artifactNote = '';
@@ -206,14 +243,14 @@ export function playwrightMissingHint(err: unknown, opts?: PlaywrightHintOptions
     }
     return (
       'browser tools require the Playwright chromium binary. ' +
-      `Install via: ${playwrightInstallCommand()}.${artifactNote}${resetNote}`
+      `Install via: ${playwrightInstallCommand()}.${versionNote}${artifactNote}${resetNote}`
     );
   }
 
   // The `playwright` package itself is not installed.
   return (
     'browser tools require the optional `playwright` peer dependency. ' +
-    `Install via: pnpm add playwright (then ${playwrightInstallCommand()}). ` +
+    `Install via: pnpm add playwright (then ${playwrightInstallCommand()}).${versionNote} ` +
     `Or pick a different tool.${resetNote}`
   );
 }

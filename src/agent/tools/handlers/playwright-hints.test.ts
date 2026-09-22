@@ -63,6 +63,22 @@ describe('playwrightMissingHint', () => {
     // Must NOT mis-direct the user to reinstall a package that is already present.
     expect(hint).not.toMatch(/pnpm add playwright/);
   });
+
+  it('includes a "Do NOT use npx" warning in the chromium-missing hint text (issue #1998)', () => {
+    // The hint explicitly calls out `npx playwright install chromium` as the command
+    // to AVOID, so users know why we emit a different command. npx resolves LATEST
+    // playwright whose pinned chromium revision can differ from this build's.
+    const hint = playwrightMissingHint("Executable doesn't exist at /ms-playwright/chromium/chrome");
+    expect(hint).toMatch(/npx playwright install chromium/);
+    expect(hint).toMatch(/Do NOT use/);
+  });
+
+  it('includes a "Do NOT use npx" warning in the package-missing hint text (issue #1998)', () => {
+    // Same rationale: name the forbidden command so users understand the version-skew risk.
+    const hint = playwrightMissingHint('Cannot find package playwright');
+    expect(hint).toMatch(/npx playwright install chromium/);
+    expect(hint).toMatch(/Do NOT use/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -129,13 +145,30 @@ describe('playwrightInstallCommand', () => {
     // succeed here and yield an absolute path to the bundled CLI. A
     // `pnpm exec`-style command would be wrong for a global install, and
     // `npx --yes playwright` would fetch LATEST playwright — whose pinned
-    // chromium revision can differ from the one this build expects.
-    const m = /^node (?:"([^"]+)"|(\S+)) install chromium$/.exec(cmd);
-    expect(m, `expected a bundled-CLI command, got: ${cmd}`).not.toBeNull();
+    // chromium revision can differ from the one this build expects (issue #1998).
+    //
+    // Command format: `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=<ms> node <cli> install chromium`
+    const m = /^PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=\d+ node (?:"([^"]+)"|(\S+)) install chromium$/.exec(cmd);
+    expect(m, `expected a bundled-CLI command with timeout prefix, got: ${cmd}`).not.toBeNull();
     const cliPath = m?.[1] ?? m?.[2] ?? '';
     expect(isAbsolute(cliPath)).toBe(true);
     expect(existsSync(cliPath)).toBe(true);
     expect(cliPath).toMatch(/cli\.js$/);
+  });
+
+  it('prefixes the command with PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT (issue #1998)', () => {
+    // Playwright's default download timeout is 30 s — too short for the ~200 MB
+    // chromium binary on slow connections. The advertised command must override it.
+    const cmd = playwrightInstallCommand();
+    expect(cmd).toMatch(/^PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=\d+/);
+    const ms = Number(/PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=(\d+)/.exec(cmd)?.[1]);
+    expect(ms).toBeGreaterThanOrEqual(120_000);
+  });
+
+  it('does NOT include npx in the install command (issue #1998 — version skew)', () => {
+    // `npx playwright install` resolves LATEST playwright, whose pinned chromium
+    // revision can differ from what this build expects.
+    expect(playwrightInstallCommand()).not.toMatch(/npx/);
   });
 
   it('memoizes the resolved command', () => {
