@@ -821,6 +821,72 @@ describe('POST /tasks and DELETE /tasks/:id routes', () => {
     const res = await fetch(`http://localhost:${h.port}/tasks/ghost`, { method: 'DELETE' });
     expect(res.status).toBe(404);
   });
+
+  it('POST /tasks rejects executor: "builtin" (falls back to default)', async () => {
+    // "builtin" is accepted by the CLI/tool layer (BuiltinTask path) but must
+    // NOT be forwarded through the HTTP body guard — the daemon scheduler has no
+    // builtin executor handler and would silently misroute the task.
+    const h = await spinDaemon();
+    const res = await fetch(`http://localhost:${h.port}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskId: 'builtin-task',
+        command: '/cmd',
+        cron: '* * * * *',
+        executor: 'builtin',
+      }),
+    });
+    // Registration still succeeds (the body guard silently drops unknown executor
+    // values rather than returning 400), but the stored task must NOT carry executor.
+    expect(res.status).toBe(201);
+    const listRes = await fetch(`http://localhost:${h.port}/tasks`);
+    const tasks = (await listRes.json()) as Array<{ taskId: string; executor?: string }>;
+    const task = tasks.find((t) => t.taskId === 'builtin-task');
+    expect(task?.executor).toBeUndefined();
+  });
+
+  it('disable → re-enable regression: DELETE then POST re-registers the task', async () => {
+    // Regression path from PR #1879: cancel_schedule(enable:true) calls
+    // trySyncToDaemon POST /tasks after toggleScheduleEnabled sets enabled:true.
+    // Verify the daemon accepts the re-registration after a preceding DELETE.
+    const h = await spinDaemon();
+    const taskBody = { taskId: 're-enable-me', command: '/toggle', cron: '0 6 * * *' };
+
+    // Initial registration (the "create" path)
+    const createRes = await fetch(`http://localhost:${h.port}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskBody),
+    });
+    expect(createRes.status).toBe(201);
+
+    // Disable: cancel_schedule(permanent:false) sends DELETE /tasks/:id
+    const deleteRes = await fetch(`http://localhost:${h.port}/tasks/re-enable-me`, {
+      method: 'DELETE',
+    });
+    expect(deleteRes.status).toBe(200);
+
+    // Task should be gone from the scheduler list
+    const afterDelete = (await (
+      await fetch(`http://localhost:${h.port}/tasks`)
+    ).json()) as Array<{ taskId: string }>;
+    expect(afterDelete.some((t) => t.taskId === 're-enable-me')).toBe(false);
+
+    // Re-enable: cancel_schedule(enable:true) sends POST /tasks again
+    const reEnableRes = await fetch(`http://localhost:${h.port}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskBody),
+    });
+    expect(reEnableRes.status).toBe(201);
+
+    // Task must be back in the scheduler list
+    const afterReEnable = (await (
+      await fetch(`http://localhost:${h.port}/tasks`)
+    ).json()) as Array<{ taskId: string }>;
+    expect(afterReEnable.some((t) => t.taskId === 're-enable-me')).toBe(true);
+  });
 });
 
 describe('notifyOn filter in CronScheduler', () => {
