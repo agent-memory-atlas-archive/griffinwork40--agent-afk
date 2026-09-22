@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.224.2] - 2026-09-22
+
+### Fixed
+- remove unnecessary win32 test skips and normalize paths (#1604) (#1938) (b4506ae8)
+
+### Changed
+- add keepLast + delegation interaction and id-correlation tests (#1927) (#1933) (466c1b35)
+
 ## [5.224.1] - 2026-09-21
 
 ### Fixed
