@@ -123,6 +123,60 @@ export function resolveMaxTokens(config: AgentConfig, model: string): number {
 }
 
 /**
+ * Allowlisted `type` values for content blocks deserialized from sidecar JSON.
+ *
+ * These are the complete set of `ContentBlockParam` discriminants in the
+ * Anthropic SDK — every entry in the `ContentBlockParam` union maps to exactly
+ * one string here. Any block whose `type` is absent or not in this set is
+ * silently dropped before the block array reaches the API (#2003).
+ *
+ * Security rationale: `userContentBlocks` and `assistantContentBlocks` are
+ * JSON-deserialized from `$AFK_STATE_DIR/sessions/` sidecar files. An attacker
+ * with local write access to those files could craft blocks with unknown or
+ * crafted `type` values. Forwarding them verbatim to the Anthropic API could
+ * replay attacker-controlled `tool_use` blocks (with arbitrary `name`/`input`)
+ * into a resumed session. The allowlist check is the last defence before the
+ * API call and must stay conservative.
+ */
+const ALLOWED_CONTENT_BLOCK_TYPES = new Set<string>([
+  'text',
+  'image',
+  'document',
+  'search_result',
+  'thinking',
+  'redacted_thinking',
+  'tool_use',
+  'tool_result',
+  'server_tool_use',
+  'web_search_tool_result',
+]);
+
+/**
+ * Filter a raw (JSON-deserialized) content-block array, retaining only blocks
+ * whose `type` field is a known `ContentBlockParam` discriminant.
+ *
+ * - Non-object entries, `null`, and entries without a string `type` field are
+ *   dropped — they cannot be valid blocks.
+ * - Entries with an unknown `type` are dropped — they may be attacker-crafted
+ *   or from a future SDK version this binary does not understand.
+ * - Valid entries are returned as `ContentBlockParam[]` via a type assertion
+ *   that is now safe because the discriminant has been checked at runtime.
+ *
+ * Exported for unit testing; the production caller is `resumeHistoryToMessages`.
+ */
+export function filterContentBlocks(raw: unknown[] | undefined): ContentBlockParam[] {
+  if (!raw || raw.length === 0) return [];
+  const result: ContentBlockParam[] = [];
+  for (const block of raw) {
+    if (block === null || typeof block !== 'object' || Array.isArray(block)) continue;
+    const t = (block as Record<string, unknown>)['type'];
+    if (typeof t !== 'string' || !ALLOWED_CONTENT_BLOCK_TYPES.has(t)) continue;
+    result.push(block as ContentBlockParam);
+  }
+  return result;
+}
+
+/**
  * Rebuild a `MessageParam[]` from persisted `ResumeHistoryTurn` records.
  *
  * Two paths:
@@ -137,20 +191,26 @@ export function resolveMaxTokens(config: AgentConfig, model: string): number {
  *   - **Text fallback** (pre-v5.226 sidecars): turns with no content-block
  *     fields fall back to the legacy `{ role, content: string }` path so
  *     backward compatibility is preserved across upgrades.
+ *
+ * Content blocks from sidecars are validated by {@link filterContentBlocks}
+ * before being forwarded to the API. Blocks with unknown or missing `type`
+ * fields are dropped to prevent replay of attacker-crafted blocks (#2003).
  */
 export function resumeHistoryToMessages(history: ResumeHistoryTurn[] | undefined): MessageParam[] | undefined {
   if (!history || history.length === 0) return undefined;
   const messages: MessageParam[] = [];
   for (const turn of history) {
     // User turn —— prefer structured blocks when present, else text fallback.
-    if (turn.userContentBlocks && turn.userContentBlocks.length > 0) {
-      messages.push({ role: 'user', content: turn.userContentBlocks as ContentBlockParam[] });
+    const userBlocks = filterContentBlocks(turn.userContentBlocks);
+    if (userBlocks.length > 0) {
+      messages.push({ role: 'user', content: userBlocks });
     } else if (turn.user.length > 0) {
       messages.push({ role: 'user', content: turn.user });
     }
     // Assistant turn —— prefer structured blocks when present, else text fallback.
-    if (turn.assistantContentBlocks && turn.assistantContentBlocks.length > 0) {
-      messages.push({ role: 'assistant', content: turn.assistantContentBlocks as ContentBlockParam[] });
+    const assistantBlocks = filterContentBlocks(turn.assistantContentBlocks);
+    if (assistantBlocks.length > 0) {
+      messages.push({ role: 'assistant', content: assistantBlocks });
     } else if (turn.assistant.length > 0) {
       messages.push({ role: 'assistant', content: turn.assistant });
     }
