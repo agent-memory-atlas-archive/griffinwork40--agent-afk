@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { RawMessageStreamEvent, MessageParam, ContentBlockParam } from '@anthropic-ai/sdk/resources';
 import { runTurn } from './loop.js';
-import type { AnthropicClientLike, ToolDispatcherLike } from './types.js';
+import type { AnthropicClientLike, ToolDispatcher } from './types.js';
 import {
   fromArray,
   collect,
@@ -417,7 +417,7 @@ describe('loop.ts runTurn — orphan tool_use prevention', () => {
     // history" and "tool_result is committed to history" that NOT absorbed
     // by the existing executeBatch try/catch (which only catches when the
     // function call itself throws, after access succeeds).
-    const dispatcher: ToolDispatcherLike = {
+    const dispatcher: ToolDispatcher = {
       execute: vi.fn(() => Promise.reject(new Error('should use batch'))),
     };
     Object.defineProperty(dispatcher, 'executeBatch', {
