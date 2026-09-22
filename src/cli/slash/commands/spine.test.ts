@@ -123,9 +123,10 @@ beforeEach(async () => {
   mkdirSync(tmpRepoDir, { recursive: true });
   vi.clearAllMocks();
 
-  // Default: git rev-parse returns tmpRepoDir
+  // Default: git rev-parse --git-common-dir returns tmpRepoDir/.git so that
+  // resolveRepoRootSync (mode: 'git-common-dir') → dirname() → tmpRepoDir.
   const mod = await import('node:child_process');
-  vi.mocked(mod.execFileSync).mockReturnValue(tmpRepoDir);
+  vi.mocked(mod.execFileSync).mockReturnValue(join(tmpRepoDir, '.git'));
 });
 
 afterEach(() => {
@@ -355,9 +356,9 @@ describe('/spine init', () => {
     // Write a dummy SPINE.md in tmpRepoDir
     writeFileSync(join(tmpRepoDir, 'SPINE.md'), '# SPINE\n', 'utf-8');
 
-    // Mock git to resolve to tmpRepoDir
+    // Mock git rev-parse --git-common-dir → tmpRepoDir/.git → dirname → tmpRepoDir
     const mod = await import('node:child_process');
-    vi.mocked(mod.execFileSync).mockReturnValue(tmpRepoDir);
+    vi.mocked(mod.execFileSync).mockReturnValue(join(tmpRepoDir, '.git'));
 
     const { writeSpine } = await import('../../../agent/spine/index.js');
     const { ctx, lines } = makeCtx();
@@ -371,7 +372,7 @@ describe('/spine init', () => {
     writeFileSync(join(tmpRepoDir, 'SPINE.md'), '# SPINE\n', 'utf-8');
 
     const mod = await import('node:child_process');
-    vi.mocked(mod.execFileSync).mockReturnValue(tmpRepoDir);
+    vi.mocked(mod.execFileSync).mockReturnValue(join(tmpRepoDir, '.git'));
 
     const { classifySeedMaterial, writeSpine } = await import('../../../agent/spine/index.js');
     vi.mocked(classifySeedMaterial).mockResolvedValue({ items: [], rawOutput: '', parsed: true });

@@ -49,7 +49,7 @@ function makeEmptyDoc(): SpineDocument {
 // ---------------------------------------------------------------------------
 
 function handleShow(ctx: Parameters<SlashCommand['handler']>[0]): 'continue' {
-  const repoRoot = resolveRepoRootSync({ fallback: process.cwd() });
+  const repoRoot = resolveRepoRootSync({ fallback: process.cwd(), mode: 'git-common-dir' });
   const doc = readSpine(repoRoot);
   if (!doc) {
     ctx.out.warn('No SPINE.md found. Run  /spine init  to bootstrap one.');
@@ -92,7 +92,7 @@ function handlePending(ctx: Parameters<SlashCommand['handler']>[0]): 'continue' 
   }
 
   // Load SPINE.md so we can show the current entry for contradicts items
-  const doc = readSpine(resolveRepoRootSync({ fallback: process.cwd() }));
+  const doc = readSpine(resolveRepoRootSync({ fallback: process.cwd(), mode: 'git-common-dir' }));
 
   ctx.out.line(palette.heading(`## Pending SPINE items (${lines.length})`));
   ctx.out.line('');
@@ -141,7 +141,7 @@ async function handleInit(
   ctx: Parameters<SlashCommand['handler']>[0],
   args: string,
 ): Promise<'continue'> {
-  const repoRoot = resolveRepoRootSync({ fallback: process.cwd() });
+  const repoRoot = resolveRepoRootSync({ fallback: process.cwd(), mode: 'git-common-dir' });
   const spinePath = join(repoRoot, 'SPINE.md');
 
   if (existsSync(spinePath) && !args.includes('--force')) {
