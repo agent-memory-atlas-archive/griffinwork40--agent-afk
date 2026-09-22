@@ -19,6 +19,7 @@ import {
 import { SubagentManager } from '../subagent.js';
 import { resolveChildManagerReadRoots, type ReadScopeInputs } from '../subagent-read-scope.js';
 import { runSubagentDAG, type SubagentDAGNode } from '../dag-subagent.js';
+import { parseComposeInput, type ComposeInput } from './compose-input-parse.js';
 import { resolveChildModel } from '../subagent/resolve-child-model.js';
 import { providerForModel } from '../providers/index.js';
 import { resolveCredentialForModel } from '../auth/credential-resolver.js';
@@ -37,9 +38,9 @@ import { getCurrentSink } from '../_lib/skill-sink-channel.js';
 import { resolveMaxNestingDepth } from './nesting.js';
 import { resolveComposeNodeProvider } from './compose-node-provider.js';
 import { buildComposeMaxDepthRefusal } from './skill-depth-message.js';
-import { parseComposeInput, type ComposeInput } from './compose-input-parse.js';
 import { getSessionsDir } from '../../paths.js';
 import { errorMessage } from '../../utils/errors.js';
+import type { InboundAttachmentReader } from '../content/attachment-registry.js';
 
 export interface ComposeExecutorContext {
   // NOTE: compose nodes are NOT wired for the parent-registry fallback. The
@@ -153,6 +154,12 @@ export interface ComposeExecutorContext {
   /** Tree-wide delegation budget. Opt-in: undefined when no budget env vars set. */
   delegationBudget?: import('./delegation-budget.js').DelegationBudget;
   /**
+   * Registry for inbound image attachments (image ids shown as [image img_xxxxxx]).
+   * When omitted, falls back to the module-scope `inboundAttachmentRegistry`.
+   * Injectable for testing.
+   */
+  inboundAttachmentRegistry?: InboundAttachmentReader;
+  /**
    * Callback wired to the per-call compose {@link SubagentManager} so every
    * successfully-completed DAG node's token usage and USD cost rolls up into
    * the parent session's `session_sealed` telemetry. Mirrors the wiring that
@@ -170,7 +177,6 @@ export interface ComposeExecutorContext {
     costUsd: number | undefined,
   ) => void;
 }
-
 
 const MAX_NODE_OUTPUT_CHARS = 8_000;
 const MAX_ERROR_CHARS = 500;
@@ -597,6 +603,19 @@ export class ComposeExecutor {
           // Per-node turn budget: forwarded to the fork config as maxTurns.
           // Omitted when unset so the node inherits the session default.
           ...(n.max_turns !== undefined ? { maxTurns: n.max_turns } : {}),
+          // Per-node filesystem overrides: cwd, extraReadRoots, writeRoots. When
+          // set on the node, they refine the fork's scope. extraReadRoots is
+          // forwarded as the ADDITIVE field (AgentConfig.extraReadRoots) so the
+          // fork COMPOSES with its inherited read scope rather than pinning it
+          // (the readRoots pin path used by afk farm). writeRoots pins exactly.
+          // The downstream validateDagNodeRoots (dag-subagent.ts) enforces
+          // breadth guards (isTooBroadRoot / ungatedSensitiveRoot) on all four
+          // root fields including extraReadRoots. parseNodePaths (above) also
+          // applies isReadDenied to readRoots entries at parse time, matching
+          // the agent tool path's step (b).
+          ...(n.cwd !== undefined ? { cwd: n.cwd } : {}),
+          ...(n.readRoots !== undefined ? { extraReadRoots: n.readRoots } : {}),
+          ...(n.writeRoots !== undefined ? { writeRoots: n.writeRoots } : {}),
           // Workspace-enabled provider (see compose-node-provider.ts).
           ...resolveComposeNodeProvider(nodeModel, this.ctx.workspaceStore, this.ctx.openaiBaseUrl),
         };
@@ -609,7 +628,9 @@ export class ComposeExecutor {
         if ((this.ctx.depth ?? 0) === 0) {
         try {
           const manifestUnits = parsed.nodes.map((n) => {
-            const effectiveCwd = this.currentCwd;
+            // Per-node cwd overrides the parent session's cwd for the manifest,
+            // so crash-recovery records the correct working directory per node.
+            const effectiveCwd = n.cwd ?? this.currentCwd;
             return buildWaveUnit({
               id: n.id,
               prompt: n.prompt,

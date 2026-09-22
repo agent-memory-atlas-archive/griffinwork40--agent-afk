@@ -414,6 +414,37 @@ describe('buildEvalCase', () => {
     expect(Buffer.compare(result.sliceBytes, existingFixtureBytes)).toBe(0);
   });
 
+  it('falls back via card-slug lookup even when evalCaseId differs from the persisted one', () => {
+    // This test uniquely pins the card-slug lookup path. The prior happy-path
+    // test used the SAME evalCaseId for both the write and fallback calls, so
+    // it would pass even if someone replaced the card-slug lookup with a direct
+    // evalCaseId check. Here the first build+write uses 'slug-lookup-first' and
+    // the fallback call uses 'slug-lookup-second' (a fresh id) — the fallback
+    // can only succeed via the card-slug lookup.
+    const { card } = setupSession();
+    const firstBuild = buildEvalCase(card, {
+      evalCaseId: 'slug-lookup-first',
+      evidenceRowIndex: 0,
+      now: FIXED_NOW,
+    });
+    writeEvalCase(firstBuild.evalCase, firstBuild.sliceBytes);
+    const existingFixtureBytes = readFileSync(getEvalCaseFixturePath('slug-lookup-first'));
+    const expectedSha = sha256Bytes(existingFixtureBytes);
+
+    // Use a completely different evalCaseId for the fallback call. The lookup
+    // must find 'slug-lookup-first' via card.slug, not via evalCaseId equality.
+    const result = buildEvalCase(card, {
+      evalCaseId: 'slug-lookup-second',
+      evidenceRowIndex: 0,
+      now: FIXED_NOW,
+      resolveTraceAbsPath: () => '/nonexistent/path/swept/trace.jsonl',
+    });
+
+    expect(result.evalCase.replay.sliceSha256).toBe(expectedSha);
+    expect(sha256Bytes(result.sliceBytes)).toBe(expectedSha);
+    expect(Buffer.compare(result.sliceBytes, existingFixtureBytes)).toBe(0);
+  });
+
   it('re-throws source-not-found when trace is missing AND no existing fixture on disk', () => {
     const { card } = setupSession();
     // Do NOT write any fixture to disk — only the trace was written.

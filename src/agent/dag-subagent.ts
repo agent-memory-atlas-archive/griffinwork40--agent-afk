@@ -10,6 +10,7 @@
  */
 
 import type { ZodType } from 'zod';
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources';
 import type { AgentModelInput, CanUseTool, IAgentSession } from './types.js';
 import type { ModelProvider } from './provider.js';
 import type { SubagentManager } from './subagent.js';
@@ -56,6 +57,15 @@ export interface SubagentDAGNode {
    */
   readRoots?: string[];
   /**
+   * Additive extra read roots for this node's subagent session. Corresponds to
+   * `AgentConfig.extraReadRoots` — DISTINCT from {@link readRoots}: this field
+   * COMPOSES with the child's inherited read scope (union) rather than pinning
+   * it. Use this instead of `readRoots` when the goal is to widen access beyond
+   * the fork's natural scope without suppressing inheritance (the `readRoots`
+   * pin path used by `afk farm`).
+   */
+  extraReadRoots?: string[];
+  /**
    * Allowed roots for write-class tools in this node's subagent session.
    * Corresponds to `AgentConfig.writeRoots`.
    */
@@ -95,6 +105,18 @@ export interface SubagentDAGNode {
    * receive a `childProviderFactory`.
    */
   provider?: ModelProvider;
+  /**
+   * Optional async alternative to {@link promptBuilder}. When present, the DAG
+   * executor awaits this function and uses its result as the node's prompt
+   * instead of `promptBuilder`. Used by the compose executor to attach
+   * resolved image bytes as multimodal `ContentBlockParam[]` blocks without
+   * requiring synchronous resolution or changing the base `promptBuilder`
+   * signature. Prefer this over `promptBuilder` when the prompt construction
+   * involves I/O (e.g. reading attachment files).
+   */
+  buildPromptAsync?: (
+    inputs: Record<string, unknown>,
+  ) => Promise<string | ContentBlockParam[]>;
 }
 
 export interface SubagentDAGOptions {
@@ -137,6 +159,7 @@ function validateDagNodeRoots(spec: SubagentDAGNode): void {
   if (spec.cwd !== undefined) candidates.push({ value: spec.cwd, field: 'cwd' });
   for (const r of spec.readRoots ?? []) candidates.push({ value: r, field: 'readRoots' });
   for (const r of spec.writeRoots ?? []) candidates.push({ value: r, field: 'writeRoots' });
+  for (const r of spec.extraReadRoots ?? []) candidates.push({ value: r, field: 'extraReadRoots' });
 
   for (const { value, field } of candidates) {
     // Resolve symlinks before checking — mirrors input-parse.ts's dual-check
@@ -215,6 +238,7 @@ export async function runSubagentDAG(options: SubagentDAGOptions): Promise<DAGRu
             ...(spec.canUseTool !== undefined ? { canUseTool: spec.canUseTool } : {}),
             ...(spec.cwd !== undefined ? { cwd: spec.cwd } : {}),
             ...(spec.readRoots !== undefined ? { readRoots: spec.readRoots } : {}),
+            ...(spec.extraReadRoots !== undefined ? { extraReadRoots: spec.extraReadRoots } : {}),
             ...(spec.writeRoots !== undefined ? { writeRoots: spec.writeRoots } : {}),
             ...(spec.apiKey !== undefined ? { apiKey: spec.apiKey } : {}),
             ...(spec.maxToolUseIterations !== undefined
@@ -277,7 +301,14 @@ export async function runSubagentDAG(options: SubagentDAGOptions): Promise<DAGRu
 
       try {
         if (nodeSignal.aborted) throw new DOMException('Aborted', 'AbortError');
-        const prompt = spec.promptBuilder(inputs);
+        // Prefer buildPromptAsync (used for multimodal nodes with image
+        // attachments) over the synchronous promptBuilder. When the async
+        // builder is present it takes full responsibility for constructing the
+        // final prompt — including upstream context injection — so promptBuilder
+        // is only called as a fallback when no async builder is wired.
+        const prompt: string | ContentBlockParam[] = spec.buildPromptAsync !== undefined
+          ? await spec.buildPromptAsync(inputs)
+          : spec.promptBuilder(inputs);
         const result = await handle.runToResult(prompt);
         if (result.status !== 'succeeded') {
           // When a TimeoutError was the abort reason, surface it as the

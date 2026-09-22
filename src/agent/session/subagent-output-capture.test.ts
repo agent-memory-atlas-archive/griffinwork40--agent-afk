@@ -138,6 +138,10 @@ describe('buildRecord', () => {
       'aborted_or_incomplete',
     );
   });
+
+  it('renders stream_complete in the end marker for a successful run', () => {
+    expect(buildRecord('end', { reason: 'stream_complete' })).toContain('stream_complete');
+  });
 });
 
 describe('createSubagentOutputRecorder', () => {

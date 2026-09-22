@@ -359,6 +359,68 @@ describe('ComposeExecutor', () => {
       expect(dagOpts.nodes[0].model).toBe('opus');
     });
 
+    it('per-node cwd threads through to SubagentDAGNode', async () => {
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { a: 'done' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'task a', cwd: '/repo/packages/web' }],
+      }));
+
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0];
+      expect(dagOpts.nodes[0].cwd).toBe('/repo/packages/web');
+    });
+
+    it('per-node readRoots threads through as extraReadRoots and writeRoots threads as writeRoots in SubagentDAGNode', async () => {
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { a: 'done' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      await executor.execute(makeCall({
+        nodes: [{
+          id: 'a',
+          prompt: 'task a',
+          readRoots: ['/shared/config'],
+          writeRoots: ['/output/artifacts'],
+        }],
+      }));
+
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0];
+      // readRoots from the compose input is forwarded as extraReadRoots so
+      // the fork COMPOSES with its inherited read scope rather than pinning it
+      // (the readRoots farm-pin path suppresses scope inheritance).
+      expect(dagOpts.nodes[0].extraReadRoots).toEqual(['/shared/config']);
+      expect('readRoots' in dagOpts.nodes[0]).toBe(false);
+      expect(dagOpts.nodes[0].writeRoots).toEqual(['/output/artifacts']);
+    });
+
+    it('omits cwd/readRoots/extraReadRoots/writeRoots from SubagentDAGNode when not provided', async () => {
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { a: 'done' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'task a' }],
+      }));
+
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0];
+      const node = dagOpts.nodes[0];
+      expect('cwd' in node).toBe(false);
+      expect('readRoots' in node).toBe(false);
+      expect('extraReadRoots' in node).toBe(false);
+      expect('writeRoots' in node).toBe(false);
+    });
+
     it('returns aborted when signal is already aborted', async () => {
       const controller = new AbortController();
       controller.abort();
