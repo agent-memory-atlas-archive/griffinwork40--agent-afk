@@ -14,8 +14,8 @@ import type { ExecFileSyncForGit } from './git.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeExec(stdout: string): (file: string, args: string[]) => Promise<{ stdout: string; stderr: string }> {
-  return async (_file, _args) => ({ stdout, stderr: '' });
+function makeExec(stdout: string): (file: string, args: string[], opts?: { cwd?: string }) => Promise<{ stdout: string; stderr: string }> {
+  return async (_file, _args, _opts) => ({ stdout, stderr: '' });
 }
 
 function makeExecThrowing(message = 'spawn git ENOENT'): () => Promise<never> {
@@ -75,16 +75,14 @@ describe('resolveRepoRoot', () => {
     });
 
     it('resolves nested linked-worktree path to main repo root', async () => {
-      // From a linked worktree, git returns the shared .git dir:
-      // /home/user/myrepo/.git/worktrees/<name>
+      // From a linked worktree, git rev-parse --git-common-dir returns the
+      // shared .git directory of the main repo: /home/user/myrepo/.git
       const root = await resolveRepoRoot({
         mode: 'git-common-dir',
-        execFile: makeExec('/home/user/myrepo/.git/worktrees/feat\n'),
+        execFile: makeExec('/home/user/myrepo/.git\n'),
       });
-      // dirname of the above is /home/user/myrepo/.git/worktrees — that is
-      // the correct dirname; if the consumer wants one level up they chain
-      // dirname again. The canonical function is faithful to what git returns.
-      expect(root).toBe('/home/user/myrepo/.git/worktrees');
+      // dirname of /home/user/myrepo/.git is /home/user/myrepo — the main repo root.
+      expect(root).toBe('/home/user/myrepo');
     });
 
     it('throws when stdout is empty (empty-stdout guard)', async () => {

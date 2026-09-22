@@ -21,6 +21,7 @@ const execFileAsync = promisify(execFileCallback);
 export type ExecFileForGit = (
   file: string,
   args: string[],
+  opts?: { cwd?: string },
 ) => Promise<{ stdout: string; stderr: string }>;
 
 // ---------------------------------------------------------------------------
@@ -106,13 +107,13 @@ export async function resolveRepoRoot(options?: ResolveRepoRootOptions): Promise
 
   try {
     if (mode === 'git-common-dir') {
-      const result = await exec('git', ['rev-parse', '--git-common-dir']);
+      const result = await exec('git', ['rev-parse', '--git-common-dir'], { cwd });
       const raw = result.stdout.trim();
       if (!raw) throw new Error('Not in a git repository.');
       const absoluteGitDir = isAbsolute(raw) ? raw : resolvePath(cwd, raw);
       return dirname(absoluteGitDir);
     } else {
-      const result = await exec('git', ['rev-parse', '--show-toplevel']);
+      const result = await exec('git', ['rev-parse', '--show-toplevel'], { cwd });
       const root = result.stdout.trim();
       if (!root) throw new Error('Not in a git repository.');
       return root;

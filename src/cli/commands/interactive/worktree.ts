@@ -215,11 +215,7 @@ function validateBranchName(name: string): void {
 }
 
 async function resolveRepoRoot(execFile: ExecFileFn): Promise<string> {
-  try {
-    return await resolveRepoRootCanonical({ mode: 'git-common-dir', execFile });
-  } catch {
-    throw new Error('Not in a git repository (run from inside a git checkout).');
-  }
+  return resolveRepoRootCanonical({ mode: 'git-common-dir', execFile });
 }
 
 /**
