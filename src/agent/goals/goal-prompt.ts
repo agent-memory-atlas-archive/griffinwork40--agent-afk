@@ -14,9 +14,12 @@ import { getGoal } from './goal-store.js';
 /**
  * Build the goal-injection fragment. Returns an empty string when no active
  * goal exists (paused and completed goals are not injected).
+ *
+ * @param projectKey - StateStore key for the project goal (e.g. from
+ *   `projectKeyForCwd()`). Omit to fall back to the global `'current'` key.
  */
-export function buildGoalPromptFragment(): string {
-  const goal = getGoal();
+export function buildGoalPromptFragment(projectKey?: string): string {
+  const goal = getGoal(projectKey);
   if (!goal || goal.status !== 'active') return '';
   // Strip ALL XML-like tags from goal text — not just <active-goal>.
   // A crafted goal containing <cross-session-memory>, <thinking>, or other
