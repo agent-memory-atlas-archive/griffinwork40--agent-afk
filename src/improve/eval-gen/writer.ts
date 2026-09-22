@@ -151,13 +151,13 @@ export interface BuildEvalCaseResult {
  * **Fixture fallback**: when `sliceTracePrefix` throws
  * `EvalGenError { code: 'source-not-found' }` — the source witness trace
  * has been swept by retention — `buildEvalCase` calls
- * `getEvalCasesForCard(card.slug)` to find any prior eval-case generated
- * for the same card slug, then checks whether the corresponding
- * `.fixture.jsonl` file is on disk. If a prior fixture is found, its
- * bytes are reused verbatim and their SHA-256 is recomputed from the
- * actual file content. A `console.warn` is emitted to make the reuse
- * visible. If no existing fixture is found for the card slug the original
- * error is re-thrown unchanged.
+ * `getEvalCasesForCard(card.slug)` to enumerate all previously generated
+ * eval-cases for the same card slug, then checks each candidate's fixture
+ * file (`<priorEvalCaseId>.fixture.jsonl`) with `existsSync`. The first
+ * existing fixture file found is read verbatim and its SHA-256 is
+ * recomputed from the actual file content. A `console.warn` is emitted to
+ * make the reuse visible. If no existing fixture is found for any prior
+ * eval-case of this card the original error is re-thrown unchanged.
  *
  * @throws EvalGenError {'evidence-row-out-of-range'} index ≥ card.evidence.length
  * @throws EvalGenError {'source-not-found'} slicer error, no existing fixture to fall back to
@@ -206,9 +206,9 @@ export function buildEvalCase(
         try {
           fixtureBytes = readFileSync(existingFixturePath);
         } catch {
-          // TOCTOU: file was deleted between existsSync and readFileSync —
-          // re-throw the original source-not-found error so callers see a
-          // consistent error code rather than a raw ENOENT.
+          // Race between existsSync and readFileSync (e.g. concurrent sweep).
+          // Re-throw the original source-not-found error so the caller sees
+          // a stable error code regardless of what the filesystem race did.
           throw err;
         }
         const fixtureSha256 = createHash('sha256').update(fixtureBytes).digest('hex');
