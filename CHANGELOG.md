@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.226.5] - 2026-09-22
+
+### Fixed
+- add manifest cwd test + fix extraReadRoots error message naming (#1992) (ec579ec4)
+
 ## [5.226.4] - 2026-09-22
 
 ### Fixed
