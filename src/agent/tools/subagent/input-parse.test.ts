@@ -726,6 +726,30 @@ describe('parseAgentInput', () => {
         /must not be at or above a credential root/,
       );
     });
+
+    // --- Hardening: denylist rejection (#1965) ---
+    // writeRoots now carry the same isReadDenied guard as readRoots: a write
+    // grant to a credential path does not just expose it — it allows overwriting
+    // secrets. Added on the agent-tool path to match the compose path update.
+    it('throws when a writeRoots entry targets a read-denylisted credential path (~/.ssh) (#1965)', () => {
+      const ssh = path.join(os.homedir(), '.ssh');
+      expect(() => parseAgentInput({ prompt: 'p', writeRoots: [ssh] })).toThrow(
+        /must not target a protected\/credential path/,
+      );
+    });
+
+    it('throws when a writeRoots entry targets the AFK config (credential) dir (#1965)', () => {
+      const afkConfig = path.join(os.homedir(), '.afk', 'config');
+      expect(() => parseAgentInput({ prompt: 'p', writeRoots: [afkConfig] })).toThrow(
+        /must not target a protected\/credential path/,
+      );
+    });
+
+    it('still accepts a normal absolute subdir (not denied and not broad) after #1965 guard', () => {
+      // The denylist guard must not over-reject: an ordinary write root stays accepted.
+      const result = parseAgentInput({ prompt: 'p', writeRoots: ['/tmp/my-project'] });
+      expect(result.writeRoots).toEqual(['/tmp/my-project']);
+    });
   });
 
   describe('readRoots (#662)', () => {

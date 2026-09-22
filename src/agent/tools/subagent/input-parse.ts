@@ -315,15 +315,18 @@ export function parseAgentInput(input: unknown): AgentInput {
 
   // writeRoots: optional array of absolute paths pre-granted as extra write
   // roots to the fork (#435). Per-entry format rules: non-empty, absolute, no
-  // '..' segments. PLUS a BREADTH rejection (#740), same as cwd and readRoots:
-  // a filesystem root, os.homedir(), or an ancestor of it is refused (checked
-  // on both the lexical and symlink-resolved form) because a too-broad write
-  // root feeds the same bash-restriction grant filter
-  // (`deriveRestrictedSubstrings`) that reads `cwd`/`readRoots` — an
-  // over-broad grant would silently drop credential roots from that child's
-  // bash restriction. There is deliberately no DENYLIST (isReadDenied)
-  // rejection here — out of scope, see readRoots below. An empty array
-  // normalizes to undefined (no-op grant).
+  // '..' segments. PLUS two hardening rejections, matching readRoots:
+  //   (a) BREADTH (#740) — a filesystem root, os.homedir(), or an ancestor of
+  //       it is refused (checked on both the lexical and symlink-resolved form)
+  //       because a too-broad write root feeds the same bash-restriction grant
+  //       filter (`deriveRestrictedSubstrings`) that reads `cwd`/`readRoots` —
+  //       an over-broad grant would silently drop credential roots from that
+  //       child's bash restriction.
+  //   (b) DENYLIST (#1965) — an entry that resolves into the credential floor
+  //       (isReadDenied: ~/.ssh, ~/.afk/config, …) is refused. Defense-in-depth
+  //       ON TOP of the write-time floor: a write grant to a credential path
+  //       would not only expose it for reading but allow overwriting secrets.
+  // An empty array normalizes to undefined (no-op grant).
   let writeRoots: string[] | undefined;
   const writeRootsValue = readOptional(agentInput, 'writeRoots');
   if (writeRootsValue !== undefined) {
@@ -358,7 +361,18 @@ export function parseAgentInput(input: unknown): AgentInput {
             `grant a specific subdirectory instead, got: ${JSON.stringify(entry)}`,
         );
       }
-      // Ancestor-of-credential rejection (#852) — writeRoots feed the same
+      // (b) Denylist rejection (#1965) — never let a write grant target the
+      // credential floor. A write grant to a credential path does not just
+      // expose it for reading; it allows overwriting secrets. isReadDenied
+      // realpaths internally, so a symlinked credential path is caught too.
+      const wDenied = isReadDenied(resolvedEntry);
+      if (wDenied.denied) {
+        throw new Error(
+          `Agent tool writeRoots entries must not target a protected/credential path ` +
+            `(matches ${READ_DENYLIST_ENTRY_MARKER} ${wDenied.matched}), got: ${JSON.stringify(entry)}`,
+        );
+      }
+      // (c) Ancestor-of-credential rejection (#852) — writeRoots feed the same
       // `granted` set in `deriveRestrictedSubstrings` that cwd and readRoots
       // do, so the guard has to be identical on all three or the erosion just
       // moves to whichever field is left unchecked.
