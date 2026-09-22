@@ -50,6 +50,7 @@
 - **INV-043** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Goals scoped per git repository via projectKey parameter; fallback to 'current' key for backward compatibility (reinforc
 - **INV-044** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key derivation uses git-common-dir mode so linked worktrees of same repo share the same goal key (reinforced 202
 - **INV-045** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Goal injection via injectGoalPrompt() must derive projectKey from config.cwd and pass to buildGoalPromptFragment() (rein
+- **INV-046** (2026-09-22, 4bfcc723-17a3-457b-8cfc-192ac9cccc71): Confined subagents must be granted read access to the skills directory to discover sibling skill definitions.
 
 
 ## Explicitly Rejected Patterns
