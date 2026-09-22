@@ -177,6 +177,46 @@ export function filterContentBlocks(raw: unknown[] | undefined): ContentBlockPar
 }
 
 /**
+ * Check whether every `tool_use` block in an assistant turn has a
+ * corresponding `tool_result` block in the **next** user turn.
+ *
+ * Per the Anthropic Messages API contract, `tool_result` blocks must appear
+ * in the user turn that *immediately follows* the assistant turn that issued
+ * the `tool_use` — never in the *preceding* user turn. Searching the
+ * preceding user turn (`currentUserBlocks`) would cause false positives: a
+ * `tool_result` from an earlier, unrelated tool exchange could satisfy the
+ * pairing check for the current assistant turn's `tool_use` blocks.
+ *
+ * This function therefore searches **only** `nextUserBlocks` — the blocks
+ * from the user turn that follows the assistant turn — and ignores the
+ * preceding user turn entirely.
+ *
+ * Returns `true` when every `tool_use` id is covered by a `tool_result` in
+ * `nextUserBlocks`; returns `true` trivially when there are no `tool_use`
+ * blocks; returns `false` otherwise.
+ *
+ * Exported for unit testing.
+ */
+export function hasValidToolUsePairing(
+  assistantBlocks: ContentBlockParam[],
+  nextUserBlocks: ContentBlockParam[] | undefined,
+): boolean {
+  const toolUseIds = assistantBlocks
+    .filter((b): b is Extract<ContentBlockParam, { type: 'tool_use' }> => b.type === 'tool_use')
+    .map((b) => b.id);
+  if (toolUseIds.length === 0) return true; // no tool_use blocks — pairing is trivially satisfied
+  if (!nextUserBlocks || nextUserBlocks.length === 0) return false;
+  const resultIds = new Set(
+    nextUserBlocks
+      .filter(
+        (b): b is Extract<ContentBlockParam, { type: 'tool_result' }> => b.type === 'tool_result',
+      )
+      .map((b) => b.tool_use_id),
+  );
+  return toolUseIds.every((id) => resultIds.has(id));
+}
+
+/**
  * Rebuild a `MessageParam[]` from persisted `ResumeHistoryTurn` records.
  *
  * Two paths:
