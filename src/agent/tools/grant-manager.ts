@@ -44,6 +44,23 @@ import { dirname } from 'path';
 import { appendFileSync, mkdirSync } from 'fs';
 import { getSessionGrantsPath } from '../../paths.js';
 
+/**
+ * Minimal interface any grant-aware component depends on. Defined here in the
+ * agent/ layer (not in cli/) so that agent/ consumers can import it without
+ * crossing a layer boundary. The cli/slash/commands/allow-dir module re-exports
+ * this type for backward compatibility with existing cli/ importers.
+ *
+ * Using a structural interface (not the concrete class) keeps consumers
+ * decoupled from PathGrantManager and makes unit-testing easy with plain mock
+ * objects.
+ */
+export interface GrantManager {
+  addReadRoot(absPath: string, source: 'slash' | 'tool', sessionId?: string): void;
+  addWriteRoot(absPath: string, source: 'slash' | 'tool', sessionId?: string): void;
+  revokeRoot(absPath: string, source: 'slash' | 'tool', sessionId?: string): void;
+  getGrants(): { resolveBase: string | undefined; readRoots: string[]; writeRoots: string[]; allowAll?: boolean };
+}
+
 /** Audit-log actions emitted to `session-grants.jsonl`. */
 export type GrantAuditAction = 'grant-read' | 'grant-write' | 'revoke';
 

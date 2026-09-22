@@ -36,7 +36,7 @@ import type { SkillExecutor } from './skill-executor.js';
 import type { ComposeExecutor } from './compose-executor.js';
 import type { ToolHandler, ToolHandlerContext } from './types.js';
 import type { TraceSink } from '../trace/index.js';
-import type { GrantManager } from '../../cli/slash/commands/allow-dir.js';
+import type { GrantManager } from './grant-manager.js';
 import type { PreDispatchGateDeps } from './dispatcher.pre-dispatch-gates.js';
 import { errorMessage } from '../../utils/errors.js';
 

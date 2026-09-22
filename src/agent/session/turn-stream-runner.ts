@@ -260,12 +260,14 @@ export class TurnStreamRunner {
     }
     const outputRecorder = this.deps.getSubagentOutputRecorder();
 
-    // Invariant: one end() call with the correct status, resolved in the
-    // finally block so every exit path (normal, error, abort, close) is
-    // covered. The try body sets this to 'stream_complete' only when the
-    // loop exits normally; any thrown/aborted path skips that assignment
-    // and lands in finally with the pessimistic default still in place.
-    let endStatus: 'stream_complete' | 'aborted_or_incomplete' = 'aborted_or_incomplete';
+    // Contract: `endStatus` is set to 'stream_complete' only when the loop exits
+    // normally (break on done/error, or iterator exhausted). The finally block
+    // calls end() exactly once with the correct status — no double-call, no
+    // overwrite. Fixes #1952: the prior pattern called end('stream_complete')
+    // at the end of the try block AND end('aborted_or_incomplete') in finally
+    // (because state is still 'streaming' at that point), always tagging normal
+    // completions with the wrong marker.
+    let endStatus: string = 'aborted_or_incomplete';
     try {
       while (true) {
         const result = await this.deps.getProviderIterator().next();
@@ -280,6 +282,14 @@ export class TurnStreamRunner {
             // A completed turn clears a prior error so the seal status
             // reflects the FINAL turn's outcome, not any earlier error.
             this.deps.accounting.clearProviderError();
+            // Contract: mark normal completion BEFORE yielding the done event.
+            // An async generator's finally block fires when the consumer's
+            // for-await loop breaks after seeing 'done' — at that point the
+            // code after `yield` never runs, so endStatus must be set here,
+            // not after the loop exits (where it would be unreachable). The
+            // same applies to 'error': we do NOT flip endStatus there because
+            // a provider error is a real failure, not a clean completion.
+            endStatus = 'stream_complete';
           } else if (output.type === 'error') {
             // Terminal-cause flag: a per-turn provider error must flip the
             // eventual clean close from `succeeded` to `failed`.
@@ -291,6 +301,9 @@ export class TurnStreamRunner {
           if (output.type === 'done' || output.type === 'error') break;
         }
       }
+      // Fallback for providers that exhaust the iterator without emitting a
+      // 'done' event (e.g. iterator.done = true). Also unreachable in practice
+      // for normal turns but keeps the logic complete.
       endStatus = 'stream_complete';
     } finally {
       // Invariant: `finally` is the ONLY path an aborted or timed-out child

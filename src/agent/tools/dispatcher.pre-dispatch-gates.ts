@@ -49,7 +49,7 @@ import type { HookRegistry, PreToolUseContext } from '../hooks.js';
 import type { ToolCall, ToolResult } from '../providers/anthropic-direct/types.js';
 import type { CanUseTool, PermissionResult } from '../types/sdk-types.js';
 import type { TraceSink } from '../trace/index.js';
-import type { GrantManager } from '../../cli/slash/commands/allow-dir.js';
+import type { GrantManager } from './grant-manager.js';
 
 // ---------------------------------------------------------------------------
 // Mutable state

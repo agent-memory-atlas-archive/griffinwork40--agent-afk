@@ -1,6 +1,6 @@
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources';
 import type { FastModeController, FastTurnDecision } from '../../../fast-mode.js';
-import type { AnthropicClientLike, AnthropicToolDef, RunTurnInput, ToolDispatcherLike } from '../types.js';
+import type { AnthropicClientLike, AnthropicToolDef, RunTurnInput, ToolDispatcher } from '../types.js';
 import { buildRequestHeaders } from '../auth.js';
 import { isExtendedCacheTtlActive } from '../cache-policy.js';
 
@@ -9,7 +9,7 @@ export interface TurnRequestInput {
   messages: RunTurnInput['messages'];
   system: ContentBlockParam[] | string | null;
   tools: AnthropicToolDef[] | null;
-  toolDispatcher: ToolDispatcherLike;
+  toolDispatcher: ToolDispatcher;
   model: string;
   maxTokens: number;
   signal: AbortSignal;

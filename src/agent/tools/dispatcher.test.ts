@@ -2533,6 +2533,86 @@ describe('SessionToolDispatcher — canUseTool (Dim 8 in-process permission poli
     await d.execute(makeCall());
     expect(writer.events.filter((e) => e.kind === 'hook_decision')).toHaveLength(0);
   });
+
+  // -------------------------------------------------------------------------
+  // Gap 1: stateful canUseTool counter via executeBatch (safe-classified tools)
+  // -------------------------------------------------------------------------
+  it('executeBatch: stateful canUseTool counter is incremented once per safe call (#1923)', async () => {
+    // Precondition: read_file must be concurrency-safe so executeBatch routes
+    // it through the parallel gate path. If this fails, the test has silently
+    // regressed to exercising the sequential path.
+    expect(defaultConcurrencyClassifier('read_file')).toBe(true);
+    // The policy tracks how many times it was invoked. Because read_file is
+    // safe-classified, executeBatch runs gates in parallel — the counter must
+    // still reach N (one increment per call), proving canUseTool is not skipped
+    // on the parallel gate path.
+    const N = 4;
+    let callCount = 0;
+    const countingPolicy: CanUseTool = async () => {
+      callCount += 1;
+      return { behavior: 'allow' };
+    };
+    const handler = vi.fn(async () => ({ content: 'read' }));
+    const d = makeDispatcher({
+      handlers: new Map<string, ToolHandler>([['read_file', handler]]),
+      permissions: { allowedTools: ['read_file'] },
+      canUseTool: countingPolicy,
+    });
+    const calls = Array.from({ length: N }, (_, i) => ({
+      id: `r${i}`,
+      name: 'read_file',
+      input: {},
+      signal: new AbortController().signal,
+    }));
+    const results = await d.executeBatch(calls);
+    expect(results).toHaveLength(N);
+    expect(results.every((r) => !r.isError)).toBe(true);
+    // canUseTool must have been invoked exactly once per safe call.
+    expect(callCount).toBe(N);
+    expect(handler).toHaveBeenCalledTimes(N);
+  });
+
+  // -------------------------------------------------------------------------
+  // Gap 2: canUseTool returning updatedInput via executeBatch (safe-classified)
+  // -------------------------------------------------------------------------
+  it('executeBatch: canUseTool updatedInput rewrites handler input for safe calls (#1923)', async () => {
+    // Precondition: read_file must be concurrency-safe so executeBatch routes
+    // calls through the parallel gate path — the path whose updatedInput
+    // propagation this test is exercising.
+    expect(defaultConcurrencyClassifier('read_file')).toBe(true);
+    // The policy appends '-rewritten' to file_path so we can distinguish the
+    // rewritten value from the original. The mock handler returns file_path as
+    // content — so if updatedInput is applied through the parallel gate, the
+    // content will contain the rewritten path.
+    const rewritePolicy: CanUseTool = async (_name, input) => {
+      const original = (input as { file_path?: string }).file_path ?? '';
+      return {
+        behavior: 'allow',
+        updatedInput: { file_path: `${original}-rewritten` },
+      };
+    };
+    const handler = vi.fn(async (input: unknown) => ({
+      content: (input as { file_path?: string }).file_path ?? '',
+    }));
+    const d = makeDispatcher({
+      handlers: new Map<string, ToolHandler>([['read_file', handler]]),
+      permissions: { allowedTools: ['read_file'] },
+      canUseTool: rewritePolicy,
+    });
+    const calls = ['a.txt', 'b.txt', 'c.txt'].map((fp, i) => ({
+      id: `call-${i}`,
+      name: 'read_file',
+      input: { file_path: fp },
+      signal: new AbortController().signal,
+    }));
+    const results = await d.executeBatch(calls);
+    expect(results).toHaveLength(3);
+    // Handler must receive the rewritten file_path, not the original.
+    expect(results[0]!.content).toBe('a.txt-rewritten');
+    expect(results[1]!.content).toBe('b.txt-rewritten');
+    expect(results[2]!.content).toBe('c.txt-rewritten');
+    expect(handler).toHaveBeenCalledTimes(3);
+  });
 });
 
 // ---------------------------------------------------------------------------

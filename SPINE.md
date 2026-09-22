@@ -27,6 +27,7 @@
 - **INV-020** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Handler exception caught in hook dispatch must wrap in HookBlockedError (fail-safe, not fail-open)
 - **INV-021** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Hook handler return { decision: 'block' } must short-circuit the handler chain immediately
 - **INV-022** (2026-09-18, f1884bb2-c075-46d5-b0ea-f61d48342e64): Overlay content must not exceed viewport height; cap after word-wrap to prevent ghost-row duplicates in scrollback
+- **INV-023** (2026-09-22, d09d5fe9): All file persistence must use src/utils/atomic-write.ts (tmp+rename); no inline atomic-write implementations (#1921)
 
 
 ## Explicitly Rejected Patterns
@@ -42,3 +43,4 @@
 - **TST-001** (2026-09-17, spine-init): pnpm exclusively (lockfile is pnpm-specific); Node ≥22 required
 - **TST-002** (2026-09-17, spine-init): Run single test with `pnpm test <file> -t <name>` scoped to file, not `--` (pnpm 10 drops args after --)
 - **TST-003** (2026-09-17, 6c724132): Use optional ServiceInstallOptions parameter to pass backend re-render directives during service operations
+- **TST-004** (2026-09-22, 739d2492): Single canonical ToolDispatcher type in agent/providers/ — no ToolDispatcherLike alias indirection (#1861)

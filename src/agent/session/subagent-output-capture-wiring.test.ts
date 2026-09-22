@@ -168,4 +168,42 @@ describe('subagent output capture wiring', () => {
       await session.close();
     }
   });
+
+  /**
+   * Regression test for #1952: before the fix, the finally block in runStream
+   * always overwrote the correct 'stream_complete' marker with
+   * 'aborted_or_incomplete', because state was still 'streaming' when the
+   * finally ran after normal loop exit.
+   */
+  it('tags the end marker as stream_complete when a turn finishes normally (#1952)', async () => {
+    const sessionId = `owiring-complete-${Date.now()}`;
+    const subagentId = 'end-marker-complete';
+    const session = new AgentSession({
+      model: 'sonnet',
+      provider: createMockProvider({ sessionId }),
+      depth: 1,
+      isSubagentFork: true,
+      subagentId,
+    });
+    try {
+      await drainTurn(session, 'evaluate this skill');
+      const files = await waitForOutputFiles(sessionId, 1);
+      expect(files).toContain(`${subagentId}.md`);
+      const filePath = path.join(getSubagentOutputsDir(sessionId), `${subagentId}.md`);
+      // Poll for the end record — the capture chain is async and append may
+      // not have flushed immediately after drainTurn returns.
+      const deadline = Date.now() + 2000;
+      let body = '';
+      while (Date.now() < deadline) {
+        body = fs.readFileSync(filePath, 'utf8');
+        if (body.includes('### end')) break;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      expect(body).toContain('stream_complete');
+      expect(body).not.toContain('aborted_or_incomplete');
+    } finally {
+      await session.close();
+      fs.rmSync(getSubagentOutputsDir(sessionId), { recursive: true, force: true });
+    }
+  });
 });

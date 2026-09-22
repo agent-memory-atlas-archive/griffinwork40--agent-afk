@@ -22,6 +22,10 @@ export interface ComposeNodeInput {
   readRoots?: string[];
   /** Per-node extra write roots. Same semantics as the agent tool's writeRoots. */
   writeRoots?: string[];
+  /** Per-node tool-use round budget. Overrides compose-level max_tool_rounds_per_node. */
+  max_tool_rounds?: number;
+  /** Per-node turn budget. Forwarded to the fork config as maxTurns. */
+  max_turns?: number;
 }
 
 export interface ComposeInput {
@@ -34,6 +38,7 @@ export interface ComposeInput {
    * `max_tool_rounds_per_node` (preferred) or the deprecated
    * `max_tool_calls_per_node` alias. Forwarded to each node's fork config as
    * `maxToolUseIterations` — see the budget note in ComposeExecutor.
+   * Per-node `max_tool_rounds` overrides this.
    */
   max_tool_rounds_per_node?: number;
 }
@@ -58,6 +63,29 @@ const MAX_NODE_TIMEOUT_MS = 3_600_000;
 // constrains useful work and is almost always a typo.
 const MIN_NODE_TOOL_ROUNDS = 1;
 const MAX_NODE_TOOL_ROUNDS = 1_000;
+
+/** Validate and return a positive integer tool-round budget from raw input. */
+function parseToolRounds(val: unknown, key: string): number {
+  if (typeof val !== 'number' || !Number.isFinite(val) || val <= 0) {
+    throw new Error(`"${key}" must be a positive finite number`);
+  }
+  if (!Number.isInteger(val)) {
+    throw new Error(
+      `"${key}" must be an integer (got ${val}). ` +
+      `Tool-use rounds are discrete events; fractional budgets are not meaningful.`,
+    );
+  }
+  if (val < MIN_NODE_TOOL_ROUNDS) {
+    throw new Error(`"${key}" must be at least ${MIN_NODE_TOOL_ROUNDS}`);
+  }
+  if (val > MAX_NODE_TOOL_ROUNDS) {
+    throw new Error(
+      `"${key}" must be at most ${MAX_NODE_TOOL_ROUNDS} ` +
+      `(got ${val}). A larger budget no longer constrains useful work.`,
+    );
+  }
+  return val;
+}
 
 /**
  * Parse and validate per-node path fields (cwd, readRoots, writeRoots).
@@ -192,7 +220,30 @@ export function parseComposeInput(input: unknown): ParseResult {
 
     const { cwd, readRoots, writeRoots } = parseNodePaths(n, id);
 
-    parsed.push({ id, prompt, model, cwd, readRoots, writeRoots });
+    let nodeMaxToolRounds: number | undefined;
+    if (n['max_tool_rounds'] !== undefined) {
+      nodeMaxToolRounds = parseToolRounds(n['max_tool_rounds'], `node "${id}" max_tool_rounds`);
+    }
+
+    let nodeMaxTurns: number | undefined;
+    if (n['max_turns'] !== undefined) {
+      const val = n['max_turns'];
+      if (typeof val !== 'number' || !Number.isFinite(val) || !Number.isInteger(val) || val <= 0) {
+        throw new Error(`Node "${id}" max_turns must be a positive integer`);
+      }
+      nodeMaxTurns = val;
+    }
+
+    parsed.push({
+      id,
+      prompt,
+      model,
+      ...(cwd !== undefined ? { cwd } : {}),
+      ...(readRoots !== undefined ? { readRoots } : {}),
+      ...(writeRoots !== undefined ? { writeRoots } : {}),
+      ...(nodeMaxToolRounds !== undefined ? { max_tool_rounds: nodeMaxToolRounds } : {}),
+      ...(nodeMaxTurns !== undefined ? { max_turns: nodeMaxTurns } : {}),
+    });
   }
 
   let edges: DAGEdge[] | undefined;
@@ -275,26 +326,7 @@ export function parseComposeInput(input: unknown): ParseResult {
 
   let maxToolRoundsPerNode: number | undefined;
   if (obj[usedKey] !== undefined) {
-    const val = obj[usedKey];
-    if (typeof val !== 'number' || !Number.isFinite(val) || val <= 0) {
-      throw new Error(`"${usedKey}" must be a positive finite number`);
-    }
-    if (!Number.isInteger(val)) {
-      throw new Error(
-        `"${usedKey}" must be an integer (got ${val}). ` +
-        `Tool-use rounds are discrete events; fractional budgets are not meaningful.`,
-      );
-    }
-    if (val < MIN_NODE_TOOL_ROUNDS) {
-      throw new Error(`"${usedKey}" must be at least ${MIN_NODE_TOOL_ROUNDS}`);
-    }
-    if (val > MAX_NODE_TOOL_ROUNDS) {
-      throw new Error(
-        `"${usedKey}" must be at most ${MAX_NODE_TOOL_ROUNDS} ` +
-        `(got ${val}). A larger budget no longer constrains useful work.`,
-      );
-    }
-    maxToolRoundsPerNode = val;
+    maxToolRoundsPerNode = parseToolRounds(obj[usedKey], usedKey);
   }
 
   return {

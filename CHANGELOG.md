@@ -11,6 +11,39 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.224.7] - 2026-09-22
+
+### Added
+- add per-node max_turns and max_tool_rounds overrides (1b87f912)
+
+### Fixed
+- add robots.txt, sitemap, canonical tags, and OG metadata (d19fd71a)
+
+### Changed
+- Merge pull request #1968 from griffinwork40/feat/issue-1947-per-node-budgets (ddc9afdd)
+- Merge pull request #1963 from griffinwork40/seo/docs-p0-fixes (66ee0b40)
+- Merge pull request #1962 from griffinwork40/refactor/tool-dispatcher-1861 (da3f7c79)
+- Merge pull request #1961 from griffinwork40/refactor/centralize-atomic-write-1921 (1ea0430f)
+- consolidate ToolDispatcher/ToolDispatcherLike into single definition (#1861) (ff0f2f73)
+- centralize atomic-write pattern (#1921) (6cbcce1a)
+
+## [5.224.6] - 2026-09-22
+
+### Fixed
+- thread completion status into subagent output capture end marker (ceeced23)
+
+### Changed
+- Merge pull request #1957 from griffinwork40/test/delegation-budget-integration-1898 (e1d42bfe)
+- Merge pull request #1954 from griffinwork40/fix/issue-1952-output-capture-status (53003b80)
+- test(dashboard)(#1822): strengthen claimed-tool dedup assertion (#1955) (32cb67ea)
+- add delegation-budget integration test coverage (ceeb538c)
+- fix GrantManager layer inversion (#1856) (1f49bb1d)
+
+## [5.224.5] - 2026-09-22
+
+### Changed
+- add env registry uniqueness guard and invariant docs (#1930) (814d13e3)
+
 ## [5.224.4] - 2026-09-22
 
 ### Fixed

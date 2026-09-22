@@ -20,7 +20,7 @@ import { runTurn } from './loop.js';
 import { DEFAULT_MAX_TOOL_USE_ITERATIONS, WIND_DOWN_NOTE } from '../shared/tool-loop-cap.js';
 import { SOFT_DEADLINE_NOTE, SOFT_DEADLINE_WIND_DOWN } from '../shared/soft-deadline.js';
 import type { ProviderEvent } from '../../provider.js';
-import type { AnthropicClientLike, ToolCall, ToolResult } from './types.js';
+import type { AnthropicClientLike, ToolDispatcher, ToolCall, ToolResult } from './types.js';
 import {
   fromArray,
   collect,
@@ -1429,7 +1429,7 @@ describe('loop.ts runTurn', () => {
       let resolveBatch!: (results: ToolResult[]) => void;
       const batchPending = new Promise<ToolResult[]>((r) => { resolveBatch = r; });
 
-      const dispatcher: ToolDispatcherLike = {
+      const dispatcher: ToolDispatcher = {
         execute: vi.fn(() => Promise.reject(new Error('should use batch'))),
         executeBatch: async (calls, onActivity) => {
           // Simulate two workers starting, then finishing.
@@ -1502,7 +1502,7 @@ describe('loop.ts runTurn', () => {
         return fromArray(makeTextStream('done'));
       });
 
-      const dispatcher: ToolDispatcherLike = {
+      const dispatcher: ToolDispatcher = {
         execute: vi.fn(() => Promise.reject(new Error('should use batch'))),
         executeBatch: async (calls, onActivity) => {
           onActivity?.([calls[0]!.id, calls[1]!.id]);
@@ -1604,7 +1604,7 @@ describe('loop.ts runTurn', () => {
 
       // Simulate: both start, one finishes first (→ activeCount=1), then both
       // done (→ activeCount=0), then results returned.
-      const dispatcher: ToolDispatcherLike = {
+      const dispatcher: ToolDispatcher = {
         execute: vi.fn(() => Promise.reject(new Error('should use batch'))),
         executeBatch: async (calls, onActivity) => {
           // Emit 2 → straggler 1 → drain 0 before returning results.

@@ -56,7 +56,7 @@
 
 import path from 'path';
 import { elicitationRouter } from '../../elicitation-router.js';
-import type { GrantManager } from '../../../cli/slash/commands/allow-dir.js';
+import type { GrantManager } from '../grant-manager.js';
 import { wouldBeRestricted, realpathSafe } from '../handlers/_cwd-utils.js';
 import {
   isReadDenied,

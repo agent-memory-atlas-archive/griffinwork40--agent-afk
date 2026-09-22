@@ -5,7 +5,7 @@ import type {
   ThinkingConfigParam,
 } from '@anthropic-ai/sdk/resources';
 import type { ProviderUsage } from '../../provider.js';
-import type { AnthropicToolDef, ToolDispatcherLike, TranslateCtx } from './types.js';
+import type { AnthropicToolDef, ToolDispatcher, TranslateCtx } from './types.js';
 
 /** Immutable inputs shared by every round and retry in one top-level turn. */
 export interface RunTurnInput {
@@ -13,7 +13,7 @@ export interface RunTurnInput {
   messages: MessageParam[];
   system: ContentBlockParam[] | string | null;
   tools: AnthropicToolDef[] | null;
-  toolDispatcher: ToolDispatcherLike;
+  toolDispatcher: ToolDispatcher;
   model: string;
   maxTokens: number;
   headers: Record<string, string>;

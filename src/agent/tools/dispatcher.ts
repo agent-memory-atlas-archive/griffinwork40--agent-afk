@@ -28,8 +28,7 @@ import type { ToolActivityReporter } from '../providers/shared/tool-activity.js'
 import type { SpawnedPidRegistry } from './handlers/pid-registry.js';
 import type { ToolPermissionConfig } from './permissions.js';
 import type { CanUseTool } from '../types/sdk-types.js';
-import { PathGrantManager, type GrantSnapshot } from './grant-manager.js';
-import type { GrantManager } from '../../cli/slash/commands/allow-dir.js';
+import { PathGrantManager, type GrantSnapshot, type GrantManager } from './grant-manager.js';
 
 import type { TraceSink } from '../trace/index.js';
 import { defaultConcurrencyClassifier } from './dispatch-batching.js';

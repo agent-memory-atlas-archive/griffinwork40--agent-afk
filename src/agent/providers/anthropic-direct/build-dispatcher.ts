@@ -33,7 +33,7 @@ import type { ComposeExecutor } from '../../tools/compose-executor.js';
 import type { TraceSink } from '../../trace/index.js';
 import type { AnthropicToolDef, ToolHandler } from '../../tools/types.js';
 import type { CustomToolDef } from '../../tools/custom-tool.js';
-import type { GrantManager } from '../../../cli/slash/commands/allow-dir.js';
+import type { GrantManager } from '../../tools/grant-manager.js';
 import type { RuntimeStateSource } from '../../awareness/index.js';
 import type { SpawnedPidRegistry } from '../../tools/handlers/pid-registry.js';
 import { SessionToolDispatcher } from '../../tools/dispatcher.js';

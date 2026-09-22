@@ -19,7 +19,7 @@
  * report meaning "nothing is running any more".
  *
  * Declared here so the dispatcher, both provider generators, and the
- * `ToolDispatcherLike` seam all name one type instead of restating a structural
+ * `ToolDispatcher` seam all name one type instead of restating a structural
  * signature that could drift.
  */
 export type ToolActivityReporter = (activeIds: readonly string[]) => void;
