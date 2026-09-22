@@ -76,7 +76,9 @@ export function createSpineSessionEndHook(options: SpineHookOptions = {}): HookH
 
     try {
       const _rootCwd = options.repoRoot ?? process.cwd();
-      const repoRoot = resolveRepoRootSync({ cwd: _rootCwd, fallback: _rootCwd });
+      // Invariant: use git-common-dir so SPINE.md always resolves to the main
+      // repo root, not a linked worktree's checkout path (#worktree-spine-bug).
+      const repoRoot = resolveRepoRootSync({ cwd: _rootCwd, fallback: _rootCwd, mode: 'git-common-dir' });
 
       // ── Git diff guard ────────────────────────────────────────────────
       const diff = getGitDiff(repoRoot);
@@ -184,6 +186,15 @@ export function createSpineSessionEndHook(options: SpineHookOptions = {}): HookH
       // ── Write auto-items ──────────────────────────────────────────────
       if (dirty) {
         writeSpine(repoRoot, doc);
+        // Stage SPINE.md so the next commit (this session, next session, or
+        // manual) picks it up. Best-effort — never block teardown.
+        try {
+          execFileSync('git', ['add', 'SPINE.md'], {
+            cwd: repoRoot,
+            encoding: 'utf8',
+            stdio: ['ignore', 'ignore', 'ignore'],
+          });
+        } catch { /* non-fatal */ }
       }
 
       // ── Log weakens after successful write ────────────────────────────

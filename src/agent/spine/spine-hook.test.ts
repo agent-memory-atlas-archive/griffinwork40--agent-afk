@@ -73,7 +73,8 @@ async function setupDiffMock(diffContent = 'diff --git a/foo.ts b/foo.ts\n+const
   const { execFileSync } = await import('node:child_process');
   vi.mocked(execFileSync).mockImplementation((_cmd, args) => {
     const argsArr = args as string[];
-    if (argsArr.includes('rev-parse')) return '/fake/repo';
+    // Return .git suffix so resolveRepoRootSync (git-common-dir) → dirname → /fake/repo
+    if (argsArr.includes('rev-parse')) return '/fake/repo/.git';
     if (argsArr.includes('diff')) return diffContent;
     return '';
   });
@@ -145,7 +146,8 @@ describe('createSpineSessionEndHook', () => {
     const { execFileSync } = await import('node:child_process');
     vi.mocked(execFileSync).mockImplementation((cmd, args) => {
       const argsArr = args as string[];
-      if (argsArr.includes('rev-parse')) return '/fake/repo';
+      // Return .git suffix so resolveRepoRootSync (git-common-dir) → dirname → /fake/repo
+      if (argsArr.includes('rev-parse')) return '/fake/repo/.git';
       if (argsArr.includes('diff')) return 'diff --git a/foo.ts b/foo.ts\n+const x = 1;';
       return '';
     });
