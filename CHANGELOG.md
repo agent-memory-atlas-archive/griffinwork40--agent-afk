@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.224.4] - 2026-09-22
+
+### Fixed
+- eval-gen falls back to existing fixture when source trace is swept (#1920) (0cc77470)
+
+### Changed
+- extract toggleScheduleEnabled, fix POST body drift (#1838) (#1879) (aa58a883)
+
 ## [5.224.3] - 2026-09-22
 
 ### Changed
