@@ -11,6 +11,8 @@
 import path from 'path';
 import type { DAGEdge } from '../dag.js';
 import { isReadDenied, READ_DENYLIST_ENTRY_MARKER } from './handlers/read-denylist.js';
+import { isTooBroadRoot, ungatedSensitiveRoot } from './subagent/root-validation.js';
+import { realpathSafe } from './handlers/_cwd-utils.js';
 
 export interface ComposeNodeInput {
   id: string;
@@ -89,10 +91,15 @@ function parseToolRounds(val: unknown, key: string): number {
 
 /**
  * Parse and validate per-node path fields (cwd, readRoots, writeRoots).
- * Returns the validated values or throws on invalid input. Structural
- * validation only (absolute, no .., non-empty); root-breadth guards
- * (isTooBroadRoot, ungatedSensitiveRoot) are enforced downstream by
- * validateDagNodeRoots in dag-subagent.ts.
+ * Returns the validated values or throws on invalid input.
+ *
+ * Two layers of validation run here:
+ *   1. Structural checks (absolute path, no ".." segments, non-empty string).
+ *   2. Breadth guards (isTooBroadRoot, ungatedSensitiveRoot) applied inline as
+ *      defense-in-depth. The same guards also run downstream in
+ *      validateDagNodeRoots (dag-subagent.ts), but applying them here closes
+ *      the architectural brittleness where the defense depends on a single
+ *      downstream callsite.
  */
 function parseNodePaths(n: Record<string, unknown>, id: string): {
   cwd?: string;
@@ -110,6 +117,23 @@ function parseNodePaths(n: Record<string, unknown>, id: string): {
     }
     if (cwd.split(/[/\\]/).includes('..')) {
       throw new Error(`Node "${id}" cwd must not contain ".." segments`);
+    }
+    // S-2: breadth guards on cwd — check both lexical path and realpath-resolved
+    // form, same as the agent tool's input-parse.ts, so a symlinked cwd that
+    // resolves to home or a credential root is caught too.
+    const cwdReal = realpathSafe(cwd);
+    for (const form of [...new Set([cwd, cwdReal])]) {
+      if (isTooBroadRoot(form)) {
+        throw new Error(
+          `Node "${id}" cwd is too broad (filesystem root, home, or an ancestor of home/AFK dirs): "${cwd}"`,
+        );
+      }
+      const sensitive = ungatedSensitiveRoot(form);
+      if (sensitive !== undefined) {
+        throw new Error(
+          `Node "${id}" cwd would un-gate credential root "${sensitive}": "${cwd}"`,
+        );
+      }
     }
   }
 
@@ -142,19 +166,36 @@ function parseRootArray(
     if (r.split(/[/\\]/).includes('..')) {
       throw new Error(`Node "${id}" ${field} entry must not contain ".." segments`);
     }
-    // Denylist check — matches the agent tool path's step (b) in
-    // subagent/input-parse.ts. isReadDenied realpaths internally, so a
-    // symlinked credential path is caught here too. Applied only to
-    // readRoots (writeRoots is deliberately excluded — same as the agent
-    // path, per #740).
-    if (field === 'readRoots') {
-      const denied = isReadDenied(r);
-      if (denied.denied) {
+    // S-2: breadth guards — isTooBroadRoot and ungatedSensitiveRoot applied to
+    // every root entry. Checked on both lexical and realpath-resolved spellings
+    // so a symlinked path that resolves to home or a credential ancestor is
+    // caught at parse time rather than only downstream in validateDagNodeRoots.
+    const rReal = realpathSafe(r);
+    for (const form of [...new Set([r, rReal])]) {
+      if (isTooBroadRoot(form)) {
         throw new Error(
-          `Node "${id}" ${field} entry must not target a protected/credential path ` +
-            `(matches ${READ_DENYLIST_ENTRY_MARKER} ${denied.matched}), got: ${JSON.stringify(r)}`,
+          `Node "${id}" ${field} entry is too broad (filesystem root, home, or an ancestor of home/AFK dirs): ${JSON.stringify(r)}`,
         );
       }
+      const sensitive = ungatedSensitiveRoot(form);
+      if (sensitive !== undefined) {
+        throw new Error(
+          `Node "${id}" ${field} entry would un-gate credential root "${sensitive}": ${JSON.stringify(r)}`,
+        );
+      }
+    }
+    // S-3: isReadDenied applied to BOTH readRoots and writeRoots. Previously
+    // gated to readRoots only (mirroring the original agent path's #740
+    // asymmetry), but a writeRoots entry pointing at a credential path is just
+    // as dangerous — a node that can write to ~/.ssh can exfiltrate or corrupt
+    // keys. isReadDenied realpaths internally, so a symlinked credential path
+    // is caught here too.
+    const denied = isReadDenied(r);
+    if (denied.denied) {
+      throw new Error(
+        `Node "${id}" ${field} entry must not target a protected/credential path ` +
+          `(matches ${READ_DENYLIST_ENTRY_MARKER} ${denied.matched}), got: ${JSON.stringify(r)}`,
+      );
     }
     roots.push(r);
   }

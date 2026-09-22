@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { homedir } from 'os';
 import { parseComposeInput } from './compose-input-parse.js';
 
 /** Minimal valid input helper. */
@@ -138,6 +139,115 @@ describe('parseComposeInput — per-node writeRoots', () => {
     expect(() => parseComposeInput(minimal({ writeRoots: ['/foo/../bar'] }))).toThrow(
       /writeRoots entry must not contain "\.\." segments/,
     );
+  });
+});
+
+describe('parseComposeInput — S-2 breadth guards on cwd', () => {
+  it('rejects home dir as cwd', () => {
+    expect(() => parseComposeInput(minimal({ cwd: homedir() }))).toThrow(
+      /cwd is too broad/,
+    );
+  });
+
+  it('rejects filesystem root as cwd', () => {
+    expect(() => parseComposeInput(minimal({ cwd: '/' }))).toThrow(
+      /cwd is too broad/,
+    );
+  });
+
+  it('rejects cwd that would un-gate a credential root', () => {
+    // ~/.config/gh is a bash credential root; its parent ~/.config is not in
+    // the denylist but is an ancestor of the credential root, so granting it
+    // as cwd would un-gate the credential subtree via the bash restriction
+    // filter's ancestor-based containment check.
+    expect(() =>
+      parseComposeInput(minimal({ cwd: `${homedir()}/.config` })),
+    ).toThrow(/un-gate credential root/);
+  });
+
+  it('accepts a valid project-scoped cwd', () => {
+    const { parsed } = parseComposeInput(minimal({ cwd: '/projects/my-repo' }));
+    expect(parsed.nodes[0]!.cwd).toBe('/projects/my-repo');
+  });
+});
+
+describe('parseComposeInput — S-2 breadth guards on readRoots', () => {
+  it('rejects home dir as a readRoots entry', () => {
+    expect(() => parseComposeInput(minimal({ readRoots: [homedir()] }))).toThrow(
+      /readRoots entry is too broad/,
+    );
+  });
+
+  it('rejects filesystem root as a readRoots entry', () => {
+    expect(() => parseComposeInput(minimal({ readRoots: ['/'] }))).toThrow(
+      /readRoots entry is too broad/,
+    );
+  });
+
+  it('rejects readRoots entry that would un-gate a credential root', () => {
+    // ~/.config/gh is a credential root; ~/.config is its ancestor and would
+    // un-gate it via the bash restriction containment check.
+    expect(() =>
+      parseComposeInput(minimal({ readRoots: [`${homedir()}/.config`] })),
+    ).toThrow(/un-gate credential root/);
+  });
+
+  it('rejects a readRoots entry that is a denylist-matched credential path', () => {
+    // Use a subpath of ~/.gnupg: it is within the isReadDenied denylist
+    // prefix but is NOT caught by ungatedSensitiveRoot (which only fires for
+    // ancestors/equals of sensitive roots, not children). The error must
+    // mention "protected/credential path" from isReadDenied, not
+    // "un-gate credential root" from ungatedSensitiveRoot.
+    const gnupgSubpath = `${homedir()}/.gnupg/private-keys-v1.d`;
+    expect(() =>
+      parseComposeInput(minimal({ readRoots: [gnupgSubpath] })),
+    ).toThrow(/protected\/credential path/);
+  });
+});
+
+describe('parseComposeInput — S-2 breadth guards on writeRoots', () => {
+  it('rejects home dir as a writeRoots entry', () => {
+    expect(() => parseComposeInput(minimal({ writeRoots: [homedir()] }))).toThrow(
+      /writeRoots entry is too broad/,
+    );
+  });
+
+  it('rejects filesystem root as a writeRoots entry', () => {
+    expect(() => parseComposeInput(minimal({ writeRoots: ['/'] }))).toThrow(
+      /writeRoots entry is too broad/,
+    );
+  });
+
+  it('rejects writeRoots entry that would un-gate a credential root', () => {
+    expect(() =>
+      parseComposeInput(minimal({ writeRoots: [`${homedir()}/.config`] })),
+    ).toThrow(/un-gate credential root/);
+  });
+});
+
+describe('parseComposeInput — S-3 isReadDenied extended to writeRoots', () => {
+  it('rejects a writeRoots entry targeting a read-denylist path', () => {
+    // Use a subpath of ~/.gnupg that is:
+    //   - Matched by isReadDenied (within the ~/.gnupg prefix)
+    //   - NOT caught by ungatedSensitiveRoot (a child, not an ancestor/equal)
+    //     so this test exercises the isReadDenied branch specifically.
+    // The error message must mention "protected/credential path" — the phrase
+    // from the isReadDenied check — NOT "un-gate credential root" from the
+    // ungatedSensitiveRoot check.
+    const gnupgSubpath = `${homedir()}/.gnupg/private-keys-v1.d`;
+    expect(() =>
+      parseComposeInput(minimal({ writeRoots: [gnupgSubpath] })),
+    ).toThrow(/protected\/credential path/);
+  });
+
+  it('rejects a writeRoots entry for ~/.ssh with the protected-path message', () => {
+    // ~/.ssh is directly on the denylist — ungatedSensitiveRoot also fires
+    // (the candidate equals the sensitive root), but the breadth guards run
+    // first, so the error comes from un-gate rather than protected-path.
+    // This test documents that ~/.ssh in writeRoots is always rejected.
+    expect(() =>
+      parseComposeInput(minimal({ writeRoots: [`${homedir()}/.ssh`] })),
+    ).toThrow();
   });
 });
 
