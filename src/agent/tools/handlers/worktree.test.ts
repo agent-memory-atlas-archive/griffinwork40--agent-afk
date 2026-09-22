@@ -576,4 +576,22 @@ describe('worktree handler — errors surface as isError', () => {
     expect(result.isError).toBe(true);
     expect(result.content).toContain('Cannot resolve git repo root');
   });
+
+  // #1915: the error message when the worktree tool is called from a non-git
+  // directory must be actionable — tell the caller to pass an explicit `cwd`.
+  it('non-git cwd error includes actionable hint to set cwd on subagent dispatch (#1915)', async () => {
+    const mock = makeMock(() => {
+      throw new Error('fatal: not a git repository (or any of the parent directories): .git');
+    });
+    const handler = createWorktreeHandler('/tmp/not-a-repo', { execFile: mock });
+    const result = await handler({ action: 'list' }, SIGNAL);
+    expect(result.isError).toBe(true);
+    // Base error preserved
+    expect(result.content).toContain('Cannot resolve git repo root');
+    // Actionable hint: tells the caller to set cwd on dispatch
+    expect(result.content).toMatch(/subagent.*dispatched.*without.*explicit.*cwd/i);
+    expect(result.content).toMatch(/pass.*cwd.*project root|cwd.*set.*project root|cwd.*pointing.*git/i);
+    // Mentions .afk-worktrees/ so the caller understands what the tool needs
+    expect(result.content).toContain('.afk-worktrees/');
+  });
 });
