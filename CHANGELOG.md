@@ -11,6 +11,27 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.225.0] - 2026-09-22
+
+### Added
+- expose per-node cwd, readRoots, writeRoots for DAG nodes (#1944) (7e926de0)
+
+### Fixed
+- remove unwired max_turns/max_tool_rounds from node schema (43ca2ee1)
+- remove unused imports from compose-executor (44fcde35)
+- close extraReadRoots breadth-guard bypass + add isReadDenied (d1808395)
+- address eval-gen fixture fallback review findings (aa56c92f)
+- segment-split .. check + additive readRoots (4faad992)
+- harden per-node roots — inline schema docs, #1939 contract, writeRoots tests (f9a24531)
+
+### Changed
+- Merge pull request #1948 from griffinwork40/afk/fix-rounding-edge-cases (d765ea6e)
+- Merge remote-tracking branch 'origin/main' into afk/merge-1948 (faa3341c)
+- Merge branch 'main' into afk/fix-rounding-edge-cases (6e40bf46)
+- add env registry uniqueness guard and invariant docs (#1930) (f84ecaa8)
+- Merge branch 'main' into afk/fix-rounding-edge-cases (8cc9e29e)
+- remove stale PR draft artifacts (f24bbe99)
+
 ## [5.224.7] - 2026-09-22
 
 ### Added
