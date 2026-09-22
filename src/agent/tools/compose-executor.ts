@@ -24,6 +24,9 @@ import { resolveChildModel } from '../subagent/resolve-child-model.js';
 import { providerForModel } from '../providers/index.js';
 import { resolveCredentialForModel } from '../auth/credential-resolver.js';
 import { applyParentCredentialFallback } from './child-credential.js';
+import { resolveAgentToolAccess } from '../agents/index.js';
+import type { AgentRegistry } from '../agents/index.js';
+import { CHILD_ALLOWED_TOOLS, buildSkillRestrictedProvider } from './nesting.js';
 import type { DAGRunResult } from '../dag.js';
 import type { AgentModelInput, IAgentSession } from '../types.js';
 import type { Surface } from '../awareness/types.js';
@@ -149,6 +152,17 @@ export interface ComposeExecutorContext {
   getReadScopeInputs?: () => ReadScopeInputs;
   /** Shared workspace store so compose DAG nodes can publish/receive findings. */
   workspaceStore?: WorkspaceStore;
+  /**
+   * Named-agent registry forwarded from the parent session. When present,
+   * per-node `agent_type` values are resolved against it: the matched
+   * definition's system prompt, tool allowlist, and model default are applied
+   * to the node's fork config — identical to the `agent` tool's named-agent
+   * path (subagent-executor.ts). An unknown type returns an error naming the
+   * available types rather than silently dispatching an unconstrained node.
+   * Optional: when absent, `agent_type` inputs fail immediately (matching the
+   * `agent` tool's "available: (none)" error when no registry is wired).
+   */
+  agentRegistry?: AgentRegistry;
   /** Tree-wide delegation budget. Opt-in: undefined when no budget env vars set. */
   delegationBudget?: import('./delegation-budget.js').DelegationBudget;
 
@@ -531,12 +545,66 @@ export class ComposeExecutor {
       //     (which is still `compose-<nodeId>` for routing telemetry).
       const composeToolUseId = call.id;
       const totalNodes = parsed.nodes.length;
+
+      // Named-agent resolution: validate all agent_type values up-front so the
+      // whole compose call fails immediately on an unknown type — the same
+      // fail-fast pattern the `agent` tool uses (subagent-executor.ts:342-350).
+      // Resolving before building dagNodes means a single bad node cannot let
+      // other nodes start then get orphaned by a late error.
+      for (const n of parsed.nodes) {
+        if (n.agent_type !== undefined) {
+          const resolved = this.ctx.agentRegistry?.get(n.agent_type);
+          if (resolved === undefined) {
+            const available = [...(this.ctx.agentRegistry?.keys() ?? [])].sort().join(', ');
+            return {
+              content:
+                `Compose node "${n.id}": agent_type "${n.agent_type}" not found. ` +
+                `Available agent types: ${available.length > 0 ? available : '(none)'}`,
+              isError: true,
+            };
+          }
+        }
+      }
+
       const dagNodes: SubagentDAGNode[] = parsed.nodes.map((n, i) => {
+        // Named-agent lookup (already validated above; cannot be undefined here).
+        const namedAgent = n.agent_type !== undefined
+          ? this.ctx.agentRegistry?.get(n.agent_type)
+          : undefined;
+
+        // Named-agent tool-access resolution: mirrors child-config.ts logic —
+        // resolveAgentToolAccess returns the effective allowlist and bash gate.
+        // Compose nodes sit at the depth cap (no nested executor factory wired),
+        // so the restricted path always applies: buildSkillRestrictedProvider is
+        // used when the named agent narrows the tool surface, exactly as the
+        // depth-cap fallback in child-config.ts does (lines 485-495 there).
+        const resolvedAccess = namedAgent !== undefined
+          ? resolveAgentToolAccess(namedAgent, CHILD_ALLOWED_TOOLS)
+          : undefined;
+        const effectiveAllowedTools = resolvedAccess?.allowedTools;
+        const effectiveReadOnlyBash = resolvedAccess?.bashReadOnly === true;
+
         // Resolve the node's effective model and provider FIRST so we can
         // decide whether to forward an API key. Mirrors the resolvedChildApiKey
         // pattern in SubagentExecutor (see subagent-executor.ts:433-444).
-        const nodeModel = resolveChildModel({ callSiteModel: n.model,
-          defaultSubagentModel: this.ctx.defaultSubagentModel, defaultModel: this.ctx.defaultModel });
+        //
+        // Named-agent model precedence (Claude Code parity):
+        //   call-site n.model > definition model > ctx.defaultSubagentModel
+        // The named agent's model is threaded in as a fallback when the call
+        // site did not supply an explicit model.
+        // Item 2: translate 'inherit' in definition model to the parent model
+        // (ctx.defaultModel), matching child-config.ts:183-185 semantics.
+        // Without this, the literal string "inherit" is passed to resolveChildModel
+        // which does not interpret it, resulting in an unusable model string.
+        const rawDefinitionModel = namedAgent?.definition.model;
+        const definitionModel = rawDefinitionModel === 'inherit'
+          ? this.ctx.defaultModel
+          : rawDefinitionModel;
+        const nodeModel = resolveChildModel({
+          callSiteModel: n.model ?? definitionModel,
+          defaultSubagentModel: this.ctx.defaultSubagentModel,
+          defaultModel: this.ctx.defaultModel,
+        });
         const nodeProvider = providerForModel(typeof nodeModel === 'string' ? nodeModel : undefined);
         const nodeIsOpenAI = nodeProvider === 'openai-compatible';
         // Invariant: resolve credentials fresh per-node at fork time, matching
@@ -550,15 +618,62 @@ export class ComposeExecutor {
           : (this.ctx.resolveApiKeyForModel ? this.ctx.resolveApiKeyForModel(nodeModel) : resolveCredentialForModel(nodeModel));
         const resolvedNodeApiKey = nodeIsOpenAI ? undefined
           : applyParentCredentialFallback({ childModel: nodeModel, resolved: freshKey, parentApiKey: this.ctx.apiKey });
+
+        // When the named agent restricts the tool surface OR gates bash, build a
+        // minimal restricted provider (no nested executors — compose nodes are
+        // leaf-level workers). This mirrors the depth-cap restricted-provider
+        // fallback in child-config.ts (the `else if` block at lines 485-495
+        // there). Without this, a named agent's allowlist would be parsed but
+        // never enforced: the node's AgentSession would fall back to the default
+        // unrestricted provider, silently widening the surface.
+        //
+        // Precedence: resolveComposeNodeProvider (workspace) is combined with the
+        // restricted surface below via a layered override: when BOTH a named-agent
+        // restriction AND a workspace store are active, the workspace store is
+        // passed to buildSkillRestrictedProvider only when the agent's declared
+        // allowlist includes workspace tools — the allowlist is the authority and
+        // we never widen beyond what the named agent declared.
+        //
+        // Item 4: pass workspaceStore so agents whose allowlist includes
+        // workspace_publish / workspace_query retain access despite tool restriction.
+        const nodeWorkspaceStore =
+          this.ctx.workspaceStore !== undefined &&
+          effectiveAllowedTools !== undefined &&
+          effectiveAllowedTools.some((t) => t === 'workspace_publish' || t === 'workspace_query')
+            ? this.ctx.workspaceStore
+            : undefined;
+        const nodeProviderOverride = (effectiveAllowedTools !== undefined || effectiveReadOnlyBash)
+          ? buildSkillRestrictedProvider(
+              effectiveAllowedTools ?? [...CHILD_ALLOWED_TOOLS],
+              nodeModel,
+              effectiveReadOnlyBash,
+              this.ctx.openaiBaseUrl,
+              nodeWorkspaceStore,
+            )
+          : undefined;
+
+        // Effective system prompt: named agent's definition prompt replaces the
+        // parent's base system prompt (Claude Code parity — the definition IS the
+        // child's system prompt). Falls back to ctx.systemPrompt for generic nodes.
+        const nodeSystemPrompt = namedAgent !== undefined
+          ? namedAgent.definition.prompt
+          : this.ctx.systemPrompt;
+
         return {
           id: n.id,
-          agentType: n.agent_type ?? `${n.id} [${i + 1}/${totalNodes}]`,
+          // agentType render label: when agent_type is set, use the registry name
+          // as the primary label (mirrors the named-dispatch label in
+          // subagent-executor.ts:578-580). Append [k/N] so progress through the
+          // DAG is still visible.
+          agentType: namedAgent !== undefined
+            ? `${namedAgent.name} [${i + 1}/${totalNodes}]`
+            : `${n.id} [${i + 1}/${totalNodes}]`,
           parentId: composeToolUseId,
-          // Pass the raw base prompt, not the assembled prompt with ROUTING_DIRECTIVE.
+          // Pass the node-effective system prompt (named agent def or raw base).
           // Compose nodes are task workers — they must not inherit orchestration
           // directives (which would let them spawn nested DAGs or invoke skills
           // recursively). Matches SubagentExecutor's defaultConfig.systemPrompt convention.
-          systemPrompt: this.ctx.systemPrompt,
+          systemPrompt: nodeSystemPrompt,
           promptBuilder: (inputs: Record<string, unknown>) => {
             // Security: upstream node output is user-controlled data, not
             // instructions. Use unambiguous non-XML delimiters so an adversarial
@@ -589,13 +704,24 @@ export class ComposeExecutor {
           // Budget enforcement: per-node max_tool_rounds overrides compose-level
           // max_tool_rounds_per_node. Omitted when unset so the fork keeps
           // SUBAGENT_DEFAULT_MAX_TOOL_USE_ITERATIONS (subagent.ts).
+          // Item 3: named-agent definition.maxToolUseIterations is a fallback
+          // beneath explicit per-node / compose-level values (mirrors child-config.ts:282-286).
           ...(() => {
-            const effectiveRounds = n.max_tool_rounds ?? maxToolRoundsPerNode;
+            const effectiveRounds = n.max_tool_rounds ?? maxToolRoundsPerNode
+              ?? (namedAgent?.definition.maxToolUseIterations !== undefined
+                ? Math.max(1, Math.floor(namedAgent.definition.maxToolUseIterations))
+                : undefined);
             return effectiveRounds !== undefined ? { maxToolUseIterations: effectiveRounds } : {};
           })(),
           // Per-node turn budget: forwarded to the fork config as maxTurns.
+          // Item 3: named-agent definition.maxTurns is a fallback beneath explicit
+          // per-node values (mirrors child-config.ts:271-274).
           // Omitted when unset so the node inherits the session default.
-          ...(n.max_turns !== undefined ? { maxTurns: n.max_turns } : {}),
+          ...(n.max_turns !== undefined
+            ? { maxTurns: n.max_turns }
+            : namedAgent?.definition.maxTurns !== undefined
+              ? { maxTurns: Math.max(1, Math.floor(namedAgent.definition.maxTurns)) }
+              : {}),
           // Per-node filesystem overrides: cwd, extraReadRoots, writeRoots. When
           // set on the node, they refine the fork's scope. extraReadRoots is
           // forwarded as the ADDITIVE field (AgentConfig.extraReadRoots) so the
@@ -609,8 +735,15 @@ export class ComposeExecutor {
           ...(n.cwd !== undefined ? { cwd: n.cwd } : {}),
           ...(n.readRoots !== undefined ? { extraReadRoots: n.readRoots } : {}),
           ...(n.writeRoots !== undefined ? { writeRoots: n.writeRoots } : {}),
-          // Workspace-enabled provider (see compose-node-provider.ts).
-          ...resolveComposeNodeProvider(nodeModel, this.ctx.workspaceStore, this.ctx.openaiBaseUrl),
+          // Provider override precedence:
+          //   1. Named-agent restricted provider (when agent_type restricts tools).
+          //      Must take priority — we must never widen a named agent's declared
+          //      allowlist by substituting the workspace provider.
+          //   2. Workspace-enabled provider (when ctx.workspaceStore is present and
+          //      no named-agent restriction is active). See compose-node-provider.ts.
+          ...(nodeProviderOverride !== undefined
+            ? { provider: nodeProviderOverride }
+            : resolveComposeNodeProvider(nodeModel, this.ctx.workspaceStore, this.ctx.openaiBaseUrl)),
         };
       });
 

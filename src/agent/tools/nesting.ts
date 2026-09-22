@@ -578,6 +578,13 @@ export function buildSkillRestrictedProvider(
   // Endpoint for an OpenAI-routed child — see buildReadOnlyReconProvider. Trailing
   // optional so existing positional callers are unaffected.
   openaiBaseUrl?: string,
+  // Item 4 (PR #1986): when present, the workspace store is threaded into the
+  // provider so agents whose declared allowlist includes workspace_publish /
+  // workspace_query retain access even when their tool surface is restricted.
+  // The allowedTools list is the authority — the store is only wired when the
+  // agent has already declared workspace tool access. Trailing optional so all
+  // existing positional callers are unaffected.
+  workspaceStore?: WorkspaceStore,
 ): ModelProvider {
   // Materialise once per fork so runtime array mutations don't bleed across siblings.
   const permissions = { allowedTools: [...allowedTools] };
@@ -590,9 +597,14 @@ export function buildSkillRestrictedProvider(
       permissions,
       ...(readOnlyBash ? { readOnlyBash: true } : {}),
       ...(openaiBaseUrl !== undefined ? { baseURL: openaiBaseUrl } : {}),
+      ...(workspaceStore !== undefined ? { workspaceStore } : {}),
     });
   }
-  return new AnthropicDirectProvider({ permissions, ...(readOnlyBash ? { readOnlyBash: true } : {}) });
+  return new AnthropicDirectProvider({
+    permissions,
+    ...(readOnlyBash ? { readOnlyBash: true } : {}),
+    ...(workspaceStore !== undefined ? { workspaceStore } : {}),
+  });
 }
 
 /**
