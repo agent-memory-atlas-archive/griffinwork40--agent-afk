@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.224.6] - 2026-09-22
+
+### Fixed
+- thread completion status into subagent output capture end marker (ceeced23)
+
+### Changed
+- Merge pull request #1957 from griffinwork40/test/delegation-budget-integration-1898 (e1d42bfe)
+- Merge pull request #1954 from griffinwork40/fix/issue-1952-output-capture-status (53003b80)
+- test(dashboard)(#1822): strengthen claimed-tool dedup assertion (#1955) (32cb67ea)
+- add delegation-budget integration test coverage (ceeb538c)
+- fix GrantManager layer inversion (#1856) (1f49bb1d)
+
 ## [5.224.5] - 2026-09-22
 
 ### Changed
