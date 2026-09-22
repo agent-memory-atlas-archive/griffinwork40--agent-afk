@@ -7,7 +7,7 @@ import type { RawMessageStreamEvent } from '@anthropic-ai/sdk/resources';
 import type { ProviderEvent } from '../../provider.js';
 import type {
   AnthropicClientLike,
-  ToolDispatcherLike,
+  ToolDispatcher,
   ToolCall,
   ToolResult,
   TranslateCtx,
@@ -180,13 +180,13 @@ export function makeClient(
 
 export function makeDispatcher(
   executeFn: (call: ToolCall) => Promise<ToolResult>,
-): ToolDispatcherLike {
+): ToolDispatcher {
   return { execute: executeFn };
 }
 
 export function makeBatchDispatcher(
   executeBatchFn: (calls: ToolCall[]) => Promise<ToolResult[]>,
-): ToolDispatcherLike {
+): ToolDispatcher {
   return {
     execute: vi.fn(() => Promise.reject(new Error('should use batch'))),
     executeBatch: executeBatchFn,

@@ -1,8 +1,8 @@
 /**
  * Pluggable tool dispatcher for the `anthropic-direct` provider.
  *
- * Defines the contract that `loop.ts` calls when the model emits `tool_use`
- * blocks, plus a default `RejectAllToolDispatcher` that returns an
+ * Re-exports `ToolDispatcher` from `./types.ts` (the single definition) and
+ * provides a default `RejectAllToolDispatcher` that returns an
  * `isError: true` result for every call. The default dispatcher is what
  * makes v1 ship safely without real tool implementations — the model sees
  * an honest error and can recover or end-turn.
@@ -10,19 +10,7 @@
  * @module agent/providers/anthropic-direct/tool-dispatcher
  */
 
-import type { ToolCall, ToolResult, ToolDispatcherLike } from './types.js';
-
-/**
- * Pluggable tool dispatcher contract. Implementations execute tool calls
- * issued by the model and return the result that becomes the body of the
- * outbound `tool_result` content block.
- *
- * Aliases the structural `ToolDispatcherLike` from `types.ts` so the public
- * name lives in this module while the structural alias used by `loop.ts`
- * stays in `types.ts` — avoids a layering cycle if a future dispatcher
- * implementation wants to import from the loop.
- */
-export interface ToolDispatcher extends ToolDispatcherLike {}
+import type { ToolCall, ToolResult, ToolDispatcher } from './types.js';
 
 /**
  * Default dispatcher used when no real tool implementations are wired in.
@@ -42,4 +30,4 @@ export class RejectAllToolDispatcher implements ToolDispatcher {
   }
 }
 
-export type { ToolCall, ToolResult } from './types.js';
+export type { ToolDispatcher, ToolCall, ToolResult } from './types.js';

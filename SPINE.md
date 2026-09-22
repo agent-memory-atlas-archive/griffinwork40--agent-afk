@@ -42,3 +42,4 @@
 - **TST-001** (2026-09-17, spine-init): pnpm exclusively (lockfile is pnpm-specific); Node ≥22 required
 - **TST-002** (2026-09-17, spine-init): Run single test with `pnpm test <file> -t <name>` scoped to file, not `--` (pnpm 10 drops args after --)
 - **TST-003** (2026-09-17, 6c724132): Use optional ServiceInstallOptions parameter to pass backend re-render directives during service operations
+- **TST-004** (2026-09-22, 739d2492): Single canonical ToolDispatcher type in agent/providers/ — no ToolDispatcherLike alias indirection (#1861)

@@ -114,6 +114,7 @@ describe('denial-circuit-breaker pure helpers', () => {
     expect(isSubagentContainmentDenial(undefined)).toBe(false);
     expect(isSubagentContainmentDenial('')).toBe(false);
   });
+
 });
 
 // ---- Dispatcher integration ----------------------------------------------

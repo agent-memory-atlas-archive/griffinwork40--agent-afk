@@ -170,11 +170,17 @@ export interface AnthropicToolDef {
 }
 
 /**
- * Structural alias so loop.ts doesn't import tool-dispatcher.ts directly
- * (avoids a layering cycle if a dispatcher implementation ever wants to
- * call back into the provider).
+ * Pluggable tool dispatcher contract. Defines the minimal interface that
+ * `loop.ts` calls when the model emits `tool_use` blocks. Kept in `types.ts`
+ * so the provider boundary (loop, request-types, turn-request) can import it
+ * without pulling in any runtime code from `tool-dispatcher.ts`, which avoids
+ * a layering cycle if a dispatcher implementation ever imports back into the
+ * provider.
+ *
+ * Previously named `ToolDispatcherLike`; consolidated into a single definition
+ * here (#1861).
  */
-export interface ToolDispatcherLike {
+export interface ToolDispatcher {
   execute(call: ToolCall): Promise<ToolResult>;
   /**
    * Execute a batch of tool calls.
