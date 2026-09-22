@@ -802,6 +802,61 @@ describe('POST /tasks and DELETE /tasks/:id routes', () => {
     expect(task?.executor).toBe('shell');
   });
 
+  it('POST /tasks does not propagate executor: "builtin" — body guard drops it', async () => {
+    // Regression guard: the body guard previously accepted 'builtin' while the
+    // tool handler and CLI both explicitly rejected it. Tightened to 'agent'|'shell' only.
+    // The guard silently drops unrecognised executor values; the task is still
+    // registered, but without an executor field (it must not be 'builtin').
+    const h = await spinDaemon();
+    const res = await fetch(`http://localhost:${h.port}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskId: 'builtin-task',
+        command: '/builtin-cmd',
+        cron: '* * * * *',
+        executor: 'builtin',
+      }),
+    });
+    expect(res.status).toBe(201);
+    const listRes = await fetch(`http://localhost:${h.port}/tasks`);
+    const tasks = (await listRes.json()) as Array<{ taskId: string; executor?: string }>;
+    const task = tasks.find((t) => t.taskId === 'builtin-task');
+    expect(task?.executor).not.toBe('builtin');
+  });
+
+  it('disable→re-enable regression: DELETE then POST re-registers the task in scheduler', async () => {
+    // Regression path from PR #1879: disabling (DELETE) then re-enabling (POST)
+    // a task must leave the task present and active in the scheduler.
+    const h = await spinDaemon();
+
+    // Step 1: register
+    const createRes = await fetch(`http://localhost:${h.port}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: 're-enable-task', command: '/cmd', cron: '* * * * *' }),
+    });
+    expect(createRes.status).toBe(201);
+
+    // Step 2: disable (unregister from scheduler)
+    const deleteRes = await fetch(`http://localhost:${h.port}/tasks/re-enable-task`, {
+      method: 'DELETE',
+    });
+    expect(deleteRes.status).toBe(200);
+    expect(h.scheduler.list().map((t) => t.taskId)).not.toContain('re-enable-task');
+
+    // Step 3: re-enable (re-register via POST)
+    const reEnableRes = await fetch(`http://localhost:${h.port}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: 're-enable-task', command: '/cmd', cron: '* * * * *' }),
+    });
+    expect(reEnableRes.status).toBe(201);
+
+    // The task must be present and live in the scheduler after re-enable.
+    expect(h.scheduler.list().map((t) => t.taskId)).toContain('re-enable-task');
+  });
+
   it('DELETE /tasks/:id for registered task → 200', async () => {
     const h = await spinDaemon();
     // Register first
