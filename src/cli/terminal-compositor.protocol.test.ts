@@ -113,6 +113,58 @@ describe('TerminalCompositor — protocol invariants', () => {
       expect(out).toMatch(/\x1b\[\d+;1H\x1b\[2KCOMMITTED_BLOCK/);
     });
 
+    it('routes the banner-scroll newline through withFullScrollRegion (anchorRow > 1, first commit)', async () => {
+      // External constraint (DECSTBM contract — banner-scroll path): the
+      // banner-scroll block in commitAbove (committed-band-commit.ts:151–163)
+      // fires on the FIRST commit when anchorRow > 1. It calls
+      // writeWithScrollGuard, which must delegate to withFullScrollRegion when
+      // a scrollRegion is active. A regression that removes that delegation
+      // would let the banner-scroll \n run inside the DECSTBM sub-region and
+      // silently discard the displaced top line.
+      //
+      // anchorRow > 1 is set here by seeding a TerminalCompositor and then
+      // reaching into its internals to set the fields that arm() does not
+      // touch (anchorRow, hasCommitted) so the gate is entered on the next
+      // commitAbove call.
+      const scrollRegion = {
+        withFullScrollRegion: vi.fn(<T,>(fn: () => T): T => fn()),
+        getExtraRows: vi.fn(() => 0),
+      };
+      const c = new TerminalCompositor({
+        stdout,
+        stdin,
+        onCancel: vi.fn(),
+        scrollRegion,
+      });
+      await c.arm();
+
+      // Reach into compositor internals to prime the banner-scroll gate:
+      // anchorRow > 1 (simulates a banner present above the frame) and
+      // hasCommitted = false (simulates the first commit of the arm cycle).
+      const internals = c as unknown as {
+        anchorRow: number | undefined;
+        hasCommitted: boolean;
+      };
+      internals.anchorRow = 10;
+      internals.hasCommitted = false;
+
+      // Reset call count so only banner-scroll invocations are counted.
+      scrollRegion.withFullScrollRegion.mockClear();
+      writes.clear();
+      c.commitAbove('BANNER_SCROLL_BLOCK');
+
+      // The banner-scroll block calls writeWithScrollGuard, which must invoke
+      // withFullScrollRegion. A removal of that call is the regression we are
+      // guarding against.
+      expect(
+        scrollRegion.withFullScrollRegion,
+        'withFullScrollRegion should be called during the banner-scroll phase',
+      ).toHaveBeenCalled();
+      // The committed text must also arrive in stdout (the full commit proceeds).
+      const out = writes.all();
+      expect(out).toContain('BANNER_SCROLL_BLOCK');
+    });
+
     it('writes directly without invoking the guard when scrollRegion is absent', async () => {
       // Negative complement: callers without an active status line shouldn't
       // pay for indirection; the bare write still commits to scrollback
