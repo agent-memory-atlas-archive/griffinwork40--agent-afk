@@ -57,6 +57,34 @@ function makeSession(sessionId: string, lines: string[]): SessionRead {
   });
 }
 
+/**
+ * Build a `session_init_start` phase line with the given actor.
+ * Used to simulate root vs subagent session identity.
+ */
+function sessionInitLine(actor: 'main' | 'subagent'): string {
+  return JSON.stringify({
+    ts: new Date(1_700_000_000_000).toISOString(),
+    seq: seqCounter++,
+    kind: 'session_phase',
+    payload: { phase: 'session_init_start', actor },
+  });
+}
+
+/**
+ * Build a `session_phase` line with an arbitrary phase name (NOT
+ * `session_init_start`). Used to exercise the `continue` branch in
+ * `isRootSession` — the loop skips non-`session_init_start` phase events
+ * and falls through to the conservative-root fallback.
+ */
+function phaseEventLine(phase: string): string {
+  return JSON.stringify({
+    ts: new Date(1_700_000_000_000).toISOString(),
+    seq: seqCounter++,
+    kind: 'session_phase',
+    payload: { phase },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -416,5 +444,82 @@ describe('detectClosureAnomaly — cascade dedupe (per-session rollup)', () => {
     expect((r.detail['seqs'] as number[]).length).toBe(8);
     expect((r.detail['sessionIds'] as string[]).length).toBe(12);
     expect(r.detail['affectedSessions']).toBe(12);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Root-session scoping (issue #1919)
+//
+// History: the detector was counting child-abort closures inside recovered
+// parent sessions, producing 156 false-positive occurrences across 29 sessions.
+// The fix filters to sessions whose session_init_start carries actor:'main'.
+// ---------------------------------------------------------------------------
+
+describe('detectClosureAnomaly — root-session scoping (issue #1919)', () => {
+  it('ignores closure events from subagent sessions (actor:subagent)', () => {
+    resetSeq();
+    const subagentSession = makeSession('child-1', [
+      sessionInitLine('subagent'),
+      closureLine('abort'),
+    ]);
+    expect(detectClosureAnomaly([subagentSession])).toEqual([]);
+  });
+
+  it('keeps closure events from root sessions (actor:main)', () => {
+    resetSeq();
+    const rootSession = makeSession('root-1', [
+      sessionInitLine('main'),
+      closureLine('abort'),
+    ]);
+    const results = detectClosureAnomaly([rootSession]);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.detail['closureReason']).toBe('abort');
+  });
+
+  it('treats sessions with no session_init_start as root (conservative: old traces)', () => {
+    resetSeq();
+    // No session_init_start line — pre-actor trace; must not be filtered out.
+    const oldSession = makeSession('old-1', [closureLine('abort')]);
+    const results = detectClosureAnomaly([oldSession]);
+    expect(results).toHaveLength(1);
+  });
+
+  it('correctly mixes root and subagent sessions in the same scan', () => {
+    resetSeq();
+    // root: abort → included; subagent: abort → excluded
+    const sessions = [
+      makeSession('root-a', [sessionInitLine('main'), closureLine('abort')]),
+      makeSession('child-b', [sessionInitLine('subagent'), closureLine('abort')]),
+      makeSession('root-c', [sessionInitLine('main'), closureLine('abort')]),
+    ];
+    const results = detectClosureAnomaly(sessions);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.detail['affectedSessions']).toBe(2);
+    expect(results[0]?.detail['sessionIds']).toEqual(['root-a', 'root-c']);
+  });
+
+  it('subagent session is excluded even for high-severity reasons', () => {
+    resetSeq();
+    const subagentSession = makeSession('child-2', [
+      sessionInitLine('subagent'),
+      closureLine('budget_exceeded', 50, 20),
+    ]);
+    expect(detectClosureAnomaly([subagentSession])).toEqual([]);
+  });
+
+  it('treats session with non-session_init_start phase events but no session_init_start as root (conservative fallback)', () => {
+    // Exercises the `continue` branch in isRootSession: the loop sees a
+    // session_phase event but its phase is NOT session_init_start, so it
+    // continues without returning. After the loop exhausts all events with no
+    // session_init_start found, isRootSession returns true (conservative root),
+    // so the closure IS detected.
+    resetSeq();
+    const sessionWithOtherPhase = makeSession('bootstrap-only', [
+      phaseEventLine('bootstrap_start'),
+      closureLine('abort'),
+    ]);
+    const results = detectClosureAnomaly([sessionWithOtherPhase]);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.detail['closureReason']).toBe('abort');
   });
 });

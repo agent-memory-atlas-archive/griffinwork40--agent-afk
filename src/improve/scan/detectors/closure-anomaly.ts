@@ -25,6 +25,17 @@
  * one session at 14:32 hit it." Grouping by reason converts dozens of
  * sessions into one card with N evidence rows.
  *
+ * ## Scoping to root sessions
+ *
+ * Only sessions whose `session_init_start` event carries `actor === 'main'`
+ * are considered. Subagent forks (`actor === 'subagent'`) share their parent's
+ * trace file and emit closure events for every in-flight child cancelled by a
+ * parent timeout or Ctrl+C — counting those as independent anomalies produced
+ * false positives (156 occurrences across 29 sessions decomposed into rate-limit
+ * cascades, user Ctrl+C, compose-timeout, zero-turn daemon, and REPL exit after
+ * clean completion — all root sessions succeeded). Sessions predating the `actor`
+ * field (no `session_init_start`) are conservatively treated as root.
+ *
  * ## Caveats
  *
  *   - Emission is live for every reason this detector groups on. The
@@ -56,6 +67,32 @@
 import type { DetectorResult, FailureEvidence, Severity } from '../../schemas.js';
 import type { SessionRead } from '../reader.js';
 import { clampExcerpt, MAX_EVIDENCE_PER_CARD } from './_lib.js';
+
+/**
+ * Returns true if this session is a root (actor:'main') session.
+ *
+ * Invariant: a session is a root session when its `session_init_start` event
+ * carries `actor === 'main'`. Subagent forks carry `actor === 'subagent'`.
+ *
+ * Conservative fallback: if no session_init_start event is present,
+ * the session is treated as root. This covers pre-actor traces but also
+ * applies to subagent traces where session_init_start was partially written
+ * at crash time and excluded by the schema reader. Prevalence is expected
+ * to be very low; this trade-off is accepted in favor of not silencing
+ * pre-actor traces.
+ */
+function isRootSession(session: SessionRead): boolean {
+  for (const item of session.events) {
+    const ev = item.event;
+    if (ev.kind !== 'session_phase') continue;
+    if (ev.payload.phase !== 'session_init_start') continue;
+    // actor is optional — absent on old traces; treat as root (conservative).
+    const { actor } = ev.payload;
+    return actor === undefined || actor === 'main';
+  }
+  // No session_init_start found — old trace; treat as root.
+  return true;
+}
 
 /** Default minimum sessions sharing a reason before a card fires. */
 export const DEFAULT_CLOSURE_ANOMALY_MIN_OCCURRENCES = 1;
@@ -99,9 +136,15 @@ export function detectClosureAnomaly(
     throw new Error(`minOccurrences must be >= 1 (got ${minOccurrences})`);
   }
 
-  // Bucket by reason.
+  // Bucket by reason. Only root sessions are considered — subagent closures
+  // within a recovered parent session produce false positives (issue #1919).
   const byReason = new Map<string, ClosureSighting[]>();
+  let skippedSubagentSessions = 0;
   for (const session of sessions) {
+    if (!isRootSession(session)) {
+      skippedSubagentSessions++;
+      continue;
+    }
     for (const item of session.events) {
       const ev = item.event;
       if (ev.kind !== 'closure') continue;
@@ -132,7 +175,7 @@ export function detectClosureAnomaly(
     // evidence rows count EVENTS. See distinctSessionIds and buildResult.
     const sessionIds = distinctSessionIds(sightings);
     if (sessionIds.length < minOccurrences) continue;
-    results.push(buildResult(reason, sessionIds, sightings));
+    results.push(buildResult(reason, sessionIds, sightings, skippedSubagentSessions));
   }
   return results;
 }
@@ -185,6 +228,7 @@ function buildResult(
   reason: string,
   sessionIds: string[],
   allSightings: ClosureSighting[],
+  skippedSubagentSessions: number,
 ): DetectorResult {
   const slug = makeSlug(reason);
   const observedAt = new Date().toISOString();
@@ -230,6 +274,10 @@ function buildResult(
       // persisted card (a live card on disk already carries 386 entries).
       sessionIds,
       seqs: capped.map((s) => s.seq),
+      // Audit counter: how many sessions were skipped by the isRootSession guard
+      // during this scan. Allows operators to quantify the subagent-filtering
+      // effect without re-running with disabled filters.
+      skippedSubagentSessions,
     },
   };
 }
