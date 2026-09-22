@@ -59,6 +59,29 @@ vi.mock('../routing-telemetry.js', () => ({
   appendRoutingDecision: vi.fn(async () => {}),
 }));
 
+// Capture buildWaveUnit calls so tests can assert the cwd recorded into each
+// manifest unit without triggering real fs writes to $AFK_HOME/state/waves/.
+// createManifest returns a stable fake waveId; updateWaveUnit is a no-op.
+const mockBuildWaveUnit = vi.fn((opts: { id: string; prompt: string; cwd: string | undefined; model: string }) => ({
+  id: opts.id,
+  status: 'pending' as const,
+  promptDigest: { sha256: 'fake', head: opts.prompt.slice(0, 10), byteLen: 0 },
+  cwd: opts.cwd,
+  model: opts.model,
+  startedAt: undefined,
+  settledAt: undefined,
+  errorMessage: undefined,
+  upstreamIds: [] as string[],
+  worktreePath: undefined,
+}));
+const mockCreateManifest = vi.fn(() => 'fake-wave-id');
+const mockUpdateWaveUnit = vi.fn();
+vi.mock('../manifest/write.js', () => ({
+  buildWaveUnit: (...args: Parameters<typeof mockBuildWaveUnit>) => mockBuildWaveUnit(...args),
+  createManifest: (...args: Parameters<typeof mockCreateManifest>) => mockCreateManifest(...args),
+  updateWaveUnit: (...args: Parameters<typeof mockUpdateWaveUnit>) => mockUpdateWaveUnit(...args),
+}));
+
 // Mock the direct credential resolver so tests that omit resolveApiKeyForModel
 // (the no-resolver fallback path) hit a controlled value instead of reading the
 // real env/keychain.
@@ -108,6 +131,8 @@ describe('ComposeExecutor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     lastManagerOpts = undefined;
+    // Restore createManifest's return value — vi.clearAllMocks() wipes it.
+    mockCreateManifest.mockReturnValue('fake-wave-id');
   });
 
   afterEach(() => {
@@ -1781,6 +1806,88 @@ describe('ComposeExecutor', () => {
       // This placeholder keeps the coverage intent visible without duplicating
       // the nesting.test.ts assertions here.
       expect(true).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Wave manifest cwd recording
+  //
+  // The executor calls buildWaveUnit for each node in a ≥2-node compose call
+  // at depth 0. The `cwd` recorded in each manifest unit must reflect the
+  // effective cwd for THAT node — the node-level `cwd` override when set,
+  // otherwise the executor's currentCwd (seeded from ctx.cwd).
+  // -------------------------------------------------------------------------
+  describe('manifest cwd recording', () => {
+    it('records ctx.cwd on every manifest unit when no per-node override is set', async () => {
+      // Invariant: buildWaveUnit is called once per node (≥2 nodes, depth 0).
+      // Without a per-node cwd, each unit receives the executor's currentCwd.
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { a: 'ok', b: 'ok' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext({ cwd: '/tmp/session-cwd' }));
+      await executor.execute(makeCall({
+        nodes: [
+          { id: 'a', prompt: 'task a' },
+          { id: 'b', prompt: 'task b' },
+        ],
+      }));
+
+      expect(mockBuildWaveUnit).toHaveBeenCalledTimes(2);
+      for (const call of mockBuildWaveUnit.mock.calls) {
+        expect(call[0].cwd).toBe('/tmp/session-cwd');
+      }
+    });
+
+    it('records the per-node cwd override in that node\'s manifest unit, not ctx.cwd', async () => {
+      // Contract: when a node specifies cwd: '/tmp/node-specific', its manifest
+      // entry must carry '/tmp/node-specific' — NOT the parent session's
+      // ctx.cwd ('/tmp/session-cwd'). The sibling node without a cwd override
+      // must still record ctx.cwd. This ensures crash-recovery manifests
+      // correctly reflect each node's actual working directory, not a uniform
+      // parent-level anchor that would mislead recovery.
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { a: 'ok', b: 'ok' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext({ cwd: '/tmp/session-cwd' }));
+      await executor.execute(makeCall({
+        nodes: [
+          { id: 'a', prompt: 'task a', cwd: '/tmp/node-specific' },
+          { id: 'b', prompt: 'task b' },
+        ],
+      }));
+
+      expect(mockBuildWaveUnit).toHaveBeenCalledTimes(2);
+      const calls = mockBuildWaveUnit.mock.calls;
+      // Node 'a' has a per-node cwd override — must appear in its manifest unit.
+      const callA = calls.find((c) => c[0].id === 'a');
+      expect(callA).toBeDefined();
+      expect(callA![0].cwd).toBe('/tmp/node-specific');
+      // Node 'b' has no override — falls back to ctx.cwd.
+      const callB = calls.find((c) => c[0].id === 'b');
+      expect(callB).toBeDefined();
+      expect(callB![0].cwd).toBe('/tmp/session-cwd');
+    });
+
+    it('does not call buildWaveUnit for a single-node compose call', async () => {
+      // Manifest is only created for ≥2 nodes — solo dispatch carries no wave.
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { a: 'ok' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext({ cwd: '/tmp/some-dir' }));
+      await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'task a' }],
+      }));
+
+      expect(mockBuildWaveUnit).not.toHaveBeenCalled();
     });
   });
 });
