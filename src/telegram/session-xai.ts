@@ -11,12 +11,8 @@
 
 import { XaiProvider } from '../agent/providers/xai/index.js';
 import { resolveXaiConstructionAuthMode } from '../agent/providers/xai/force-mode.js';
-import { seedPersistedGrants } from '../agent/permissions-store.js';
-import { assembleSystemPrompt } from '../agent/routing-directive.js';
-import { createTelegramAfkHookBundle } from './afk-hook-bundle.js';
-import { constructTelegramSession } from './construct-session.js';
-import { attachMcpCleanup } from './mcp-session.js';
 import { wireTelegramExecutors } from './wire-telegram-executors.js';
+import { finalizeTelegramSession } from './session-lifecycle.js';
 import type { AgentSession } from '../agent/session.js';
 import type { TelegramSessionBuildContext } from './session-context.js';
 
@@ -25,31 +21,20 @@ export async function buildXaiTelegramSession(
 ): Promise<AgentSession> {
   const {
     sessionConfig,
-    config,
     layeredBasePrompt,
     sessionCwd,
-    maxOutputTokens,
-    maxToolUseIterations,
     traceWriter,
     mcpManager,
-    memoryStore,
     chatId,
     threadId,
-    reportSession,
     providerName,
   } = ctx;
-
-  const rawPrompt = layeredBasePrompt;
-  const telegramAutoRouting = config.autoRouting?.telegram ?? false;
-  const systemPrompt = typeof rawPrompt === 'string'
-    ? assembleSystemPrompt(rawPrompt, telegramAutoRouting, 'telegram')
-    : rawPrompt;
 
   // Shared executor + background + drain scaffolding.
   const wiring = wireTelegramExecutors({
     apiKey: sessionConfig.apiKey,
     model: sessionConfig.model,
-    layeredBasePrompt: rawPrompt,
+    layeredBasePrompt,
     sessionCwd,
     traceWriter,
     chatId,
@@ -73,38 +58,12 @@ export async function buildXaiTelegramSession(
     ...(mcpManager !== undefined ? { mcpManager } : {}),
   });
 
-  let sessionForMode: AgentSession | undefined;
-  const hookBundle = createTelegramAfkHookBundle({
-    memoryStore,
-    getSession: () => sessionForMode,
-    cwd: sessionCwd,
-    traceWriter,
-  });
-
-  const session = attachMcpCleanup(constructTelegramSession({
-    ...(sessionConfig.apiKey !== undefined ? { apiKey: sessionConfig.apiKey } : {}),
-    model: sessionConfig.model,
-    ...(sessionConfig.resume !== undefined ? { resume: sessionConfig.resume } : {}),
-    ...(sessionConfig.sessionId !== undefined ? { sessionId: sessionConfig.sessionId } : {}),
-    ...(sessionConfig.resumeHistory !== undefined
-      ? { resumeHistory: sessionConfig.resumeHistory }
-      : {}),
-    ...(systemPrompt !== undefined ? { systemPrompt } : {}),
-    ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
-    maxTurns: 100,
-    drainSubagents: wiring.drainSubagents,
-    ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
-    ...(maxToolUseIterations !== undefined ? { maxToolUseIterations } : {}),
-    ...(sessionConfig.xaiBaseUrl !== undefined ? { xaiBaseUrl: sessionConfig.xaiBaseUrl } : {}),
-    ...(sessionCwd !== undefined && sessionCwd.length > 0 ? { cwd: sessionCwd } : {}),
-    provider: xaiProvider,
-    hookRegistry: hookBundle.registry,
-  }, { traceWriter }), mcpManager);
-
-  sessionForMode = session;
-  reportSession(session);
-  seedPersistedGrants(xaiProvider);
-  wiring.bindSession(session);
-
-  return session;
+  // xAI branch: provider-specific config is only `xaiBaseUrl`.
+  // Invariant: do NOT set openaiBaseUrl here (XaiProvider ignores it).
+  return finalizeTelegramSession(
+    xaiProvider,
+    { ...(sessionConfig.xaiBaseUrl !== undefined ? { xaiBaseUrl: sessionConfig.xaiBaseUrl } : {}) },
+    ctx,
+    wiring,
+  );
 }
