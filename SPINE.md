@@ -5,7 +5,7 @@
 
 ## Invariants
 
-- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:` (reinforced 2026-09-22)
+- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:` (reinforced 2026-09-18)
 - **INV-002** (2026-09-17, spine-init): Every DECSTBM emit must be bracketed by `\x1b[s`/`\x1b[u` save/restore or carry a comment explaining why cursor-home is 
 - **INV-003** (2026-09-17, spine-init): Before first `log-update.render()` of a session, cursor must be at the target row (typically `stdout.rows - 1`)
 - **INV-004** (2026-09-17, spine-init): Lifecycle flag must be set synchronously before any `await` that could trigger interval timer or resize handler re-entry

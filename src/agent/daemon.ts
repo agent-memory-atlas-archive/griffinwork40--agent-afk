@@ -355,7 +355,7 @@ async function handleRequestAsync(
       ...(typeof notifyChatRaw === 'number' || typeof notifyChatRaw === 'string'
         ? { notifyChat: notifyChatRaw }
         : {}),
-      ...(executorRaw === 'agent' || executorRaw === 'shell'
+      ...(executorRaw === 'agent' || executorRaw === 'shell' || executorRaw === 'builtin'
         ? { executor: executorRaw as TaskExecutor }
         : {}),
     };
