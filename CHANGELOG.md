@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.227.0] - 2026-09-22
+
+### Added
+- expose subagent runtime knowledge to the coordinator model (#1997) (1172c6ad)
+
 ## [5.226.5] - 2026-09-22
 
 ### Fixed
