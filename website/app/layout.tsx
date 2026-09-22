@@ -17,7 +17,11 @@ const jetbrainsMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Agent AFK Docs',
+  metadataBase: new URL('https://docs.agentafk.com'),
+  title: {
+    default: 'Agent AFK Docs',
+    template: '%s | Agent AFK',
+  },
   description: 'Documentation for Agent AFK',
   // Favicon: the same "Handoff Arc" mark used on the main site (agentafk.com).
   // SVG primary icon (served from public/favicon.svg) plus the Safari
@@ -25,6 +29,14 @@ export const metadata: Metadata = {
   icons: {
     icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
     other: [{ rel: 'mask-icon', url: '/favicon.svg', color: '#fb923c' }],
+  },
+  openGraph: {
+    siteName: 'Agent AFK Docs',
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
   },
 };
 
