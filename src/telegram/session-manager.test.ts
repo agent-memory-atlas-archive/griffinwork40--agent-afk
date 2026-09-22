@@ -1545,7 +1545,9 @@ describe('SessionManager — elicitation route registry cleanup (#1662)', () => 
     const sid = session.sessionId!;
 
     // Wait so that Date.now() - lastActivity > idleSessionMs (1ms).
-    await new Promise((r) => setTimeout(r, 2));
+    // Use a generous margin (50ms) to avoid the macOS CI timer-resolution race
+    // where setTimeout(2) can fire before 1ms has elapsed on a loaded runner.
+    await new Promise((r) => setTimeout(r, 50));
 
     // Call _evictStaleSessionData with a very large maxAgeMs (999999 ms) so
     // Math.min(maxAgeMs, idleSessionMs) = idleSessionMs = 1 drives Phase 1.

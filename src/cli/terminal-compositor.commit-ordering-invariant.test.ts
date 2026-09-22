@@ -64,6 +64,8 @@ function makeHost(stdout: Out, over: Partial<CommittedBandHost>): CommittedBandH
     committing: false,
     commitInFlight: false,
     hasCommitted: true,
+    placementMode: 'cursor-follow',
+    lifecycleStateDirty: false,
     pendingResizeErase: null,
     bandGeometryStale: false,
     anchorRow: 1,
@@ -72,6 +74,19 @@ function makeHost(stdout: Out, over: Partial<CommittedBandHost>): CommittedBandH
     stdout,
     ...over,
   };
+}
+
+/**
+ * makeHostBannerScroll — variant of makeHost that exercises the banner-scroll
+ * gate (`!hasCommitted && anchorRow > 1`). Introduced by PR #1823 to cover the
+ * pre-commit banner scroll block in commitAbove (committed-band-commit.ts:151–163).
+ */
+function makeHostBannerScroll(stdout: Out, over: Partial<CommittedBandHost>): CommittedBandHost {
+  return makeHost(stdout, {
+    hasCommitted: false,
+    anchorRow: 10,
+    ...over,
+  });
 }
 
 describe('commitAbove ordering invariants (#827)', () => {
@@ -227,6 +242,182 @@ describe('commitAbove ordering invariants (#827)', () => {
 
     expect(commitInFlightAtRepaint, 'commitInFlight should be true when repaint fires').toBe(true);
     // And released afterward
+    expect(host.commitInFlight, 'commitInFlight should be false after commitAbove completes').toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Banner-scroll path — parallel invariant assertions for the
+// `!hasCommitted && anchorRow > 1` gate introduced in PR #1823
+// (committed-band-commit.ts:151–163).
+//
+// makeHostBannerScroll seeds hasCommitted=false, anchorRow=10 so the gate is
+// entered on every call. All four ordering invariants are replayed here to
+// ensure the banner-scroll block doesn't break the structural guarantees that
+// the existing suite verifies for the already-committed path.
+// ---------------------------------------------------------------------------
+describe('commitAbove ordering invariants — banner-scroll path (#1829)', () => {
+  it('banner-clear → banner-write → banner-repaint order before normal phase (committing=false at both repaints)', () => {
+    // The banner-scroll block fires BEFORE the normal clear→write→repaint
+    // pipeline. This test verifies that the banner block itself preserves the
+    // clear→write→repaint ordering and that committing is false at both the
+    // banner repaint and the main phase-2 repaint.
+    const stdout = makeStdout();
+    const events: string[] = [];
+    let repaintCount = 0;
+
+    const lu = makeLogUpdate(18);
+    const origClear = lu.clear.bind(lu);
+    lu.clear = function (extraRows: number) {
+      events.push('clear');
+      origClear(extraRows);
+    };
+
+    const host = makeHostBannerScroll(stdout, {
+      logUpdate: lu as unknown as CommittedBandHost['logUpdate'],
+      repaint() {
+        repaintCount++;
+        events.push(`repaint-${repaintCount}`);
+        // committing must be false at EVERY repaint — banner or phase-2.
+        expect(this.committing, `committing should be false at repaint-${repaintCount}`).toBe(false);
+      },
+    });
+
+    const origWrite = stdout.write.bind(stdout);
+    (stdout as unknown as { write: (chunk: string) => boolean }).write = (chunk: string) => {
+      events.push(repaintCount > 0 ? `write-after-repaint-${repaintCount}` : 'write-pre-repaint');
+      return origWrite(chunk);
+    };
+
+    commitAbove(host as CommittedBandHost & { repaint(): void }, 'Hello world\n');
+
+    // Banner-scroll sequence: first clear, then a write, then the first repaint.
+    const firstClearIdx = events.indexOf('clear');
+    const firstPreRepaintWriteIdx = events.indexOf('write-pre-repaint');
+    const firstRepaintIdx = events.indexOf('repaint-1');
+
+    expect(firstClearIdx, 'banner clear should appear').toBeGreaterThanOrEqual(0);
+    expect(firstPreRepaintWriteIdx, 'banner write should appear before repaint-1').toBeGreaterThanOrEqual(0);
+    expect(firstRepaintIdx, 'repaint-1 (banner repaint) should appear').toBeGreaterThanOrEqual(0);
+
+    expect(firstClearIdx, 'banner clear before banner write').toBeLessThan(firstPreRepaintWriteIdx);
+    expect(firstPreRepaintWriteIdx, 'banner write before banner repaint').toBeLessThan(firstRepaintIdx);
+
+    // A second repaint (phase 2) must also occur after the banner repaint.
+    const secondRepaintIdx = events.indexOf('repaint-2');
+    expect(secondRepaintIdx, 'phase-2 repaint should appear after banner repaint').toBeGreaterThan(firstRepaintIdx);
+  });
+
+  it('finally releases committing guard on throw — banner-scroll path', () => {
+    // In the banner-scroll path the banner write is #1 (before committing=true).
+    // The phase-1 write (inside the committing=true block) is write #2.
+    // Throwing on write #2 exercises the finally{committing=false} guard.
+    const stdout = makeStdout();
+    const lu = makeLogUpdate(18);
+
+    let writeCount = 0;
+    const origWrite = stdout.write.bind(stdout);
+    (stdout as unknown as { write: (chunk: string) => boolean }).write = (chunk: string) => {
+      writeCount++;
+      if (writeCount === 2) {
+        // Write #2 is the phase-1 scrollback write inside the try/finally block.
+        throw new Error('TTY closed mid-session');
+      }
+      return origWrite(chunk);
+    };
+
+    const host = makeHostBannerScroll(stdout, {
+      logUpdate: lu as unknown as CommittedBandHost['logUpdate'],
+    });
+
+    expect(() => {
+      commitAbove(host, 'Hello world\n');
+    }).toThrow('TTY closed mid-session');
+
+    // The invariant: committing must be false regardless of where the throw lands.
+    expect(host.committing, 'committing should be false after throw').toBe(false);
+  });
+
+  it('geometry is read before the first clear — banner-scroll path', () => {
+    // The banner-scroll block reads stdout.rows (for bannerRows calculation)
+    // before calling logUpdate.clear(). This test asserts those reads happen
+    // before ANY clear() invocation, mirroring the same invariant the normal
+    // path tests assert for the phase-1 clear.
+    let columnsReadCount = 0;
+    let rowsReadCount = 0;
+    let clearCount = 0;
+    const columnsReadsBeforeFirstClear: number[] = [];
+    const rowsReadsBeforeFirstClear: number[] = [];
+
+    const stdout = new PassThrough() as unknown as Out;
+    Object.defineProperty(stdout, 'columns', {
+      get() {
+        columnsReadCount++;
+        if (clearCount === 0) columnsReadsBeforeFirstClear.push(columnsReadCount);
+        return COLS;
+      },
+      configurable: true,
+    });
+    Object.defineProperty(stdout, 'rows', {
+      get() {
+        rowsReadCount++;
+        if (clearCount === 0) rowsReadsBeforeFirstClear.push(rowsReadCount);
+        return ROWS;
+      },
+      configurable: true,
+    });
+
+    const lu = {
+      get topRow() {
+        return 18;
+      },
+      clearCalled: false,
+      clear(_extraRows: number) {
+        clearCount++;
+        this.clearCalled = true;
+      },
+    };
+
+    const host = makeHostBannerScroll(stdout, {
+      logUpdate: lu as unknown as CommittedBandHost['logUpdate'],
+    });
+
+    commitAbove(host, 'Hello\n');
+
+    // stdout.rows must be read at least once before the first clear() —
+    // the banner-scroll block uses it to compute bannerRows.
+    expect(rowsReadsBeforeFirstClear.length, 'stdout.rows should be read before first clear()').toBeGreaterThan(0);
+    // stdout.columns is read for the reflow / geometry snapshot.
+    expect(columnsReadsBeforeFirstClear.length, 'stdout.columns should be read before first clear()').toBeGreaterThan(0);
+    // Both clears (banner + phase-1) must have fired.
+    expect(clearCount, 'both banner and phase-1 clear() calls should fire').toBeGreaterThanOrEqual(2);
+  });
+
+  it('commitInFlight === true when phase-2 repaint fires — banner-scroll path', () => {
+    // The banner-scroll repaint (repaint #1) fires BEFORE commitInFlight is set.
+    // The phase-2 repaint (#2) fires after commitInFlight = true. This test
+    // captures the flag at each repaint to assert the correct per-repaint state.
+    const stdout = makeStdout();
+    const lu = makeLogUpdate(18);
+
+    let repaintCount = 0;
+    const commitInFlightAtRepaint: boolean[] = [];
+
+    const host = makeHostBannerScroll(stdout, {
+      logUpdate: lu as unknown as CommittedBandHost['logUpdate'],
+      repaint() {
+        repaintCount++;
+        commitInFlightAtRepaint.push(this.commitInFlight);
+      },
+    });
+
+    commitAbove(host as CommittedBandHost & { repaint(): void }, 'Hello world\n');
+
+    // Banner repaint (first) fires before commitInFlight is set — it should be false.
+    expect(commitInFlightAtRepaint[0], 'commitInFlight should be false at banner repaint').toBe(false);
+    // Phase-2 repaint (second) fires after commitInFlight = true — suppresses repin.
+    expect(commitInFlightAtRepaint[1], 'commitInFlight should be true at phase-2 repaint').toBe(true);
+    // Released after commitAbove completes.
     expect(host.commitInFlight, 'commitInFlight should be false after commitAbove completes').toBe(false);
   });
 });
