@@ -56,6 +56,7 @@
 - **INV-049** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): isSubagentContext() extracted to src/agent/hooks/hook-utils.ts; all subagent checks must use this function, not inline p
 - **INV-050** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Abort signal forwarding must use forwardAbortSignal() utility from src/utils/abort.ts; hand-coded abort listeners must n
 - **INV-051** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Error status extraction must use getErrorStatus() from src/agent/providers/shared/error-status.ts; both Anthropic and Op
+- **INV-052** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): pinnedReadRoots suppresses parent inheritance; extraReadRoots composes additively. Field name signals semantics to calle
 
 
 ## Explicitly Rejected Patterns
@@ -83,3 +84,4 @@
 - **TST-008** (2026-09-22, spine-audit): Worktree sweep MIN_EMPTY_AGE_MS (1 hour) and the occupancy heartbeat interval are deliberately cross-referenced — raising the heartbeat above the empty-age gate silently re-breaks ghost-reaping with no test failures (`src/agent/worktree/worktree-sweep.ts:214-224`)
 - **TST-009** (2026-09-22, spine-audit): execFile callers that produce large output MUST set maxBuffer — Node's default 1MB cap rejects the promise on overflow rather than truncating. In the sweep engine, every failure path fails safe by protecting the worktree (`src/agent/worktree/worktree-sweep.ts:40-47`)
 - **TST-010** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key format: `proj.<sanitized-basename>-<sha1_hex8>`; sanitizes special chars to `_`, caps at 128 chars
+- **TST-011** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): Compaction core algorithm factored to shared/compaction.ts; provider-specific ops passed as collaborators to runCompacti

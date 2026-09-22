@@ -10,8 +10,14 @@
  *
  * Extracted from `loop.ts`. The predicates and constants moved unchanged.
  *
+ * Status extraction delegates to the shared {@link getErrorStatus} from
+ * `providers/shared/error-status.ts`, which encodes identical field-access
+ * logic and is also used by the OpenAI-compatible provider's retry module.
+ *
  * @module agent/providers/anthropic-direct/loop/retry-budget
  */
+
+import { getErrorStatus } from '../../shared/error-status.js';
 
 export const OVERLOAD_MAX_RETRIES = 3;
 export const OVERLOAD_BASE_DELAY_MS = 5_000;
@@ -116,12 +122,21 @@ export function ttfbAttemptTimeoutMs(configuredTtfbMs: number): number {
 /**
  * Connection-phase transient: a real HTTP status on a thrown SDK error.
  * Consulted by the `messages.create` retry wrapper, where a status is present.
+ *
+ * Delegates status extraction to the shared {@link getErrorStatus} so both
+ * providers use identical field-access logic. The `Error` type annotation is
+ * kept for backward compatibility — callers at the create-retry site pass an
+ * `Error`, and `getErrorStatus` handles the `unknown` widening internally.
  */
 export function isTransientServerError(err: Error): boolean {
-  if (!('status' in err)) return false;
-  const status = (err as Error & { status: number }).status;
+  const status = getErrorStatus(err);
+  if (status === undefined) return false;
   return status === 529 || status === 503;
 }
+
+// Re-export getErrorStatus so callers that need it from this module compile
+// without a separate import from shared/error-status.
+export { getErrorStatus };
 
 /**
  * Detect a transient Anthropic *overload* delivered as a **mid-stream** SSE

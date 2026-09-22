@@ -37,6 +37,7 @@
  */
 
 import { parseRetryAfterMs } from '../../shared/retry-after.js';
+import { getErrorStatus as sharedGetErrorStatus } from '../../shared/error-status.js';
 
 /**
  * HTTP status codes that warrant a retry with backoff. 429 (rate limit) and
@@ -102,11 +103,14 @@ export function retryAfterDelayMs(err: unknown): number | undefined {
  * compatible shim). The SDK throws `APIError` instances with a `status` field;
  * network errors and generic throws have no status and are treated as
  * retryable (transient network blip) only when they carry no explicit code.
+ *
+ * Delegates to the shared {@link sharedGetErrorStatus} from
+ * `providers/shared/error-status.ts`, which encodes the same field-access
+ * logic used by the Anthropic-direct provider. Re-exported as
+ * `getErrorStatus` so existing importers of this module compile unchanged.
  */
 export function getErrorStatus(err: unknown): number | undefined {
-  if (err === null || typeof err !== 'object') return undefined;
-  const e = err as { status?: unknown };
-  return typeof e.status === 'number' ? e.status : undefined;
+  return sharedGetErrorStatus(err);
 }
 
 /**
