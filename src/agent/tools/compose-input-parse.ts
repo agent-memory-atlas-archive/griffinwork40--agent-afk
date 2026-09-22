@@ -85,6 +85,8 @@ function parseNodePaths(n: Record<string, unknown>, id: string): {
   }
 
   const readRoots = parseRootArray(n, id, 'readRoots');
+  // Contract: writeRoots is mutually exclusive with isolation:"worktree"
+  // when that lands on compose nodes (#1939). The guard belongs here.
   const writeRoots = parseRootArray(n, id, 'writeRoots');
 
   return { cwd, readRoots, writeRoots };

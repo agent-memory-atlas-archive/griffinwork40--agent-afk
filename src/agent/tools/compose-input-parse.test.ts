@@ -101,6 +101,18 @@ describe('parseComposeInput — per-node writeRoots', () => {
     expect(parsed.nodes[0]!.writeRoots).toBeUndefined();
   });
 
+  it('rejects non-array writeRoots', () => {
+    expect(() => parseComposeInput(minimal({ writeRoots: '/single' as unknown as string[] }))).toThrow(
+      /writeRoots must be an array/,
+    );
+  });
+
+  it('rejects non-string entries in writeRoots', () => {
+    expect(() => parseComposeInput(minimal({ writeRoots: [42] as unknown as string[] }))).toThrow(
+      /writeRoots entries must be non-empty strings/,
+    );
+  });
+
   it('rejects relative path in writeRoots', () => {
     expect(() => parseComposeInput(minimal({ writeRoots: ['relative'] }))).toThrow(
       /writeRoots entry must be an absolute path/,
