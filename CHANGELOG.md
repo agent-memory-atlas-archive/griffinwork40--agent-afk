@@ -11,6 +11,25 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.1] - 2026-09-22
+
+### Fixed
+- complete runtime type validation for deserialized sidecar content blocks (#2003) (664110a8)
+- classify and test zero-observation closure reasons (63d52383)
+
+### Changed
+- Merge pull request #2027 from griffinwork40/fix/issue-1839-provider-consolidation (f68f5ba8)
+- Merge pull request #2029 from griffinwork40/afk/iso-fix-2003-4-m0hy42 (02fa79bc)
+- Merge pull request #2025 from griffinwork40/fix/issue-2013-zero-observation-closure-reasons (5f4a1817)
+- Merge pull request #2026 from griffinwork40/afk/iso-fix-2006-3-qnobvr (c918acb5)
+- Merge pull request #2024 from griffinwork40/fix/telegram-session-lifecycle-1854 (2d41ba59)
+- consolidate shared tracing-fetch, retry predicates, compaction shell (#1839) (625358ba)
+- add surrogate-safe truncation regression tests (#2006) (171e7e7c)
+- extract shared session lifecycle helper (#1854) (c4292e4d)
+- deduplicate CLI and slash command display formatters (#1836) (e16babed)
+- consolidate atomic write pattern into shared utility (#1833) (dd5f0931)
+- throughput inflection audit + self-correction loop follow-up (25a51b6e)
+
 ## [5.230.0] - 2026-09-22
 
 ### Added
