@@ -28,6 +28,8 @@ export interface ComposeNodeInput {
   max_tool_rounds?: number;
   /** Per-node turn budget. Forwarded to the fork config as maxTurns. */
   max_turns?: number;
+  /** Named agent type forwarded to the SubagentDAGNode as agentType. */
+  agent_type?: string;
 }
 
 export interface ComposeInput {
@@ -275,6 +277,14 @@ export function parseComposeInput(input: unknown): ParseResult {
       nodeMaxTurns = val;
     }
 
+    let nodeAgentType: string | undefined;
+    if (n['agent_type'] !== undefined) {
+      if (typeof n['agent_type'] !== 'string' || n['agent_type'].trim().length === 0) {
+        throw new Error(`Node "${id}" agent_type must be a non-empty string`);
+      }
+      nodeAgentType = n['agent_type'];
+    }
+
     parsed.push({
       id,
       prompt,
@@ -284,6 +294,7 @@ export function parseComposeInput(input: unknown): ParseResult {
       ...(writeRoots !== undefined ? { writeRoots } : {}),
       ...(nodeMaxToolRounds !== undefined ? { max_tool_rounds: nodeMaxToolRounds } : {}),
       ...(nodeMaxTurns !== undefined ? { max_turns: nodeMaxTurns } : {}),
+      ...(nodeAgentType !== undefined ? { agent_type: nodeAgentType } : {}),
     });
   }
 

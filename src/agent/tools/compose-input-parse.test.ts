@@ -413,6 +413,36 @@ describe('parseComposeInput — combined fields', () => {
   });
 });
 
+describe('parseComposeInput — per-node agent_type', () => {
+  it('accepts a valid agent_type string', () => {
+    const { parsed } = parseComposeInput(minimal({ agent_type: 'my-researcher' }));
+    expect(parsed.nodes[0]!.agent_type).toBe('my-researcher');
+  });
+
+  it('omits agent_type when not provided', () => {
+    const { parsed } = parseComposeInput(minimal());
+    expect(parsed.nodes[0]!.agent_type).toBeUndefined();
+  });
+
+  it('rejects empty string agent_type', () => {
+    expect(() => parseComposeInput(minimal({ agent_type: '' }))).toThrow(
+      /non-empty string/,
+    );
+  });
+
+  it('rejects whitespace-only agent_type', () => {
+    expect(() => parseComposeInput(minimal({ agent_type: '   ' }))).toThrow(
+      /non-empty string/,
+    );
+  });
+
+  it('rejects non-string agent_type', () => {
+    expect(() => parseComposeInput(minimal({ agent_type: 42 }))).toThrow(
+      /non-empty string/,
+    );
+  });
+});
+
 describe('parseComposeInput — compose-level fields still work', () => {
   it('accepts max_tool_rounds_per_node at compose level', () => {
     const { parsed } = parseComposeInput(minimal({}, { max_tool_rounds_per_node: 30 }));
