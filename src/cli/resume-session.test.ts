@@ -118,6 +118,37 @@ describe('resume-session', () => {
     expect(config.resumeHistory?.[0]?.assistantContentBlocks).toEqual(assistantBlocks);
   });
 
+  it('always appends tool summary to text field even when assistantContentBlocks is present (#2005)', () => {
+    // Regression test for issue #2005: when assistantContentBlocks is present on a turn,
+    // the text field must still carry the tool-event summary so the text fallback path
+    // (used when pairing validation fails on the structured path) has full tool context.
+    const stats = createSessionStats('sonnet');
+    const record = recordTurn(
+      stats,
+      'run a command',
+      'done',
+      { sessionId: 'sdk-blocks-tools' },
+      [{ toolName: 'bash', toolUseId: 'tu_1', input: 'echo hi', isError: false }],
+    );
+    // Simulate a v5.226+ sidecar that also has structured content blocks.
+    const assistantBlocks = [
+      { type: 'text' as const, text: 'done' },
+      { type: 'tool_use' as const, id: 'tu_1', name: 'bash', input: { command: 'echo hi' } },
+    ];
+    record.assistantContentBlocks = assistantBlocks;
+    saveSession(stats, 'blocks-tools-session');
+
+    const target = resolveResumeTarget({ resume: 'blocks-tools-session' });
+    const config = resumeConfigFor(target);
+    // The structured blocks are propagated for the normal path.
+    expect(config.resumeHistory?.[0]?.assistantContentBlocks).toEqual(assistantBlocks);
+    // The text field must still include the tool summary so the text fallback path
+    // (triggered when hasValidToolUsePairing returns false on the structured path)
+    // retains tool context. The text field is simply ignored when the structured
+    // path succeeds, so this redundancy is harmless.
+    expect(config.resumeHistory?.[0]?.assistant).toBe('done\n[Tools used: bash(echo hi)✓]');
+  });
+
   it('produces identical output for old TurnRecords without content blocks', () => {
     const stats = createSessionStats('sonnet');
     recordTurn(stats, 'hello', 'hi', { sessionId: 'sdk-noblocks-resume' });
