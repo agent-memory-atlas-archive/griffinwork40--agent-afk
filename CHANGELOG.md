@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.226.0] - 2026-09-22
+
+### Added
+- add per-node agent_type for DAG nodes (#1943) (bcbadf1c)
+
+### Fixed
+- eval-gen fixture fallback review follow-ups (#1949) (e8dc405b)
+
+### Changed
+- Merge pull request #1980 from griffinwork40/fix/issue-1949-clean (b08481ae)
+- Merge pull request #1978 from griffinwork40/feat/issue-1943-agent-type (0166b349)
+
 ## [5.225.5] - 2026-09-22
 
 ### Fixed
