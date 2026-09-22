@@ -254,6 +254,432 @@ describe('launchMidTurnTaskView width clamping', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Content chunk buffering (streaming word-wrap fix)
+// ---------------------------------------------------------------------------
+
+describe('content chunk buffering', () => {
+  it('joins streaming content chunks into continuous lines instead of one-word-per-line', async () => {
+    const { launchMidTurnTaskView } = await import('./task-view-mid-turn.js');
+
+    const written: string[] = [];
+    const fakeStdout = {
+      columns: 80,
+      write: (s: string) => { written.push(s); return true; },
+    };
+
+    // Capture the stdin 'data' listener so we can send Esc after the stream.
+    let capturedDataListener: ((data: Buffer) => void) | null = null;
+    const origOn = process.stdin.on.bind(process.stdin);
+    const origRemoveListener = process.stdin.removeListener.bind(process.stdin);
+    vi.spyOn(process.stdin, 'on').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      if (event === 'data') capturedDataListener = listener as (d: Buffer) => void;
+      return origOn(event as never, listener as never);
+    });
+    vi.spyOn(process.stdin, 'removeListener').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      return origRemoveListener(event as never, listener as never);
+    });
+
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((r) => { resolveStream = r; });
+
+    // Simulate streaming token deltas: the model sends a few words per chunk.
+    const fakeSession = {
+      getHistory: () => [],
+      getOutputStream: async function* () {
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: "I'll start" } };
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: ' by running' } };
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: ' a ground-state' } };
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: ' reconnaissance' } };
+        // A newline in the stream triggers a line break.
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: '\nSecond line here' } };
+        resolveStream();
+      },
+    };
+
+    const fakeHandle = {
+      status: 'running' as const,
+      session: fakeSession,
+      sendMessage: vi.fn(),
+    };
+
+    const fakeManager = {
+      list: () => [{ id: 'sub-buf1', status: 'running' as const }],
+      get: (_id: string) => fakeHandle as never,
+    };
+
+    const fakeCompositor = {
+      stdout: fakeStdout as never,
+      suspendInput: vi.fn(),
+      resumeInput: vi.fn(),
+      repaint: vi.fn(),
+    };
+
+    // Send Esc after the stream finishes so launchMidTurnTaskView exits.
+    void streamDone.then(() => {
+      setTimeout(() => {
+        if (capturedDataListener) capturedDataListener(Buffer.from('\x1b'));
+      }, 10);
+    });
+
+    await launchMidTurnTaskView({
+      manager: fakeManager as never,
+      compositor: fakeCompositor as never,
+    });
+
+    vi.restoreAllMocks();
+
+    const allOutput = written.join('');
+
+    // The full sentence should appear as one flushed line, not split per chunk.
+    expect(allOutput).toContain("I'll start by running a ground-state reconnaissance");
+    // The second line (after the embedded newline) should also be present.
+    expect(allOutput).toContain('Second line here');
+
+    // Critically: the words should NOT each be on separate lines.
+    const lines = allOutput.split('\n');
+    const singleWordLines = lines.filter(l => {
+      const stripped = l.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\r/g, '').trim();
+      return stripped === "I'll start" || stripped === 'by running' || stripped === 'a ground-state';
+    });
+    expect(singleWordLines).toHaveLength(0);
+  });
+
+  it('flushes buffered content before non-content events', async () => {
+    const { launchMidTurnTaskView } = await import('./task-view-mid-turn.js');
+
+    const written: string[] = [];
+    const fakeStdout = {
+      columns: 80,
+      write: (s: string) => { written.push(s); return true; },
+    };
+
+    let capturedDataListener: ((data: Buffer) => void) | null = null;
+    const origOn = process.stdin.on.bind(process.stdin);
+    const origRemoveListener = process.stdin.removeListener.bind(process.stdin);
+    vi.spyOn(process.stdin, 'on').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      if (event === 'data') capturedDataListener = listener as (d: Buffer) => void;
+      return origOn(event as never, listener as never);
+    });
+    vi.spyOn(process.stdin, 'removeListener').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      return origRemoveListener(event as never, listener as never);
+    });
+
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((r) => { resolveStream = r; });
+
+    const fakeSession = {
+      getHistory: () => [],
+      getOutputStream: async function* () {
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: 'Some text here' } };
+        // A tool_use_detail event should cause the buffered content to flush first.
+        yield { type: 'chunk' as const, chunk: { type: 'tool_use_detail' as const, toolUseId: 'tu-1', toolName: 'bash', toolInput: '{}' } };
+        resolveStream();
+      },
+    };
+
+    const fakeHandle = {
+      status: 'running' as const,
+      session: fakeSession,
+      sendMessage: vi.fn(),
+    };
+
+    const fakeManager = {
+      list: () => [{ id: 'sub-buf2', status: 'running' as const }],
+      get: (_id: string) => fakeHandle as never,
+    };
+
+    const fakeCompositor = {
+      stdout: fakeStdout as never,
+      suspendInput: vi.fn(),
+      resumeInput: vi.fn(),
+      repaint: vi.fn(),
+    };
+
+    void streamDone.then(() => {
+      setTimeout(() => {
+        if (capturedDataListener) capturedDataListener(Buffer.from('\x1b'));
+      }, 10);
+    });
+
+    await launchMidTurnTaskView({
+      manager: fakeManager as never,
+      compositor: fakeCompositor as never,
+    });
+
+    vi.restoreAllMocks();
+
+    const allOutput = written.join('');
+    // The buffered content line should appear before the tool badge.
+    const contentIdx = allOutput.indexOf('Some text here');
+    const toolIdx = allOutput.indexOf('[tool: bash]');
+    expect(contentIdx).toBeGreaterThan(-1);
+    expect(toolIdx).toBeGreaterThan(-1);
+    expect(contentIdx).toBeLessThan(toolIdx);
+  });
+
+  it('resets lineBuf on stream_retry without flushing pre-retry content', async () => {
+    const { launchMidTurnTaskView } = await import('./task-view-mid-turn.js');
+
+    const written: string[] = [];
+    const fakeStdout = {
+      columns: 80,
+      write: (s: string) => { written.push(s); return true; },
+    };
+
+    let capturedDataListener: ((data: Buffer) => void) | null = null;
+    const origOn = process.stdin.on.bind(process.stdin);
+    const origRemoveListener = process.stdin.removeListener.bind(process.stdin);
+    vi.spyOn(process.stdin, 'on').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      if (event === 'data') capturedDataListener = listener as (d: Buffer) => void;
+      return origOn(event as never, listener as never);
+    });
+    vi.spyOn(process.stdin, 'removeListener').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      return origRemoveListener(event as never, listener as never);
+    });
+
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((r) => { resolveStream = r; });
+
+    const fakeSession = {
+      getHistory: () => [],
+      getOutputStream: async function* () {
+        // Pre-retry content accumulates in lineBuf (no newline yet).
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: 'Hello world' } };
+        // stream_retry: model re-streams from scratch — buffer must be discarded.
+        yield { type: 'stream_retry' as const };
+        // Post-retry content starts fresh.
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: 'Fresh start\n' } };
+        resolveStream();
+      },
+    };
+
+    const fakeHandle = {
+      status: 'running' as const,
+      session: fakeSession,
+      sendMessage: vi.fn(),
+    };
+
+    const fakeManager = {
+      list: () => [{ id: 'sub-retry', status: 'running' as const }],
+      get: (_id: string) => fakeHandle as never,
+    };
+
+    const fakeCompositor = {
+      stdout: fakeStdout as never,
+      suspendInput: vi.fn(),
+      resumeInput: vi.fn(),
+      repaint: vi.fn(),
+    };
+
+    void streamDone.then(() => {
+      setTimeout(() => {
+        if (capturedDataListener) capturedDataListener(Buffer.from('\x1b'));
+      }, 10);
+    });
+
+    await launchMidTurnTaskView({
+      manager: fakeManager as never,
+      compositor: fakeCompositor as never,
+    });
+
+    vi.restoreAllMocks();
+
+    const allOutput = written.join('');
+
+    const stripAnsi = (s: string): string =>
+      s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/\r/g, '');
+
+    // A flushed line is one that was explicitly committed with a trailing \n.
+    // The live preview of "Hello world" has NO trailing \n — it is written as
+    // `\r\x1b[K${lineBuf}` (no newline). When the buffer is reset on
+    // stream_retry, the next write overwrites that preview row. We detect a
+    // standalone flush of "Hello world" by looking for the pattern
+    // `\r\x1b[K<content>\n` — i.e. a line that ended with \n without the
+    // post-retry text appearing on the same terminal row.
+    //
+    // Split on \n first, then check each segment: a segment is a "flushed" line
+    // only if it does NOT also contain the post-retry text (which would mean
+    // the pre-retry preview and the post-retry flush are on the same segment).
+    const segments = allOutput.split('\n');
+    const hasPreRetryAsStandaloneFlushed = segments.some(seg => {
+      const vis = stripAnsi(seg);
+      return vis.includes('Hello world') && !vis.includes('Fresh start');
+    });
+    // Pre-retry text must NOT appear as a standalone flushed line.
+    expect(hasPreRetryAsStandaloneFlushed).toBe(false);
+
+    // Post-retry text MUST appear as a flushed line.
+    const hasPostRetry = segments.some(l => stripAnsi(l).includes('Fresh start'));
+    expect(hasPostRetry).toBe(true);
+  });
+
+  it('does not emit spurious blank lines for null-returning non-content events', async () => {
+    const { launchMidTurnTaskView } = await import('./task-view-mid-turn.js');
+
+    const written: string[] = [];
+    const fakeStdout = {
+      columns: 80,
+      write: (s: string) => { written.push(s); return true; },
+    };
+
+    let capturedDataListener: ((data: Buffer) => void) | null = null;
+    const origOn = process.stdin.on.bind(process.stdin);
+    const origRemoveListener = process.stdin.removeListener.bind(process.stdin);
+    vi.spyOn(process.stdin, 'on').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      if (event === 'data') capturedDataListener = listener as (d: Buffer) => void;
+      return origOn(event as never, listener as never);
+    });
+    vi.spyOn(process.stdin, 'removeListener').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      return origRemoveListener(event as never, listener as never);
+    });
+
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((r) => { resolveStream = r; });
+
+    const fakeSession = {
+      getHistory: () => [],
+      getOutputStream: async function* () {
+        // tool_result chunks return null from formatOutputEvent — should not
+        // produce blank lines when lineBuf is empty.
+        yield { type: 'chunk' as const, chunk: { type: 'tool_result' as const, toolUseId: 'tu-1', output: 'ok' } };
+        yield { type: 'chunk' as const, chunk: { type: 'tool_result' as const, toolUseId: 'tu-2', output: 'ok' } };
+        resolveStream();
+      },
+    };
+
+    const fakeHandle = {
+      status: 'running' as const,
+      session: fakeSession,
+      sendMessage: vi.fn(),
+    };
+
+    const fakeManager = {
+      list: () => [{ id: 'sub-nullevt', status: 'running' as const }],
+      get: (_id: string) => fakeHandle as never,
+    };
+
+    const fakeCompositor = {
+      stdout: fakeStdout as never,
+      suspendInput: vi.fn(),
+      resumeInput: vi.fn(),
+      repaint: vi.fn(),
+    };
+
+    void streamDone.then(() => {
+      setTimeout(() => {
+        if (capturedDataListener) capturedDataListener(Buffer.from('\x1b'));
+      }, 10);
+    });
+
+    await launchMidTurnTaskView({
+      manager: fakeManager as never,
+      compositor: fakeCompositor as never,
+    });
+
+    vi.restoreAllMocks();
+
+    const allOutput = written.join('');
+    const stripAnsi = (s: string): string =>
+      s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/\r/g, '');
+
+    // Count blank lines (segments that are empty after stripping ANSI).
+    // The header/footer contribute some lines; null-returning events must NOT
+    // add additional blank lines.
+    const visibleLines = allOutput.split('\n').map(l => stripAnsi(l));
+    const blankCount = visibleLines.filter(l => l === '').length;
+    // Without the guard, each null event would add a blank line (2 extra).
+    // With the guard, these events produce no output at all.
+    // Allow a baseline of blanks from the header/footer (typically ~5-8).
+    // The key assertion: no 'tool_result' text appears, and blank count is
+    // within the header/footer baseline.
+    expect(allOutput).not.toContain('tool_result');
+    expect(blankCount).toBeLessThan(10);
+  });
+
+  it('preserves blank lines from consecutive model-intended newlines', async () => {
+    const { launchMidTurnTaskView } = await import('./task-view-mid-turn.js');
+
+    const written: string[] = [];
+    const fakeStdout = {
+      columns: 80,
+      write: (s: string) => { written.push(s); return true; },
+    };
+
+    let capturedDataListener: ((data: Buffer) => void) | null = null;
+    const origOn = process.stdin.on.bind(process.stdin);
+    const origRemoveListener = process.stdin.removeListener.bind(process.stdin);
+    vi.spyOn(process.stdin, 'on').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      if (event === 'data') capturedDataListener = listener as (d: Buffer) => void;
+      return origOn(event as never, listener as never);
+    });
+    vi.spyOn(process.stdin, 'removeListener').mockImplementation((event: string, listener: (...args: unknown[]) => void) => {
+      return origRemoveListener(event as never, listener as never);
+    });
+
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((r) => { resolveStream = r; });
+
+    const fakeSession = {
+      getHistory: () => [],
+      getOutputStream: async function* () {
+        // Double newline: paragraph break with blank line between.
+        yield { type: 'chunk' as const, chunk: { type: 'content' as const, content: 'Para one\n\nPara two\n' } };
+        resolveStream();
+      },
+    };
+
+    const fakeHandle = {
+      status: 'running' as const,
+      session: fakeSession,
+      sendMessage: vi.fn(),
+    };
+
+    const fakeManager = {
+      list: () => [{ id: 'sub-dblnl', status: 'running' as const }],
+      get: (_id: string) => fakeHandle as never,
+    };
+
+    const fakeCompositor = {
+      stdout: fakeStdout as never,
+      suspendInput: vi.fn(),
+      resumeInput: vi.fn(),
+      repaint: vi.fn(),
+    };
+
+    void streamDone.then(() => {
+      setTimeout(() => {
+        if (capturedDataListener) capturedDataListener(Buffer.from('\x1b'));
+      }, 10);
+    });
+
+    await launchMidTurnTaskView({
+      manager: fakeManager as never,
+      compositor: fakeCompositor as never,
+    });
+
+    vi.restoreAllMocks();
+
+    const allOutput = written.join('');
+
+    // Both paragraphs must appear.
+    expect(allOutput).toContain('Para one');
+    expect(allOutput).toContain('Para two');
+
+    // The blank line between paragraphs must be preserved. Look for the
+    // pattern: "Para one" on a line, then an empty line, then "Para two".
+    const stripAnsi = (s: string): string =>
+      s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/\r/g, '');
+    const lines = allOutput.split('\n').map(l => stripAnsi(l));
+    const paraOneIdx = lines.findIndex(l => l.includes('Para one'));
+    const paraTwoIdx = lines.findIndex(l => l.includes('Para two'));
+    expect(paraOneIdx).toBeGreaterThan(-1);
+    expect(paraTwoIdx).toBeGreaterThan(-1);
+    // There should be at least one blank line between them.
+    expect(paraTwoIdx - paraOneIdx).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // renderPrompt suffix viewport (issue #1477)
 // ---------------------------------------------------------------------------
 
