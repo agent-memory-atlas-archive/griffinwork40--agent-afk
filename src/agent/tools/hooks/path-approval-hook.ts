@@ -67,6 +67,7 @@ import { appendGrant } from '../../permissions-store.js';
 import { buildForkPathDenialReason } from './fork-denial-remedy.js';
 import type { HookContext, HookDecision, HookHandler } from '../../hooks.js';
 import { errorMessage } from '../../../utils/errors.js';
+import { isSubagentContext } from '../../hooks/hook-utils.js';
 
 /** Tools subject to per-call path approval. Bash is gated separately. */
 const TYPED_FILE_TOOLS = new Set([
@@ -302,11 +303,9 @@ async function preToolUseImpl(
   // reports the requirement back to its parent, which owns the surface and can
   // grant it.
   // Mirrors the `parentSessionId` self-skip used by the memory + plan-mode hooks.
-  if (context.parentSessionId !== undefined) {
+  if (isSubagentContext(context)) {
     // eslint-disable-next-line no-console
-    console.error(
-      `[path-approval] surface=${opts.surface} tool=${context.toolName} path=${result.resolved} outcome=subagent-autodeny`,
-    );
+    console.error(`[path-approval] surface=${opts.surface} tool=${context.toolName} path=${result.resolved} outcome=subagent-autodeny`);
     // #435: name the concrete remedy rather than implying a grant mechanism the
     // fork does not have. A fork cannot elicit, so the recovery actor is always
     // the PARENT — and because a fork's roots are fixed at dispatch, the only

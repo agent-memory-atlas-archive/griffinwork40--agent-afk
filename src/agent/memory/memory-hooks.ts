@@ -12,6 +12,7 @@
 import type { HookHandler } from '../hooks.js';
 import { MemoryStore } from './memory-store.js';
 import { deriveActor } from '../session/session-identity.js';
+import { isSubagentContext } from '../hooks/hook-utils.js';
 
 export function createMemorySessionEndHook(
   store: MemoryStore,
@@ -25,7 +26,7 @@ export function createMemorySessionEndHook(
     // start/end session pair to the store, polluting it with worker
     // sessions the user never started. Top-level sessions have no
     // parentSessionId and proceed normally.
-    if (context.parentSessionId) return {};
+    if (isSubagentContext(context)) return {};
     try {
       const sessionId = context.sessionId;
       if (sessionId) {

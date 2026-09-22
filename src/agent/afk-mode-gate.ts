@@ -88,6 +88,8 @@ import { emitHookDecision } from './trace/emit.js';
 import { redactInlineSecrets } from './session/prompt-dump.js';
 import { worktreeRootFor } from './worktree/worktree-occupancy.js';
 import { isSafeInWorkspaceRm } from './afk-mode-rm-allowlist.js';
+import { isSubagentContext } from './hooks/hook-utils.js';
+import { forwardAbortSignal } from '../utils/abort.js';
 
 /** Default deny-on-timeout window for a high-risk approval (ms). */
 const DEFAULT_APPROVAL_TIMEOUT_MS = 300_000;
@@ -166,11 +168,7 @@ export function createAfkModeGate(
     // the pending elicitation prompt — the real router resolves to a decline on
     // abort, so the phone prompt does not linger past the decision.
     const ac = new AbortController();
-    const onParentAbort = (): void => ac.abort();
-    if (signal) {
-      if (signal.aborted) ac.abort();
-      else signal.addEventListener('abort', onParentAbort, { once: true });
-    }
+    const cleanupAbort = signal ? forwardAbortSignal(signal, ac) : () => undefined;
 
     const TIMEOUT = Symbol('afk-approval-timeout');
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -243,7 +241,7 @@ export function createAfkModeGate(
       ]);
     } finally {
       if (timer) clearTimeout(timer);
-      if (signal) signal.removeEventListener('abort', onParentAbort);
+      cleanupAbort();
     }
 
     if (outcome === TIMEOUT) {
@@ -364,7 +362,7 @@ export function createAfkModeGate(
     // High-risk in AFK. A forked sub-agent must not prompt the operator (the
     // prompt would surface on the parent's surface with no attribution), and the
     // approval path can be opted out — both degrade to the legacy hard block.
-    if (context.parentSessionId !== undefined || !promptForApproval) {
+    if (isSubagentContext(context) || !promptForApproval) {
       const decision = blockDecision(toolName, 'AFK mode runs autonomously without a human watching');
       // Emit the audit trace on the no-prompt refusal too. requestApproval's
       // decide() helper centralises the emit for the prompt paths, but this

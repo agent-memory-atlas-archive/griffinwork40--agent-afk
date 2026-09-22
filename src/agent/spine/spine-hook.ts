@@ -41,6 +41,7 @@ import type {
   SpineRelationItem,
 } from './spine-classifier.js';
 import { errorMessage } from '../../utils/errors.js';
+import { isSubagentContext } from '../hooks/hook-utils.js';
 
 // ---------------------------------------------------------------------------
 // Options
@@ -69,7 +70,7 @@ export function createSpineSessionEndHook(options: SpineHookOptions = {}): HookH
   return async (context, signal) => {
     // ── Guards ────────────────────────────────────────────────────────────
     if (context.event !== 'SessionEnd') return {};
-    if (context.parentSessionId !== undefined) return {}; // skip subagents
+    if (isSubagentContext(context)) return {}; // skip subagents
     if (env.AFK_DISABLE_SPINE_UPDATE === '1') return {};
 
     const sessionId = context.sessionId ?? 'unknown-session';

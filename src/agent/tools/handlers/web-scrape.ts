@@ -43,6 +43,7 @@ import {
   playwrightInstallCommand,
 } from './playwright-hints.js';
 import { errorMessage } from '../../../utils/errors.js';
+import { forwardAbortSignal } from '../../../utils/abort.js';
 
 // External constraint: Node 20+ ships `fetch` as a global. Older runtimes
 // would throw before reaching this handler because tsconfig targets >=20.
@@ -195,13 +196,11 @@ export function createWebScrapeHandler(opts: WebScrapeOptions = {}): ToolHandler
 
     // Ordered-operation constraint: build the AbortController, wire the parent
     // signal AND the timeout to it, then issue work. The `finally` block tears
-    // down the listener + timer in the inverse order. Failing to clear the
-    // timer leaks a Node timer reference; failing to remove the listener leaks
+    // down the timer + listener in the inverse order. Failing to clear the
+    // timer leaks a Node timer reference; failing to call cleanupAbort leaks
     // a hard reference to `ac` from the caller's signal.
     const ac = new AbortController();
-    const onParentAbort = (): void => {
-      ac.abort(signal.reason);
-    };
+    const cleanupAbort = forwardAbortSignal(signal, ac);
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const abortMessage = (): string => {
@@ -210,7 +209,6 @@ export function createWebScrapeHandler(opts: WebScrapeOptions = {}): ToolHandler
     };
 
     try {
-      signal.addEventListener('abort', onParentAbort, { once: true });
       timer = setTimeout(() => {
         ac.abort(new Error(`web_scrape timeout after ${parsed.timeoutMs}ms`));
       }, parsed.timeoutMs);
@@ -343,7 +341,7 @@ export function createWebScrapeHandler(opts: WebScrapeOptions = {}): ToolHandler
       // Inverse-of-setup teardown order: timer first (it was set last),
       // then listener removal (it was added first).
       if (timer !== undefined) clearTimeout(timer);
-      signal.removeEventListener('abort', onParentAbort);
+      cleanupAbort();
     }
   };
 }

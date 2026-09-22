@@ -12,6 +12,7 @@
  */
 
 import { TimeoutError } from '../utils/errors.js';
+import { forwardAbortSignal } from '../utils/abort.js';
 import { settleWithConcurrencyLimit, resolveMaxConcurrentSubagentCalls } from './concurrency-pool.js';
 import {
   computeDAGHash,
@@ -237,19 +238,11 @@ export async function runDAG(
     }
   }
 
-  // Use a named abort handler so we can remove it in the finally block,
+  // Use forwardAbortSignal so we can remove the listener in the finally block,
   // preventing a listener leak when the DAG completes before the outer
   // signal is ever aborted (C8 fix).
   const dagController = new AbortController();
-  const forwardAbort = (): void => {
-    if (!dagController.signal.aborted) dagController.abort(signal.reason);
-  };
-
-  if (signal.aborted) {
-    dagController.abort(signal.reason);
-  } else {
-    signal.addEventListener('abort', forwardAbort, { once: true });
-  }
+  const cleanupDagAbort = forwardAbortSignal(signal, dagController);
 
   try {
     while (!dagController.signal.aborted) {
@@ -276,17 +269,7 @@ export async function runDAG(
 
           // Forward dagController abort to nodeController, and clean up the
           // listener when the node finishes to avoid per-node leaks.
-          const forwardNodeAbort = (): void => {
-            if (!nodeController.signal.aborted) {
-              nodeController.abort(dagController.signal.reason);
-            }
-          };
-
-          if (dagController.signal.aborted) {
-            nodeController.abort(dagController.signal.reason);
-          } else {
-            dagController.signal.addEventListener('abort', forwardNodeAbort, { once: true });
-          }
+          const cleanupNodeAbort = forwardAbortSignal(dagController.signal, nodeController);
 
           // Per-node max-runtime timer. Aborts the node's own controller with
           // a labeled TimeoutError so consumers (dag-subagent) can surface
@@ -321,7 +304,7 @@ export async function runDAG(
             // in the await-microtask chain — no event-loop window for the
             // timer to fire between node.run resolving and clearTimeout.
             if (nodeTimeoutHandle !== undefined) clearTimeout(nodeTimeoutHandle);
-            dagController.signal.removeEventListener('abort', forwardNodeAbort);
+            cleanupNodeAbort();
           }
         },
       );
@@ -364,8 +347,8 @@ export async function runDAG(
       }
     }
   } finally {
-    // Always remove the forwarding listener; safe to call even if already fired.
-    signal.removeEventListener('abort', forwardAbort);
+    // Always run cleanup; safe to call even if already fired.
+    cleanupDagAbort();
   }
 
   // On complete success (no failures), clear the checkpoint.

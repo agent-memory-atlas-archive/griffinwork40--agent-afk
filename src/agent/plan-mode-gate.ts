@@ -38,6 +38,7 @@ import type { HookContext, HookDecision } from './hooks.js';
 import type { PermissionMode } from './types/sdk-types.js';
 import { categorizeTool } from './tool-category.js';
 import { classifyBashCommand } from './tools/readonly-bash.js';
+import { isSubagentContext } from './hooks/hook-utils.js';
 
 export function createPlanModeGate(
   getMode: () => PermissionMode,
@@ -49,7 +50,7 @@ export function createPlanModeGate(
     // worker whose tool calls (incl. writes to its own worktree) are task
     // output, not main-conversation mutations. It inherits the parent's
     // registry, so without this guard it would be plan-gated too. Skip it.
-    if (context.parentSessionId) return {};
+    if (isSubagentContext(context)) return {};
     if (getMode() !== 'plan') return {};
 
     const { toolName } = context;
