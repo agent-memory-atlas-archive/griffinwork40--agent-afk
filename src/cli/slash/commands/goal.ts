@@ -15,6 +15,11 @@
  * survive across sessions, compaction, and terminal disconnects. The active
  * goal is injected into the system prompt at session construction; mid-session
  * changes are persisted immediately but take effect on the next session start.
+ *
+ * Goals are scoped to the current git repository. Running `/goal set` inside
+ * the agent-afk repo stores the goal under a project-specific key; the same
+ * command in a different repo stores a separate goal. Directories not under
+ * any git repo fall back to the global `'current'` key.
  */
 
 import { palette } from '../../palette.js';
@@ -26,6 +31,7 @@ import {
   completeGoal,
   clearGoal,
 } from '../../../agent/goals/index.js';
+import { projectKeyForCwd } from '../../../agent/goals/goal-utils.js';
 import type { SlashCommand, SlashContext } from '../types.js';
 
 function statusBadge(status: string): string {
@@ -37,8 +43,8 @@ function statusBadge(status: string): string {
   }
 }
 
-function printGoal(ctx: SlashContext): void {
-  const goal = getGoal();
+function printGoal(ctx: SlashContext, projectKey: string): void {
+  const goal = getGoal(projectKey);
   if (!goal) {
     ctx.out.info('No goal set.  Try  /goal <objective>');
     return;
@@ -55,6 +61,10 @@ export const goalCmd: SlashCommand = {
   async handler(ctx, args) {
     const trimmed = args.trim();
 
+    // Derive the project-scoped key for this session's working directory.
+    // Falls back to 'current' when not in a git repo.
+    const projectKey = projectKeyForCwd(ctx.stats.cwd);
+
     // History: goalPrompt is baked into stableSystemPrefix at session construction
     // (injectGoalPrompt / cwd-dependents.ts). Mid-session writes persist to DB
     // immediately but the running session's prompt is not rebuilt. The UX notes
@@ -63,7 +73,7 @@ export const goalCmd: SlashCommand = {
 
     // No args or "status" → show current goal
     if (!trimmed || trimmed === 'status') {
-      printGoal(ctx);
+      printGoal(ctx, projectKey);
       return 'continue';
     }
 
@@ -78,18 +88,18 @@ export const goalCmd: SlashCommand = {
           ctx.out.warn('Usage:  /goal set <objective>');
           return 'continue';
         }
-        const goal = setGoal(rem, ctx.stats.sessionId);
+        const goal = setGoal(rem, ctx.stats.sessionId, projectKey);
         ctx.out.success(`Goal set: ${goal.text}`);
         ctx.out.info(SESSION_NOTE);
         return 'continue';
       }
       case 'pause': {
-        const result = pauseGoal();
+        const result = pauseGoal(projectKey);
         if (result) {
           ctx.out.success('Goal paused.');
           ctx.out.info(SESSION_NOTE);
         } else {
-          const current = getGoal();
+          const current = getGoal(projectKey);
           if (!current) ctx.out.warn('No goal to pause.');
           else if (current.status === 'paused') ctx.out.warn('Goal is already paused.');
           else ctx.out.info(`Goal is ${current.status} — cannot pause.`);
@@ -97,12 +107,12 @@ export const goalCmd: SlashCommand = {
         return 'continue';
       }
       case 'resume': {
-        const result = resumeGoal();
+        const result = resumeGoal(projectKey);
         if (result) {
           ctx.out.success('Goal resumed.');
           ctx.out.info(SESSION_NOTE);
         } else {
-          const current = getGoal();
+          const current = getGoal(projectKey);
           if (!current) ctx.out.warn('No goal to resume.');
           else if (current.status === 'active') ctx.out.warn('Goal is already active.');
           else ctx.out.info(`Goal is ${current.status} — cannot resume.`);
@@ -111,12 +121,12 @@ export const goalCmd: SlashCommand = {
       }
       case 'done':
       case 'complete': {
-        const result = completeGoal();
+        const result = completeGoal(projectKey);
         if (result) {
           ctx.out.success(`Goal completed: ${result.text}`);
           ctx.out.info(SESSION_NOTE);
         } else {
-          const current = getGoal();
+          const current = getGoal(projectKey);
           if (!current) ctx.out.warn('No goal to complete.');
           else if (current.status === 'completed') ctx.out.warn('Goal is already completed.');
           else ctx.out.warn(`Goal is ${current.status} — resume it before completing.`);
@@ -124,7 +134,7 @@ export const goalCmd: SlashCommand = {
         return 'continue';
       }
       case 'clear': {
-        const deleted = clearGoal();
+        const deleted = clearGoal(projectKey);
         if (deleted) {
           ctx.out.success('Goal cleared.');
           ctx.out.info(SESSION_NOTE);
@@ -134,12 +144,12 @@ export const goalCmd: SlashCommand = {
         return 'continue';
       }
       case 'status': {
-        printGoal(ctx);
+        printGoal(ctx, projectKey);
         return 'continue';
       }
       default: {
         // Bare text without a verb → treat as "set"
-        const goal = setGoal(trimmed, ctx.stats.sessionId);
+        const goal = setGoal(trimmed, ctx.stats.sessionId, projectKey);
         ctx.out.success(`Goal set: ${goal.text}`);
         ctx.out.info(SESSION_NOTE);
         return 'continue';

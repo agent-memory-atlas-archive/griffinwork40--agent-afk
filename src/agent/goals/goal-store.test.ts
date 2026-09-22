@@ -204,3 +204,47 @@ describe('full lifecycle', () => {
     expect(fresh.text).toBe('new');
   });
 });
+
+// ── Project-scoped key parameter ──────────────────────────────────────────────
+
+describe('project-scoped goals (projectKey parameter)', () => {
+  it('goals under different project keys are isolated', () => {
+    mod.setGoal('project A goal', undefined, 'proj.repo-a-aabbccdd');
+    mod.setGoal('project B goal', undefined, 'proj.repo-b-11223344');
+    expect(mod.getGoal('proj.repo-a-aabbccdd')?.text).toBe('project A goal');
+    expect(mod.getGoal('proj.repo-b-11223344')?.text).toBe('project B goal');
+  });
+
+  it('global fallback key is independent of project keys', () => {
+    mod.setGoal('global goal');
+    mod.setGoal('project goal', undefined, 'proj.my-repo-deadbeef');
+    // Global key unaffected by project write
+    expect(mod.getGoal()?.text).toBe('global goal');
+    // Project key unaffected by global write
+    expect(mod.getGoal('proj.my-repo-deadbeef')?.text).toBe('project goal');
+  });
+
+  it('pause/resume/complete/clear all respect the project key', () => {
+    const pk = 'proj.test-repo-cafebabe';
+    mod.setGoal('scoped goal', undefined, pk);
+    expect(mod.pauseGoal(pk)?.status).toBe('paused');
+    expect(mod.getGoal(pk)?.status).toBe('paused');
+    expect(mod.resumeGoal(pk)?.status).toBe('active');
+    expect(mod.completeGoal(pk)?.status).toBe('completed');
+    expect(mod.clearGoal(pk)).toBe(true);
+    expect(mod.getGoal(pk)).toBeNull();
+  });
+
+  it('operations on project key do not affect global key', () => {
+    const pk = 'proj.isolated-deadbeef';
+    mod.setGoal('global', undefined, undefined);
+    mod.setGoal('scoped', undefined, pk);
+    mod.clearGoal(pk);
+    // Global key survives the project-key clear
+    expect(mod.getGoal()?.text).toBe('global');
+  });
+
+  it('getGoal returns null for an unknown project key', () => {
+    expect(mod.getGoal('proj.unknown-ffffffff')).toBeNull();
+  });
+});

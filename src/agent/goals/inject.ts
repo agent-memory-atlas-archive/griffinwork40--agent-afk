@@ -13,9 +13,11 @@
 
 import type { AgentConfig } from '../types/config-types.js';
 import { buildGoalPromptFragment } from './goal-prompt.js';
+import { projectKeyForCwd } from './goal-utils.js';
 
 export function injectGoalPrompt(config: AgentConfig): AgentConfig {
-  const fragment = buildGoalPromptFragment();
+  const projectKey = projectKeyForCwd(config.cwd);
+  const fragment = buildGoalPromptFragment(projectKey);
   if (!fragment) return config;
   return { ...config, goalPrompt: fragment };
 }

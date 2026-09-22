@@ -2,3 +2,4 @@ export { getGoal, setGoal, pauseGoal, resumeGoal, completeGoal, clearGoal } from
 export type { Goal, GoalStatus } from './goal-store.js';
 export { buildGoalPromptFragment } from './goal-prompt.js';
 export { injectGoalPrompt } from './inject.js';
+export { projectKeyForCwd, FALLBACK_KEY } from './goal-utils.js';
