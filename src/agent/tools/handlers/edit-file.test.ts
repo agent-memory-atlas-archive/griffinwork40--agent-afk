@@ -8,8 +8,13 @@ import { rm } from 'fs/promises';
 import { utimesSync, writeFileSync } from 'node:fs';
 import os from 'os';
 import path from 'path';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { editFileHandler } from './edit-file.js';
+
+/** Compute SHA-256 hex digest for test assertions. */
+function sha256Hex(content: string): string {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
+}
 
 // Invariant: this scratch dir must live OUTSIDE the repo working tree. Rooted
 // at `process.cwd()` it landed as `.test-temp-edit-file/` in whatever checkout
@@ -551,6 +556,90 @@ describe('editFileHandler cwd containment', () => {
 
       expect(result.isError).toBeUndefined();
       expect(result.content).toBe(`Replaced 1 occurrence in ${filePath}`);
+    });
+  });
+
+  describe('expected_hash content-hash gate', () => {
+    it('succeeds when expected_hash matches on-disk content', async () => {
+      const content = 'hello world\n';
+      const filePath = await createTempFile('hash-match.txt', content);
+      const hash = `sha256:${sha256Hex(content)}`;
+      const signal = new AbortController().signal;
+
+      const result = await editFileHandler(
+        {
+          file_path: filePath,
+          old_string: 'hello',
+          new_string: 'goodbye',
+          expected_hash: hash,
+        },
+        signal,
+      );
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain('Replaced 1 occurrence');
+      expect(await readTempFile(filePath)).toBe('goodbye world\n');
+    });
+
+    it('rejects when expected_hash does not match on-disk content', async () => {
+      const filePath = await createTempFile('hash-mismatch.txt', 'current content\n');
+      // Supply a hash for different content (simulating stale context after patch_apply).
+      const staleHash = `sha256:${sha256Hex('old content before patch\n')}`;
+      const signal = new AbortController().signal;
+
+      const result = await editFileHandler(
+        {
+          file_path: filePath,
+          old_string: 'current',
+          new_string: 'updated',
+          expected_hash: staleHash,
+        },
+        signal,
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toMatch(/content hash mismatch/);
+      expect(result.content).toContain(filePath);
+      // File must not have been modified.
+      expect(await readTempFile(filePath)).toBe('current content\n');
+    });
+
+    it('rejects when expected_hash has wrong format', async () => {
+      const filePath = await createTempFile('hash-bad-format.txt', 'some content\n');
+      const signal = new AbortController().signal;
+
+      const result = await editFileHandler(
+        {
+          file_path: filePath,
+          old_string: 'some',
+          new_string: 'other',
+          expected_hash: 'md5:abc123',
+        },
+        signal,
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toMatch(/must start with "sha256:"/);
+      // File must not have been modified.
+      expect(await readTempFile(filePath)).toBe('some content\n');
+    });
+
+    it('proceeds without hash check when expected_hash is omitted', async () => {
+      const filePath = await createTempFile('hash-omitted.txt', 'original\n');
+      const signal = new AbortController().signal;
+
+      const result = await editFileHandler(
+        {
+          file_path: filePath,
+          old_string: 'original',
+          new_string: 'changed',
+        },
+        signal,
+      );
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content).toContain('Replaced 1 occurrence');
+      expect(await readTempFile(filePath)).toBe('changed\n');
     });
   });
 });

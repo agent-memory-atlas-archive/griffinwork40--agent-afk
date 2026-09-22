@@ -15,6 +15,7 @@ import { assertNotDenylisted } from './write-denylist.js';
 import { resolveAndContain } from './_cwd-utils.js';
 import { computeLineDiff } from '../../../utils/diff.js';
 import { errorMessage } from '../../../utils/errors.js';
+import { sha256Hex } from './patch-validate.js';
 
 /**
  * Input shape for the edit_file tool (validated at runtime).
@@ -24,6 +25,7 @@ interface EditFileInput {
   old_string?: unknown;
   new_string?: unknown;
   replace_all?: unknown;
+  expected_hash?: unknown;
 }
 
 /**
@@ -35,6 +37,7 @@ function parseEditFileInput(input: unknown): {
   old_string: string;
   new_string: string;
   replace_all: boolean;
+  expected_hash: string | undefined;
 } {
   if (typeof input !== 'object' || input === null) {
     throw new Error('Input must be an object');
@@ -62,11 +65,20 @@ function parseEditFileInput(input: unknown): {
     replace_all = editInput.replace_all;
   }
 
+  let expected_hash: string | undefined;
+  if (editInput.expected_hash !== undefined) {
+    if (typeof editInput.expected_hash !== 'string') {
+      throw new Error('expected_hash must be a string');
+    }
+    expected_hash = editInput.expected_hash;
+  }
+
   return {
     file_path: editInput.file_path,
     old_string: editInput.old_string,
     new_string: editInput.new_string,
     replace_all,
+    expected_hash,
   };
 }
 
@@ -101,7 +113,7 @@ const editFileImpl = async (
     };
   }
 
-  const { file_path: rawFilePath, old_string, new_string, replace_all } = parseEditFileInput(input);
+  const { file_path: rawFilePath, old_string, new_string, replace_all, expected_hash } = parseEditFileInput(input);
 
   let file_path: string;
   try {
@@ -126,6 +138,29 @@ const editFileImpl = async (
 
     // Read the file.
     const content = await readFile(file_path, 'utf-8');
+
+    // Content-hash staleness gate: when the caller supplies expected_hash
+    // (format "sha256:<hex>"), verify the on-disk content matches before
+    // proceeding. This catches stale-context overwrites where a prior
+    // patch_apply modified the file but the caller's old_string comes from
+    // pre-patch context. Mirrors the same gate in patch-validate.ts:179-200.
+    if (expected_hash !== undefined) {
+      const prefix = 'sha256:';
+      if (!expected_hash.startsWith(prefix)) {
+        return {
+          content: `edit_file rejected: expected_hash must start with "sha256:". Got: "${expected_hash}"`,
+          isError: true,
+        };
+      }
+      const expectedHex = expected_hash.slice(prefix.length);
+      const actualHex = sha256Hex(content);
+      if (actualHex !== expectedHex) {
+        return {
+          content: `edit_file rejected: content hash mismatch for ${file_path}. Expected sha256:${expectedHex}, got sha256:${actualHex}. The file was modified since you last read it. Re-read the file before editing.`,
+          isError: true,
+        };
+      }
+    }
 
     // Count occurrences.
     const occurrences = countOccurrences(content, old_string);
