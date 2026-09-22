@@ -18,19 +18,10 @@
 import path from 'path';
 import { statSync } from 'fs';
 import type { SlashCommand } from '../types.js';
+import type { GrantManager } from '../../../agent/tools/grant-manager.js';
 
-/**
- * Minimal interface the /allow-dir command needs from the provider/dispatcher.
- * Using a structural interface keeps this module from importing the concrete
- * provider class (which would create a circular dep concern) and makes testing
- * easy with a plain mock object.
- */
-export interface GrantManager {
-  addReadRoot(absPath: string, source: 'slash' | 'tool', sessionId?: string): void;
-  addWriteRoot(absPath: string, source: 'slash' | 'tool', sessionId?: string): void;
-  revokeRoot(absPath: string, source: 'slash' | 'tool', sessionId?: string): void;
-  getGrants(): { resolveBase: string | undefined; readRoots: string[]; writeRoots: string[]; allowAll?: boolean };
-}
+// Re-export so that existing cli/ importers keep resolving from this path.
+export type { GrantManager };
 
 let grantManagerRef: GrantManager | undefined;
 

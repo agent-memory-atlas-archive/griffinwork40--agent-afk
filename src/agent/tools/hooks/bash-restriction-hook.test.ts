@@ -27,7 +27,7 @@ import {
 } from './bash-restriction-hook.js';
 import { _resetReadDenylistCacheForTests } from '../handlers/read-denylist.js';
 import { resetAfkHomeWarnLatchForTests } from '../afk-home-warn.js';
-import type { GrantManager } from '../../../cli/slash/commands/allow-dir.js';
+import type { GrantManager } from '../grant-manager.js';
 import type { PreToolUseContext } from '../../hooks.js';
 import { homedir, tmpdir } from 'os';
 import { join, resolve } from 'path';
