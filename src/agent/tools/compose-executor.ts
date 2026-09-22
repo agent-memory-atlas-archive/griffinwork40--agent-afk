@@ -577,7 +577,16 @@ export class ComposeExecutor {
         }
       }
 
-      const dagNodes: SubagentDAGNode[] = await Promise.all(parsed.nodes.map(async (n, i) => {
+      // Invariant: attachment resolution errors are isolated per-node so a bad
+      // path or unknown image id on one node never aborts siblings. Each map
+      // callback either resolves with a SubagentDAGNode (success) or with a
+      // sentinel { attachmentError } object (failure). After Promise.all the
+      // sentinels are split out and injected as pre-failed nodes into the result
+      // so `formatDAGResult` surfaces them alongside any runtime failures.
+      type NodeBuildResult =
+        | SubagentDAGNode
+        | { attachmentError: true; nodeId: string; error: Error };
+      const nodeBuildResults: NodeBuildResult[] = await Promise.all(parsed.nodes.map(async (n, i) => {
         // Named-agent lookup (already validated above; cannot be undefined here).
         const namedAgent = n.agent_type !== undefined
           ? this.ctx.agentRegistry?.get(n.agent_type)
@@ -671,17 +680,25 @@ export class ComposeExecutor {
 
         // Attachment resolution: when a node declares `attachments`, resolve
         // them to ImageBlockAttachment[] using the same pipeline as the agent
-        // tool (subagent-executor.ts:717-747). Errors are surfaced as isError
-        // results matching the agent tool's error handling pattern.
+        // tool (subagent-executor.ts:717-747). Errors are caught per-node so a
+        // bad path or unknown image id fails only this node; siblings continue.
         let resolvedAttachments: import('../content/image-blocks.js').ImageBlockAttachment[] | undefined;
         if (n.attachments !== undefined && n.attachments.length > 0) {
-          resolvedAttachments = await resolveSubagentAttachments({
-            paths: n.attachments,
-            resolveBase: n.cwd ?? this.currentCwd,
-            readRoots: nodeReadRoots,
-            sessionId: this.ctx.parentSession.sessionId,
-            registry: this.ctx.inboundAttachmentRegistry ?? defaultInboundAttachmentRegistry,
-          });
+          try {
+            resolvedAttachments = await resolveSubagentAttachments({
+              paths: n.attachments,
+              resolveBase: n.cwd ?? this.currentCwd,
+              readRoots: nodeReadRoots,
+              sessionId: this.ctx.parentSession.sessionId,
+              registry: this.ctx.inboundAttachmentRegistry ?? defaultInboundAttachmentRegistry,
+            });
+          } catch (attachErr) {
+            return {
+              attachmentError: true as const,
+              nodeId: n.id,
+              error: attachErr instanceof Error ? attachErr : new Error(String(attachErr)),
+            };
+          }
         }
 
         return {
@@ -776,6 +793,19 @@ export class ComposeExecutor {
         };
       }));
 
+      // Split build results into runnable DAG nodes and pre-failed attachment errors.
+      // Nodes with attachment errors are injected into result.failed so they appear
+      // in the formatted output alongside runtime failures — siblings still run.
+      const dagNodes: SubagentDAGNode[] = [];
+      const attachmentErrors: Array<{ id: string; error: Error }> = [];
+      for (const r of nodeBuildResults) {
+        if ('attachmentError' in r) {
+          attachmentErrors.push({ id: r.nodeId, error: r.error });
+        } else {
+          dagNodes.push(r);
+        }
+      }
+
       // Wave manifest: create before the DAG starts so a crash mid-run leaves
       // a recoverable record. Only for ≥2 nodes (no manifest for solo dispatch).
       let composeWaveId: string | undefined;
@@ -821,7 +851,7 @@ export class ComposeExecutor {
       // governed solely by the operator's AFK_MAX_CONCURRENT_SUBAGENT_CALLS
       // ceiling. Adding such a field would let the agent override an operator
       // safety limit, which is why it is absent rather than merely unset here.
-      const result = await runSubagentDAG({
+      const dagResult = await runSubagentDAG({
         manager,
         parentSession: this.ctx.parentSession,
         nodes: dagNodes,
@@ -831,6 +861,12 @@ export class ComposeExecutor {
         // Item 2: thread the budget so every DAG node is counted individually.
         ...(this.ctx.delegationBudget !== undefined ? { delegationBudget: this.ctx.delegationBudget } : {}),
       });
+      // Merge pre-failed attachment-error nodes into the DAG result so they
+      // appear in the formatted output alongside runtime failures. Prepend so
+      // failed-resolution nodes are listed before any runtime-failed nodes.
+      const result = attachmentErrors.length > 0
+        ? { ...dagResult, failed: [...attachmentErrors, ...dagResult.failed] }
+        : dagResult;
 
       void appendRoutingDecision({
         ...identity,

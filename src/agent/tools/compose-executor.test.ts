@@ -2127,19 +2127,39 @@ describe('ComposeExecutor', () => {
       expect('resolvedAttachments' in dagOpts.nodes[0]).toBe(false);
     });
 
-    it('surfaces attachment resolution errors as an isError result', async () => {
+    it('surfaces attachment resolution errors as per-node failures; sibling nodes still run', async () => {
+      // Node 'bad' fails attachment resolution; node 'good' has no attachments
+      // and must still be dispatched and succeed — the whole compose call must
+      // not abort just because one node had a bad path.
       mockResolveSubagentAttachments.mockRejectedValueOnce(
         new Error('Unknown inbound image id "img_missing"'),
       );
-      mockRunSubagentDAG.mockResolvedValue({ outputs: {}, failed: [], skipped: [] });
+      // Sibling node runs fine.
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { good: 'sibling result' },
+        failed: [],
+        skipped: [],
+      });
 
       const executor = new ComposeExecutor(makeContext());
       const result = await executor.execute(makeCall({
-        nodes: [{ id: 'a', prompt: 'analyse', attachments: ['img_missing'] }],
+        nodes: [
+          { id: 'bad', prompt: 'analyse', attachments: ['img_missing'] },
+          { id: 'good', prompt: 'sibling task' },
+        ],
       }));
 
+      // The overall call is marked isError because a node failed.
       expect(result.isError).toBe(true);
+      // The error message from the failed node is in the output.
       expect(result.content).toContain('img_missing');
+      // The FAILED section for 'bad' appears in the formatted output.
+      expect(result.content).toContain('bad');
+      // runSubagentDAG was still called — sibling node 'good' was not blocked.
+      expect(mockRunSubagentDAG).toHaveBeenCalledOnce();
+      // Only 'good' was passed to runSubagentDAG (not 'bad', which pre-failed).
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0] as { nodes: { id: string }[] };
+      expect(dagOpts.nodes.map((n) => n.id)).toEqual(['good']);
     });
 
     it('only resolves attachments for nodes that declare them; others are unaffected', async () => {

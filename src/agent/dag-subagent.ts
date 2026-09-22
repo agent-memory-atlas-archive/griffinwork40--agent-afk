@@ -347,6 +347,17 @@ export async function runSubagentDAG(options: SubagentDAGOptions): Promise<DAGRu
         // executor path for per-node attachments declared in the compose input.
         let prompt: string | ContentBlockParam[];
         if (spec.buildPromptAsync !== undefined) {
+          // Development-time warning: resolvedAttachments is silently dropped
+          // when buildPromptAsync is present because the async builder owns the
+          // full prompt construction. Callers that set both likely intended to
+          // let resolvedAttachments drive image injection instead.
+          if (spec.resolvedAttachments !== undefined && spec.resolvedAttachments.length > 0) {
+            console.warn(
+              `[dag-subagent] node "${spec.id}": both buildPromptAsync and resolvedAttachments ` +
+                `are set — resolvedAttachments will be ignored. The async builder is responsible ` +
+                `for injecting images into the prompt.`,
+            );
+          }
           prompt = await spec.buildPromptAsync(inputs);
         } else if (spec.resolvedAttachments !== undefined && spec.resolvedAttachments.length > 0) {
           const blocks: ContentBlockParam[] = [{ type: 'text', text: spec.promptBuilder(inputs) }];
