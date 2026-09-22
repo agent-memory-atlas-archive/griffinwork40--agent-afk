@@ -253,7 +253,10 @@ describe('web_scrape handler — markdown mode (fetch-first)', () => {
     const r = await handler({ url: 'https://example.com/x' }, signal());
     expect(r.isError).toBe(true);
     const occurrences = (String(r.content).match(/install chromium/g) ?? []).length;
-    expect(occurrences).toBe(1);
+    // The decorated error already contains two occurrences of "install chromium":
+    // one from the actual install command and one from the "Do NOT use npx" warning.
+    // web_scrape must NOT append a third copy — hasPlaywrightInstallHint guards that.
+    expect(occurrences).toBe(2);
     expect(r.content).not.toMatch(/render fallback needs the optional Playwright browser/);
   });
 });

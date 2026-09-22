@@ -243,7 +243,7 @@ export function playwrightMissingHint(err: unknown, opts?: PlaywrightHintOptions
     }
     return (
       'browser tools require the Playwright chromium binary. ' +
-      `Install via: ${playwrightInstallCommand()}.${artifactNote}${versionNote}${resetNote}`
+      `Install via: ${playwrightInstallCommand()}.${versionNote}${artifactNote}${resetNote}`
     );
   }
 

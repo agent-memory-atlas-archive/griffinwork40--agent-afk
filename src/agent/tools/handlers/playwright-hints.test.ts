@@ -64,14 +64,17 @@ describe('playwrightMissingHint', () => {
     expect(hint).not.toMatch(/pnpm add playwright/);
   });
 
-  it('warns against npx playwright install on the chromium-missing branch (issue #1998)', () => {
-    // npx resolves LATEST playwright whose pinned chromium revision can differ.
+  it('includes a "Do NOT use npx" warning in the chromium-missing hint text (issue #1998)', () => {
+    // The hint explicitly calls out `npx playwright install chromium` as the command
+    // to AVOID, so users know why we emit a different command. npx resolves LATEST
+    // playwright whose pinned chromium revision can differ from this build's.
     const hint = playwrightMissingHint("Executable doesn't exist at /ms-playwright/chromium/chrome");
     expect(hint).toMatch(/npx playwright install chromium/);
     expect(hint).toMatch(/Do NOT use/);
   });
 
-  it('warns against npx playwright install on the package-missing branch (issue #1998)', () => {
+  it('includes a "Do NOT use npx" warning in the package-missing hint text (issue #1998)', () => {
+    // Same rationale: name the forbidden command so users understand the version-skew risk.
     const hint = playwrightMissingHint('Cannot find package playwright');
     expect(hint).toMatch(/npx playwright install chromium/);
     expect(hint).toMatch(/Do NOT use/);
