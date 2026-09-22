@@ -22,6 +22,8 @@ import { resolveSubagentTimeoutMs } from './subagent/constants.js';
 import { isTooBroadRoot, ungatedSensitiveRoot } from './tools/subagent/root-validation.js';
 import { realpathSafe } from './tools/handlers/_cwd-utils.js';
 import type { DelegationBudget, SpawnReceipt } from './tools/delegation-budget.js';
+import type { ImageBlockAttachment } from './content/image-blocks.js';
+import { appendImageBlocks } from './content/image-blocks.js';
 
 export interface SubagentDAGNode {
   id: string;
@@ -129,6 +131,18 @@ export interface SubagentDAGNode {
   buildPromptAsync?: (
     inputs: Record<string, unknown>,
   ) => Promise<string | ContentBlockParam[]>;
+  /**
+   * Pre-resolved image attachments for this node's initial prompt. When set,
+   * the run loop builds a `ContentBlockParam[]` array — a text block with
+   * the prompt followed by image blocks — instead of a bare string. Populated
+   * by compose-executor.ts via `resolveSubagentAttachments` for nodes that
+   * declare `attachments` in the compose input.
+   *
+   * Invariant: `resolvedAttachments` takes effect only when `buildPromptAsync`
+   * is absent. If both are set, `buildPromptAsync` owns the full prompt
+   * construction (it is responsible for injecting images too).
+   */
+  resolvedAttachments?: ImageBlockAttachment[];
 }
 
 export interface SubagentDAGOptions {
@@ -326,9 +340,32 @@ export async function runSubagentDAG(options: SubagentDAGOptions): Promise<DAGRu
         // builder is present it takes full responsibility for constructing the
         // final prompt — including upstream context injection — so promptBuilder
         // is only called as a fallback when no async builder is wired.
-        const prompt: string | ContentBlockParam[] = spec.buildPromptAsync !== undefined
-          ? await spec.buildPromptAsync(inputs)
-          : spec.promptBuilder(inputs);
+        //
+        // When resolvedAttachments is set (and buildPromptAsync is absent),
+        // build a multimodal ContentBlockParam[] array: a text block carrying
+        // the string prompt followed by image blocks. This is the compose-
+        // executor path for per-node attachments declared in the compose input.
+        let prompt: string | ContentBlockParam[];
+        if (spec.buildPromptAsync !== undefined) {
+          // Development-time warning: resolvedAttachments is silently dropped
+          // when buildPromptAsync is present because the async builder owns the
+          // full prompt construction. Callers that set both likely intended to
+          // let resolvedAttachments drive image injection instead.
+          if (spec.resolvedAttachments !== undefined && spec.resolvedAttachments.length > 0) {
+            console.warn(
+              `[dag-subagent] node "${spec.id}": both buildPromptAsync and resolvedAttachments ` +
+                `are set — resolvedAttachments will be ignored. The async builder is responsible ` +
+                `for injecting images into the prompt.`,
+            );
+          }
+          prompt = await spec.buildPromptAsync(inputs);
+        } else if (spec.resolvedAttachments !== undefined && spec.resolvedAttachments.length > 0) {
+          const blocks: ContentBlockParam[] = [{ type: 'text', text: spec.promptBuilder(inputs) }];
+          appendImageBlocks(blocks, spec.resolvedAttachments);
+          prompt = blocks;
+        } else {
+          prompt = spec.promptBuilder(inputs);
+        }
         const result = await handle.runToResult(prompt);
         if (result.status !== 'succeeded') {
           // When a TimeoutError was the abort reason, surface it as the

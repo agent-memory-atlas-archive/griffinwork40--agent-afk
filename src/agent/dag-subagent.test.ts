@@ -690,4 +690,136 @@ describe('runSubagentDAG', () => {
       expect(result.outputs['A']).toBeDefined();
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // resolvedAttachments branch (lines 340-349 of dag-subagent.ts)
+  //
+  // When a node has `resolvedAttachments` set (and no `buildPromptAsync`), the
+  // run loop must build a ContentBlockParam[] array: a text block with the
+  // string prompt followed by base64-encoded image blocks. The compose-executor
+  // populates this field via resolveSubagentAttachments for nodes that declare
+  // `attachments` in the compose input.
+  //
+  // (a) A node with `resolvedAttachments` set — verify the prompt passed to
+  //     runToResult is a ContentBlockParam[] with a text block + image blocks.
+  // (b) A downstream node with upstream edges AND resolvedAttachments — verify
+  //     promptBuilder(inputs) is called with the upstream context AND the
+  //     resulting text is used as the text block while image blocks follow.
+  // ---------------------------------------------------------------------------
+  describe('resolvedAttachments', () => {
+    it('(a) builds a ContentBlockParam[] with text + image blocks when resolvedAttachments is set', async () => {
+      pushHandle('analysis-done');
+      const manager = managerFromQueue();
+
+      const fakeImage = {
+        mediaType: 'image/png' as const,
+        bytes: Buffer.from('fake-png-bytes'),
+      };
+
+      const node: SubagentDAGNode = {
+        id: 'A',
+        systemPrompt: 'You are an image analyser.',
+        promptBuilder: () => 'Describe what you see.',
+        resolvedAttachments: [fakeImage],
+      };
+
+      const result = await runSubagentDAG({
+        manager,
+        parentSession: makeParent(),
+        nodes: [node],
+        edges: [],
+      });
+
+      expect(result.failed).toHaveLength(0);
+      expect(result.outputs['A']).toBe('analysis-done');
+
+      // The prompt passed to runToResult must be a ContentBlockParam[] array.
+      const prompt = handles[0]!.runToResult.mock.calls[0]?.[0] as unknown;
+      expect(Array.isArray(prompt)).toBe(true);
+      const blocks = prompt as { type: string; text?: string; source?: { type: string; media_type: string; data: string } }[];
+
+      // First block: text carrying the promptBuilder output.
+      expect(blocks[0]).toEqual({ type: 'text', text: 'Describe what you see.' });
+
+      // Second block: base64-encoded image.
+      expect(blocks[1]).toEqual({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/png',
+          data: Buffer.from('fake-png-bytes').toString('base64'),
+        },
+      });
+
+      expect(blocks).toHaveLength(2);
+    });
+
+    it('(b) downstream node with upstream edges AND resolvedAttachments: promptBuilder receives upstream context and image blocks follow', async () => {
+      pushHandle('upstream-result');
+      pushHandle('downstream-result');
+      const manager = managerFromQueue();
+
+      const fakeImage = {
+        mediaType: 'image/jpeg' as const,
+        bytes: Buffer.from('fake-jpg-bytes'),
+      };
+
+      let capturedInputs: Record<string, unknown> | undefined;
+
+      const nodes: SubagentDAGNode[] = [
+        {
+          id: 'Upstream',
+          systemPrompt: 'upstream agent',
+          promptBuilder: () => 'produce data',
+        },
+        {
+          id: 'Downstream',
+          systemPrompt: 'downstream image agent',
+          promptBuilder: (inputs) => {
+            capturedInputs = inputs;
+            return `process with context: ${inputs['Upstream'] as string}`;
+          },
+          resolvedAttachments: [fakeImage],
+        },
+      ];
+
+      const result = await runSubagentDAG({
+        manager,
+        parentSession: makeParent(),
+        nodes,
+        edges: [{ from: 'Upstream', to: 'Downstream' }],
+      });
+
+      expect(result.failed).toHaveLength(0);
+      expect(result.outputs['Upstream']).toBe('upstream-result');
+      expect(result.outputs['Downstream']).toBe('downstream-result');
+
+      // promptBuilder was called with the upstream node's output.
+      expect(capturedInputs).toBeDefined();
+      expect(capturedInputs!['Upstream']).toBe('upstream-result');
+
+      // The downstream prompt is a ContentBlockParam[] — text block uses the
+      // promptBuilder string (which includes the upstream context fence), image block follows.
+      const downstreamPrompt = handles[1]!.runToResult.mock.calls[0]?.[0] as unknown;
+      expect(Array.isArray(downstreamPrompt)).toBe(true);
+      const blocks = downstreamPrompt as { type: string; text?: string; source?: { type: string; media_type: string; data: string } }[];
+
+      // Text block carries the full promptBuilder output (including upstream fence).
+      expect(blocks[0]?.type).toBe('text');
+      expect(blocks[0]?.text).toContain('upstream-result');
+      expect(blocks[0]?.text).toContain('process with context:');
+
+      // Image block follows with the resolved attachment.
+      expect(blocks[1]).toEqual({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/jpeg',
+          data: Buffer.from('fake-jpg-bytes').toString('base64'),
+        },
+      });
+
+      expect(blocks).toHaveLength(2);
+    });
+  });
 });

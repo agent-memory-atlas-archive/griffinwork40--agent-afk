@@ -92,6 +92,13 @@ vi.mock('../auth/credential-resolver.js', () => ({
   resolveCredentialForModel: (...args: unknown[]) => mockResolveCredentialForModel(...args),
 }));
 
+// Mock resolveSubagentAttachments so tests can inject resolved attachments
+// without touching the filesystem or requiring real image data.
+const mockResolveSubagentAttachments = vi.fn(async () => [] as import('../content/image-blocks.js').ImageBlockAttachment[]);
+vi.mock('./subagent/attachment-resolve.js', () => ({
+  resolveSubagentAttachments: (...args: unknown[]) => mockResolveSubagentAttachments(...args),
+}));
+
 import { ComposeExecutor, cleanupComposeSpills, type ComposeExecutorContext } from './compose-executor.js';
 
 function makeCall(input: unknown): ToolCall {
@@ -2060,6 +2067,164 @@ describe('ComposeExecutor', () => {
       expect(result.isError).toBe(true);
       expect(result.content).toContain('"research-agent" not found');
       expect(mockRunSubagentDAG).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Per-node attachments
+  //
+  // A compose node with `attachments` must have them resolved via
+  // resolveSubagentAttachments and the resulting ImageBlockAttachment[] set as
+  // `resolvedAttachments` on the corresponding SubagentDAGNode. Nodes without
+  // attachments must be passed through unchanged (regression guard).
+  // -------------------------------------------------------------------------
+  describe('per-node attachments', () => {
+    it('resolves attachments and sets resolvedAttachments on the DAG node', async () => {
+      const fakeAttachment = {
+        mediaType: 'image/png' as const,
+        bytes: Buffer.from('fake-png'),
+      };
+      mockResolveSubagentAttachments.mockResolvedValueOnce([fakeAttachment]);
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { a: 'done' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext({ cwd: '/tmp/proj' }));
+      await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'analyse this', attachments: ['img_abc123'] }],
+      }));
+
+      // resolveSubagentAttachments was called with the node's attachment paths.
+      expect(mockResolveSubagentAttachments).toHaveBeenCalledOnce();
+      const resolveArgs = mockResolveSubagentAttachments.mock.calls[0][0] as {
+        paths: string[];
+        sessionId: string;
+      };
+      expect(resolveArgs.paths).toEqual(['img_abc123']);
+      expect(resolveArgs.sessionId).toBe('parent-session');
+
+      // The resolved attachment is forwarded to the DAG node.
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0] as { nodes: { resolvedAttachments?: unknown }[] };
+      expect(dagOpts.nodes[0].resolvedAttachments).toEqual([fakeAttachment]);
+    });
+
+    it('does not set resolvedAttachments on nodes without attachments (regression guard)', async () => {
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { plain: 'done' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      await executor.execute(makeCall({
+        nodes: [{ id: 'plain', prompt: 'no attachments here' }],
+      }));
+
+      expect(mockResolveSubagentAttachments).not.toHaveBeenCalled();
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0] as { nodes: { resolvedAttachments?: unknown }[] };
+      expect('resolvedAttachments' in dagOpts.nodes[0]).toBe(false);
+    });
+
+    it('surfaces attachment resolution errors as per-node failures; sibling nodes still run', async () => {
+      // Node 'bad' fails attachment resolution; node 'good' has no attachments
+      // and must still be dispatched and succeed — the whole compose call must
+      // not abort just because one node had a bad path.
+      mockResolveSubagentAttachments.mockRejectedValueOnce(
+        new Error('Unknown inbound image id "img_missing"'),
+      );
+      // Sibling node runs fine.
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { good: 'sibling result' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      const result = await executor.execute(makeCall({
+        nodes: [
+          { id: 'bad', prompt: 'analyse', attachments: ['img_missing'] },
+          { id: 'good', prompt: 'sibling task' },
+        ],
+      }));
+
+      // The overall call is marked isError because a node failed.
+      expect(result.isError).toBe(true);
+      // The error message from the failed node is in the output.
+      expect(result.content).toContain('img_missing');
+      // The FAILED section for 'bad' appears in the formatted output.
+      expect(result.content).toContain('bad');
+      // runSubagentDAG was still called — sibling node 'good' was not blocked.
+      expect(mockRunSubagentDAG).toHaveBeenCalledOnce();
+      // Only 'good' was passed to runSubagentDAG (not 'bad', which pre-failed).
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0] as { nodes: { id: string }[] };
+      expect(dagOpts.nodes.map((n) => n.id)).toEqual(['good']);
+    });
+
+    it('filters edges referencing pre-failed nodes so validateDAG does not throw', async () => {
+      // Node 'bad' fails attachment resolution and is the 'from' in an edge.
+      // Without edge filtering, validateDAG would throw "Edge references
+      // non-existent node: bad", aborting the entire compose call.
+      mockResolveSubagentAttachments.mockRejectedValueOnce(
+        new Error('Unknown inbound image id "img_missing"'),
+      );
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { good: 'sibling result' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      const result = await executor.execute(makeCall({
+        nodes: [
+          { id: 'bad', prompt: 'analyse', attachments: ['img_missing'] },
+          { id: 'good', prompt: 'sibling task' },
+        ],
+        edges: [{ from: 'bad', to: 'good' }],
+      }));
+
+      // The overall call reports failure (a node failed).
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('img_missing');
+      // runSubagentDAG was still called — the edge was filtered, not passed.
+      expect(mockRunSubagentDAG).toHaveBeenCalledOnce();
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0] as { nodes: { id: string }[]; edges: { from: string; to: string }[] };
+      expect(dagOpts.nodes.map((n) => n.id)).toEqual(['good']);
+      // The edge referencing 'bad' was filtered out.
+      expect(dagOpts.edges).toEqual([]);
+    });
+
+    it('only resolves attachments for nodes that declare them; others are unaffected', async () => {
+      const fakeAttachment = {
+        mediaType: 'image/jpeg' as const,
+        bytes: Buffer.from('fake-jpg'),
+      };
+      mockResolveSubagentAttachments.mockResolvedValueOnce([fakeAttachment]);
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { withImg: 'done', noImg: 'done' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      await executor.execute(makeCall({
+        nodes: [
+          { id: 'withImg', prompt: 'has image', attachments: ['/abs/path/photo.jpg'] },
+          { id: 'noImg', prompt: 'no image' },
+        ],
+      }));
+
+      // Only one call to resolver — only the node that declared attachments.
+      expect(mockResolveSubagentAttachments).toHaveBeenCalledOnce();
+
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0] as {
+        nodes: { id: string; resolvedAttachments?: unknown }[];
+      };
+      const withImgNode = dagOpts.nodes.find((n) => n.id === 'withImg');
+      const noImgNode = dagOpts.nodes.find((n) => n.id === 'noImg');
+      expect(withImgNode?.resolvedAttachments).toEqual([fakeAttachment]);
+      expect('resolvedAttachments' in (noImgNode ?? {})).toBe(false);
     });
   });
 });
