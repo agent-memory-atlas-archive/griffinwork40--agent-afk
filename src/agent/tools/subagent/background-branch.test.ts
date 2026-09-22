@@ -448,4 +448,118 @@ describe('runBackgroundBranch', () => {
       ).resolves.toBeDefined();
     });
   });
+
+  // ─── budgetRelease wiring ─────────────────────────────────────────────────
+  //
+  // Item 1 fix (PR #1894): budgetRelease must be invoked on every terminal path
+  // so the delegation-budget slot is released even when the background branch
+  // errors out before the registry can do it via markTerminal/onSettled.
+  //
+  // Happy path: budgetRelease is forwarded into register({ onSettled }) so the
+  // registry owns the call — budgetRelease must NOT be called directly.
+  // Error paths: budgetRelease is called immediately before returning because
+  // no registry entry was created (markTerminal will never fire).
+  describe('budgetRelease wiring', () => {
+    it('calls budgetRelease immediately on the no-registry path', async () => {
+      const { handle } = fakeHandle();
+      const budgetRelease = vi.fn();
+
+      await runBackgroundBranch({
+        handle,
+        registry: undefined,
+        prompt: 'p',
+        model: 'sonnet',
+        parentSessionId: undefined,
+        budgetRelease,
+      });
+
+      expect(budgetRelease).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls budgetRelease immediately on the cap-error path', async () => {
+      const { handle } = fakeHandle();
+      const registry = fakeRegistry(() => {
+        throw new BackgroundJobCapError(5, 5);
+      });
+      const budgetRelease = vi.fn();
+
+      await runBackgroundBranch({
+        handle,
+        registry,
+        prompt: 'p',
+        model: 'sonnet',
+        parentSessionId: undefined,
+        budgetRelease,
+      });
+
+      expect(budgetRelease).toHaveBeenCalledTimes(1);
+    });
+
+    it('calls budgetRelease immediately on the generic-register-throw path', async () => {
+      const { handle } = fakeHandle();
+      const registry = fakeRegistry(() => {
+        throw new Error('unexpected registry failure');
+      });
+      const budgetRelease = vi.fn();
+
+      await expect(
+        runBackgroundBranch({
+          handle,
+          registry,
+          prompt: 'p',
+          model: 'sonnet',
+          parentSessionId: undefined,
+          budgetRelease,
+        }),
+      ).rejects.toThrow('unexpected registry failure');
+
+      // budgetRelease must still fire even though the error is re-thrown.
+      expect(budgetRelease).toHaveBeenCalledTimes(1);
+    });
+
+    it('forwards budgetRelease into register({ onSettled }) on the happy path and does NOT call it directly', async () => {
+      const { handle } = fakeHandle();
+      const registerSpy = vi.fn(() => makeJob());
+      const registry = fakeRegistry(registerSpy);
+      const budgetRelease = vi.fn();
+
+      await runBackgroundBranch({
+        handle,
+        registry,
+        prompt: 'p',
+        model: 'sonnet',
+        parentSessionId: undefined,
+        budgetRelease,
+      });
+
+      // The happy path must NOT call budgetRelease directly — the registry
+      // invokes it via markTerminal/onSettled when the job settles.
+      expect(budgetRelease).not.toHaveBeenCalled();
+
+      // budgetRelease is forwarded as the onSettled slot in the register args.
+      expect(registerSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ onSettled: budgetRelease }),
+      );
+    });
+
+    it('omits onSettled from register args when budgetRelease is undefined', async () => {
+      // When no budget is wired, register must be called WITHOUT an onSettled
+      // key — avoids a stale undefined listener slot in the registry.
+      const { handle } = fakeHandle();
+      const registerSpy = vi.fn(() => makeJob());
+      const registry = fakeRegistry(registerSpy);
+
+      await runBackgroundBranch({
+        handle,
+        registry,
+        prompt: 'p',
+        model: 'sonnet',
+        parentSessionId: undefined,
+        // budgetRelease omitted
+      });
+
+      const callArg = registerSpy.mock.calls[0]![0] as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(callArg, 'onSettled')).toBe(false);
+    });
+  });
 });

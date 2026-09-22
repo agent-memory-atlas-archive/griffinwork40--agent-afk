@@ -290,6 +290,20 @@ describe('resolveDelegationBudgetConfig', () => {
     expect(config?.maxConcurrentChildrenPerAgent).toBe(20); // clamped from 21 to 20
   });
 
+  it('clamps AFK_MAX_CONCURRENT_AGENTS=65 to the ceiling of 64', () => {
+    process.env['AFK_MAX_CONCURRENT_AGENTS'] = '65';
+    const config = resolveDelegationBudgetConfig();
+    expect(config).not.toBeUndefined();
+    expect(config?.maxConcurrentAgents).toBe(64); // clamped from 65 to 64
+  });
+
+  it('clamps AFK_MAX_TOTAL_AGENTS=201 to the ceiling of 200', () => {
+    process.env['AFK_MAX_TOTAL_AGENTS'] = '201';
+    const config = resolveDelegationBudgetConfig();
+    expect(config).not.toBeUndefined();
+    expect(config?.maxTotalAgents).toBe(200); // clamped from 201 to 200
+  });
+
   it('returns undefined for non-numeric string', () => {
     process.env['AFK_MAX_CONCURRENT_CHILDREN_PER_AGENT'] = 'abc';
     // Only this one var set, and it is non-numeric — all three resolve undefined
