@@ -642,7 +642,25 @@ export const composeTool: AnthropicToolDef = {
             cwd: { type: 'string', description: 'Absolute path for this node to run in (same semantics as `agent` tool cwd). Defaults to parent session cwd.' },
             readRoots: { type: 'array', items: { type: 'string' }, description: 'Optional extra read roots to pre-grant to this node. Each entry must be an absolute path with no `..` segments (and not a filesystem root or your home dir). Composed WITH (never replaces) the inherited parent read scope. Grandchildren must be re-granted (not inherited).' },
             writeRoots: { type: 'array', items: { type: 'string' }, description: 'Optional extra write roots to pre-grant to this node. Each entry must be an absolute path with no `..` segments. Composed WITH (never replaces) the child cwd.' },
-          }, required: ['id', 'prompt'], additionalProperties: false,
+            max_turns: {
+              type: 'number',
+              description:
+                'Optional per-node maximum conversation turns. Overrides any ' +
+                'compose-level default for this node only. 0 = unlimited. ' +
+                'Omit to inherit session defaults.',
+            },
+            max_tool_rounds: {
+              type: 'number',
+              description:
+                'Optional per-node tool-use ROUND budget. Overrides ' +
+                '`max_tool_rounds_per_node` for this node only. Same semantics ' +
+                'and bounds as the compose-level key (positive integer, 1-1000). ' +
+                'When omitted, the compose-level `max_tool_rounds_per_node` ' +
+                'applies (or the subagent default of 50 when that is also omitted).',
+            },
+          },
+          required: ['id', 'prompt'],
+          additionalProperties: false,
         },
         description: 'Subagent tasks to execute.',
       },

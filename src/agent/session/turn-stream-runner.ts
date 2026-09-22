@@ -260,6 +260,12 @@ export class TurnStreamRunner {
     }
     const outputRecorder = this.deps.getSubagentOutputRecorder();
 
+    // Invariant: one end() call with the correct status, resolved in the
+    // finally block so every exit path (normal, error, abort, close) is
+    // covered. The try body sets this to 'stream_complete' only when the
+    // loop exits normally; any thrown/aborted path skips that assignment
+    // and lands in finally with the pessimistic default still in place.
+    let endStatus: 'stream_complete' | 'aborted_or_incomplete' = 'aborted_or_incomplete';
     try {
       while (true) {
         const result = await this.deps.getProviderIterator().next();
@@ -285,12 +291,12 @@ export class TurnStreamRunner {
           if (output.type === 'done' || output.type === 'error') break;
         }
       }
-      outputRecorder?.end('stream_complete');
+      endStatus = 'stream_complete';
     } finally {
       // Invariant: `finally` is the ONLY path an aborted or timed-out child
       // takes — closing the generator runs it while `break` does not reach it.
       if (this.deps.getState() === 'streaming') {
-        outputRecorder?.end('aborted_or_incomplete');
+        outputRecorder?.end(endStatus);
         this.deps.setState('idle');
       }
     }

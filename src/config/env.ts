@@ -1954,8 +1954,41 @@ export type EnvObject = { readonly [K in (typeof ENV_REGISTRY)[number]['name']]:
  *   That's it — no manual getter needed.
  */
 const _envBase = {} as EnvObject;
+const _seenEnvNames = new Set<string>();
 for (const _entry of ENV_REGISTRY) {
   const _name = _entry.name; // close over name for the getter
+
+  // Invariant: three non-obvious constraints govern this defineProperty call —
+  // violating any one silently breaks security or correctness:
+  //
+  //   1. UNIQUENESS — each registry entry name must appear exactly once.
+  //      Object.defineProperty with `configurable: true` silently overwrites a
+  //      prior definition if the same name is registered twice, producing a
+  //      getter that only ever returns the LAST entry's value and with the LAST
+  //      entry's `enumerable` flag — the earlier definition is gone without any
+  //      error.  The guard below throws at module-load time rather than allowing
+  //      a silent overwrite that could hide a credential leak or a wrong getter.
+  //
+  //   2. SECRET → NON-ENUMERABLE — when `entry.secret === true`, `enumerable`
+  //      MUST be `false` so the getter is invisible to `Object.keys(env)`,
+  //      `for...in env`, and `JSON.stringify(env)`.  Direct access
+  //      (`env.ANTHROPIC_API_KEY`) is unaffected — non-enumerable blocks
+  //      accidental serialization only.  Omitting `secret: true` on a
+  //      credential entry leaks it into every serialized snapshot.
+  //
+  //   3. isPlainOutputRequested() COUPLES TO AFK_PLAIN_OUTPUT — the function
+  //      below reads `env.AFK_PLAIN_OUTPUT` by name.  If that registry entry
+  //      were renamed or removed, isPlainOutputRequested() would silently
+  //      return `false` for all inputs.  Keep the name in sync with any rename.
+  if (_seenEnvNames.has(_name)) {
+    throw new Error(
+      `ENV_REGISTRY duplicate: "${_name}" is registered more than once. ` +
+      'Each entry name must be unique — defineProperty with configurable:true ' +
+      'silently overwrites the prior definition, losing its getter and enumerable flag.',
+    );
+  }
+  _seenEnvNames.add(_name);
+
   Object.defineProperty(_envBase, _name, {
     // process.env reads stay in src/config/env.ts per audit-env-access.ts constraint.
     get(): string | undefined { return process.env[_name]; },

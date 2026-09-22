@@ -40,6 +40,11 @@ import { resolveComposeNodeProvider } from './compose-node-provider.js';
 import { buildComposeMaxDepthRefusal } from './skill-depth-message.js';
 import { getSessionsDir } from '../../paths.js';
 import { errorMessage } from '../../utils/errors.js';
+import { resolveSubagentAttachments } from './subagent/attachment-resolve.js';
+import { inboundAttachmentRegistry } from '../content/attachment-registry.js';
+import type { InboundAttachmentReader } from '../content/attachment-registry.js';
+import { appendImageBlocks } from '../content/image-blocks.js';
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources';
 
 export interface ComposeExecutorContext {
   // NOTE: compose nodes are NOT wired for the parent-registry fallback. The
@@ -152,6 +157,12 @@ export interface ComposeExecutorContext {
   workspaceStore?: WorkspaceStore;
   /** Tree-wide delegation budget. Opt-in: undefined when no budget env vars set. */
   delegationBudget?: import('./delegation-budget.js').DelegationBudget;
+  /**
+   * Registry for inbound image attachments (image ids shown as [image img_xxxxxx]).
+   * When omitted, falls back to the module-scope `inboundAttachmentRegistry`.
+   * Injectable for testing.
+   */
+  inboundAttachmentRegistry?: InboundAttachmentReader;
   /**
    * Callback wired to the per-call compose {@link SubagentManager} so every
    * successfully-completed DAG node's token usage and USD cost rolls up into
