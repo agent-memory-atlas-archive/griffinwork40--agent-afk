@@ -350,7 +350,7 @@ export async function runFarm(opts: RunFarmOptions): Promise<void> {
     model: resolvedModel,
     idPrefix: `farm-${manifest.taskSlug}-branch-${b.index}`,
     cwd: b.path,
-    readRoots: [b.path],
+    pinnedReadRoots: [b.path],
     writeRoots: [b.path],
   }));
 

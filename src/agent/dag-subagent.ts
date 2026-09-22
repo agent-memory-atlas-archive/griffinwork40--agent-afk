@@ -54,17 +54,24 @@ export interface SubagentDAGNode {
    */
   cwd?: string;
   /**
-   * Allowed roots for read-class tools in this node's subagent session.
+   * PINNING read roots for this node's subagent session. When set,
+   * inheritance from the parent is SUPPRESSED entirely -- the child sees ONLY
+   * these roots (plus its own cwd). Use exclusively for deliberate confinement
+   * (e.g. `afk farm` restricting each branch worker to its own worktree).
+   *
+   * For additive scope widening (the common case), set `extraReadRoots`
+   * instead -- it composes with inherited scope rather than replacing it.
+   *
    * Corresponds to `AgentConfig.readRoots`.
    */
-  readRoots?: string[];
+  pinnedReadRoots?: string[];
   /**
    * Additive extra read roots for this node's subagent session. Corresponds to
-   * `AgentConfig.extraReadRoots` — DISTINCT from {@link readRoots}: this field
-   * COMPOSES with the child's inherited read scope (union) rather than pinning
-   * it. Use this instead of `readRoots` when the goal is to widen access beyond
-   * the fork's natural scope without suppressing inheritance (the `readRoots`
-   * pin path used by `afk farm`).
+   * `AgentConfig.extraReadRoots` -- DISTINCT from {@link pinnedReadRoots}: this
+   * field COMPOSES with the child's inherited read scope (union) rather than
+   * pinning it. Use this instead of `pinnedReadRoots` when the goal is to widen
+   * access beyond the fork's natural scope without suppressing inheritance (the
+   * `pinnedReadRoots` pin path used by `afk farm`).
    *
    * @deprecated Prefer `manager.parentReadRoots` for additive read scope
    * widening. Direct use of `extraReadRoots` on a node spec bypasses the
@@ -189,7 +196,7 @@ export interface SubagentDAGOptions {
 function validateDagNodeRoots(spec: SubagentDAGNode): void {
   const candidates: Array<{ value: string; field: string }> = [];
   if (spec.cwd !== undefined) candidates.push({ value: spec.cwd, field: 'cwd' });
-  for (const r of spec.readRoots ?? []) candidates.push({ value: r, field: 'readRoots' });
+  for (const r of spec.pinnedReadRoots ?? []) candidates.push({ value: r, field: 'pinnedReadRoots' });
   for (const r of spec.writeRoots ?? []) candidates.push({ value: r, field: 'writeRoots' });
   // Internal field is `extraReadRoots` but the user-facing compose schema calls it `readRoots`.
   // Use the user-facing name in error messages so the model can map errors to its input.
@@ -271,7 +278,7 @@ export async function runSubagentDAG(options: SubagentDAGOptions): Promise<DAGRu
             systemPrompt: spec.systemPrompt,
             ...(spec.canUseTool !== undefined ? { canUseTool: spec.canUseTool } : {}),
             ...(spec.cwd !== undefined ? { cwd: spec.cwd } : {}),
-            ...(spec.readRoots !== undefined ? { readRoots: spec.readRoots } : {}),
+            ...(spec.pinnedReadRoots !== undefined ? { readRoots: spec.pinnedReadRoots } : {}),
             ...(spec.extraReadRoots !== undefined ? { extraReadRoots: spec.extraReadRoots } : {}),
             ...(spec.writeRoots !== undefined ? { writeRoots: spec.writeRoots } : {}),
             ...(spec.apiKey !== undefined ? { apiKey: spec.apiKey } : {}),

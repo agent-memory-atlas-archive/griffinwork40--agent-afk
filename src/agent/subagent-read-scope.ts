@@ -156,6 +156,16 @@ export interface InheritedReadRootsArgs {
    * that omits it gets byte-for-byte the pre-fix behaviour.
    */
   afkFrameworkRoot?: string | undefined;
+  /**
+   * The AFK skills directory (`~/.afk/skills`). Folded into a CONFINED fork's
+   * read union so children dispatched by skill orchestrators can read sibling
+   * skill definitions (SKILL.md files) when introspection or cross-skill
+   * delegation requires it.
+   *
+   * Same guard as the other grants: pass the SKILLS dir ONLY -- never
+   * `~/.afk/config` (credentials). `undefined` adds nothing.
+   */
+  afkSkillsRoot?: string | undefined;
 }
 
 /**
@@ -179,7 +189,7 @@ export interface InheritedReadRootsArgs {
  * leaves the provider default untouched.
  */
 export function computeInheritedReadRoots(args: InheritedReadRootsArgs): string[] | undefined {
-  const { parentReadRoots, parentCwd, childCwd, worktreeMainRoot, afkStateRoot, afkFrameworkRoot } =
+  const { parentReadRoots, parentCwd, childCwd, worktreeMainRoot, afkStateRoot, afkFrameworkRoot, afkSkillsRoot } =
     args;
   const resolvedChildCwd =
     childCwd !== undefined && childCwd !== '' ? path.resolve(childCwd) : undefined;
@@ -223,6 +233,13 @@ export function computeInheritedReadRoots(args: InheritedReadRootsArgs): string[
   // so it too is correctly seen as a broadening grant.
   if (afkFrameworkRoot !== undefined && afkFrameworkRoot !== '') {
     roots.add(path.resolve(afkFrameworkRoot));
+  }
+  // The AFK skills dir (~/.afk/skills) -- user-installed skill definitions
+  // (SKILL.md files) that skill orchestrators and cross-skill introspection
+  // dispatch children to read. Same rules as the roots above: callers pass
+  // this dir only, never ~/.afk/config.
+  if (afkSkillsRoot !== undefined && afkSkillsRoot !== '') {
+    roots.add(path.resolve(afkSkillsRoot));
   }
 
   // Nothing to grant, OR the only root is the child's own cwd (which equals the
