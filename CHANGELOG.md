@@ -11,6 +11,29 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.3] - 2026-09-22
+
+### Fixed
+- narrow hasValidToolUsePairing to search only nextUserBlocks (d7080fe4)
+- improve worktree tool error message for non-git cwd (9a5b2ee7)
+- warn agent to re-read files after patch_apply to prevent stale-context reverts (b0146ec9)
+- always append tool summary to text field for fallback path (5251817f)
+- improve worktree tool error message for non-git cwd (e79ef696)
+- rename SubagentDAGNode.readRoots to pinnedReadRoots + grant ~/.afk/skills to confined forks (9aba3c29)
+- resolve playwright chromium version mismatch and download timeout (#1998) (6a7cdb40)
+
+### Changed
+- Merge pull request #2038 from griffinwork40/afk/iso-agent-tool-1-ugktlk (d002fa0c)
+- Merge pull request #2037 from griffinwork40/fix/issue-1915-worktree-error-msg (af18b393)
+- Merge pull request #2034 from griffinwork40/fix/issue-2028-patch-apply-stale-context (4b45d97c)
+- Merge pull request #2023 from griffinwork40/afk/iso-fix-1998-2-kjx7ob (f3db69c9)
+- Merge pull request #2033 from griffinwork40/fix/issue-2005-tool-summary-fallback (378e4a0e)
+- Merge remote-tracking branch 'origin/main' into afk/resolve-pr-2030 (b3ea6345)
+- retrigger CI after test fix push (520091ab)
+- Revert "fix(#1915): improve worktree tool error message for non-git cwd" (a1e86311)
+- fix CI test failure and address review feedback (d1d675ea)
+- add SKILLS (Gap D) to expected read-root Sets in worktree-readroot tests (ee0ab1ea)
+
 ## [5.230.2] - 2026-09-22
 
 ### Fixed
