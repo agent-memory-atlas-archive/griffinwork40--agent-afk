@@ -41,12 +41,11 @@
  * @module improve/eval-gen/writer
  */
 
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import {
   existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   renameSync,
   writeFileSync,
 } from 'fs';
@@ -69,7 +68,8 @@ import { getAfkHome } from '../../paths.js';
 import { atomicWriteFile } from '../../utils/envFile.js';
 import { appendJsonlIndex, formatYyyymmdd } from '../_lib/writer-utils.js';
 import { describeEvalRunCoverage } from './eval-run-coverage.js';
-import { EvalGenError, sha256Bytes, sliceTracePrefix } from './replay-fixture.js';
+import { getEvalCasesForCard } from './eval-case-readers.js';
+import { EvalGenError, sha256Bytes, sliceTracePrefix, type SliceTraceResult } from './replay-fixture.js';
 
 // ---------------------------------------------------------------------------
 // ID generation
@@ -148,8 +148,18 @@ export interface BuildEvalCaseResult {
  * Slice rule (Sprint 3): full prefix from line 1 through the line carrying
  * `max(evidence.eventIndices)`. Documented in {@link EvalReplaySchema}.
  *
+ * **Fixture fallback**: when `sliceTracePrefix` throws
+ * `EvalGenError { code: 'source-not-found' }` — the source witness trace
+ * has been swept by retention — `buildEvalCase` checks whether an existing
+ * `<evalCaseId>.fixture.jsonl` file is already on disk. If it is, the
+ * fixture bytes are reused verbatim and their SHA-256 is recomputed from
+ * the actual file content. A `console.warn` is emitted to make the
+ * reuse visible. If no existing fixture is found the original error is
+ * re-thrown unchanged.
+ *
  * @throws EvalGenError {'evidence-row-out-of-range'} index ≥ card.evidence.length
- * @throws EvalGenError {'source-not-found' | 'seq-not-found' | …} from the slicer
+ * @throws EvalGenError {'source-not-found'} slicer error, no existing fixture to fall back to
+ * @throws EvalGenError {'seq-not-found' | …} other slicer errors (always re-thrown)
  */
 export function buildEvalCase(
   card: FailureCard,
@@ -173,7 +183,47 @@ export function buildEvalCase(
   const endSeq = Math.max(...evidence.eventIndices);
   const resolveAbs = ctx.resolveTraceAbsPath ?? defaultResolveTraceAbsPath;
   const sourceAbsPath = resolveAbs(evidence.tracePath);
-  const slice = sliceTracePrefix(sourceAbsPath, { endSeq });
+
+  // Attempt to slice the source trace, falling back to an existing fixture
+  // when the source trace has been swept by witness retention.
+  let slice: SliceTraceResult;
+  try {
+    slice = sliceTracePrefix(sourceAbsPath, { endSeq });
+  } catch (err) {
+    if (err instanceof EvalGenError && err.code === 'source-not-found') {
+      // Source trace swept by witness retention — search for an existing
+      // fixture from a prior eval-case generated for the same card slug.
+      const priorCases = getEvalCasesForCard(card.slug);
+      let existingFixturePath: string | undefined;
+      for (const prior of priorCases) {
+        const candidate = getEvalCaseFixturePath(prior.evalCaseId);
+        if (existsSync(candidate)) { existingFixturePath = candidate; break; }
+      }
+      if (existingFixturePath) {
+        const fixtureBytes = readFileSync(existingFixturePath);
+        const fixtureSha256 = createHash('sha256').update(fixtureBytes).digest('hex');
+        const fixtureLineCount = countLines(fixtureBytes);
+        console.warn(
+          `[eval-gen] WARNING: source trace not found (${sourceAbsPath}); ` +
+            `reusing existing fixture at ${existingFixturePath} ` +
+            `(${fixtureLineCount} lines, sha256 ${fixtureSha256.slice(0, 12)}…)`,
+        );
+        slice = {
+          bytes: fixtureBytes,
+          startLine: 1,
+          endLine: fixtureLineCount,
+          sliceLineCount: fixtureLineCount,
+          sliceSha256: fixtureSha256,
+          sourceLineCount: fixtureLineCount,
+        };
+      } else {
+        // No existing fixture for this card — re-throw the original error.
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
 
   const createdAt = (ctx.now ?? (() => new Date()))().toISOString();
   const fixtureAbsPath = getEvalCaseFixturePath(ctx.evalCaseId);
@@ -240,6 +290,22 @@ export function buildEvalCase(
 
 function defaultResolveTraceAbsPath(relativeTracePath: string): string {
   return join(getAfkHome(), relativeTracePath);
+}
+
+/**
+ * Count the number of lines in a Buffer. A line is terminated by `\n`;
+ * a trailing line without a final newline still counts as one line.
+ * Returns 0 for an empty buffer.
+ */
+function countLines(bytes: Buffer): number {
+  if (bytes.length === 0) return 0;
+  let count = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0x0a) count++;
+  }
+  // Count the trailing line if the file does not end with \n.
+  if (bytes[bytes.length - 1] !== 0x0a) count++;
+  return count;
 }
 
 function buildTitle(card: FailureCard, endSeq: number): string {
@@ -412,81 +478,20 @@ export function renderEvalCaseMarkdown(ec: EvalCase): string {
 }
 
 // ---------------------------------------------------------------------------
-// Read-side helpers
+// Read-side helpers — re-exported from sibling module so no downstream
+// importer needs to change its import path.
 // ---------------------------------------------------------------------------
 
-export interface EvalCaseListEntry {
-  evalCaseId: string;
-  cardSlug: string;
-  proposalId: string | null;
-  title: string;
-  kind: EvalCase['kind'];
-  status: EvalCase['status'];
-  patternId: EvalCase['assertion']['patternId'];
-  createdAt: string;
-  sliceSha256: string;
-}
-
-export function listEvalCases(): EvalCaseListEntry[] {
-  const dir = getEvalCasesDir();
-  if (!existsSync(dir)) return [];
-  const entries: EvalCaseListEntry[] = [];
-  for (const name of readdirSync(dir)) {
-    if (!name.endsWith('.json')) continue;
-    if (name.startsWith('.')) continue;
-    if (name.endsWith('.fixture.jsonl')) continue; // never matches .json but defensive
-    const ec = readEvalCaseIfExists(join(dir, name));
-    if (!ec) continue;
-    entries.push({
-      evalCaseId: ec.evalCaseId,
-      cardSlug: ec.cardSlug,
-      proposalId: ec.proposalId,
-      title: ec.title,
-      kind: ec.kind,
-      status: ec.status,
-      patternId: ec.assertion.patternId,
-      createdAt: ec.createdAt,
-      sliceSha256: ec.replay.sliceSha256,
-    });
-  }
-  // Newest first by createdAt; stable by id.
-  entries.sort((a, b) => {
-    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
-    return a.evalCaseId < b.evalCaseId ? -1 : 1;
-  });
-  return entries;
-}
-
-export function getEvalCase(evalCaseId: string): EvalCase | undefined {
-  return readEvalCaseIfExists(getEvalCaseJsonPath(evalCaseId));
-}
-
-export function getEvalCasesForCard(cardSlug: string): EvalCase[] {
-  return listEvalCases()
-    .filter((e) => e.cardSlug === cardSlug)
-    .map((e) => getEvalCase(e.evalCaseId))
-    .filter((ec): ec is EvalCase => ec !== undefined);
-}
-
-export function getEvalCasesForProposal(proposalId: string): EvalCase[] {
-  return listEvalCases()
-    .filter((e) => e.proposalId === proposalId)
-    .map((e) => getEvalCase(e.evalCaseId))
-    .filter((ec): ec is EvalCase => ec !== undefined);
-}
-
-function readEvalCaseIfExists(path: string): EvalCase | undefined {
-  if (!existsSync(path)) return undefined;
-  try {
-    const raw = readFileSync(path, 'utf-8');
-    const parsed = JSON.parse(raw);
-    const validated = EvalCaseSchema.safeParse(parsed);
-    if (!validated.success) return undefined;
-    return validated.data;
-  } catch {
-    return undefined;
-  }
-}
+export type {
+  EvalCaseListEntry,
+} from './eval-case-readers.js';
+export {
+  getEvalCase,
+  getEvalCasesForCard,
+  getEvalCasesForProposal,
+  listEvalCases,
+  readEvalCaseIfExists,
+} from './eval-case-readers.js';
 
 // ---------------------------------------------------------------------------
 // Index append

@@ -30,7 +30,7 @@ import {
   renderEvalCaseMarkdown,
   writeEvalCase,
 } from './writer.js';
-import { sha256Bytes } from './replay-fixture.js';
+import { EvalGenError, sha256Bytes } from './replay-fixture.js';
 import {
   EvalCaseSchema,
   type EvalCase,
@@ -384,6 +384,53 @@ describe('buildEvalCase', () => {
 
     // Fixtures must differ.
     expect(rowA.evalCase.replay.sliceSha256).not.toBe(rowB.evalCase.replay.sliceSha256);
+  });
+
+  it('falls back to existing fixture when source trace is missing (witness-sweep scenario)', () => {
+    // Build an eval-case with a live trace to get valid fixture bytes.
+    const { card } = setupSession();
+    const firstBuild = buildEvalCase(card, {
+      evalCaseId: 'fallback-fixture',
+      evidenceRowIndex: 0,
+      now: FIXED_NOW,
+    });
+    // Write the fixture to disk so it exists as the prior generation artifact.
+    writeEvalCase(firstBuild.evalCase, firstBuild.sliceBytes);
+    const existingFixturePath = getEvalCaseFixturePath('fallback-fixture');
+    const existingFixtureBytes = readFileSync(existingFixturePath);
+    const expectedSha = sha256Bytes(existingFixtureBytes);
+
+    // Now point the resolver at a non-existent trace to simulate witness-sweep.
+    const result = buildEvalCase(card, {
+      evalCaseId: 'fallback-fixture',
+      evidenceRowIndex: 0,
+      now: FIXED_NOW,
+      resolveTraceAbsPath: () => '/nonexistent/path/that/was/swept/trace.jsonl',
+    });
+
+    // Should succeed, reusing the fixture.
+    expect(result.evalCase.replay.sliceSha256).toBe(expectedSha);
+    expect(sha256Bytes(result.sliceBytes)).toBe(expectedSha);
+    expect(Buffer.compare(result.sliceBytes, existingFixtureBytes)).toBe(0);
+  });
+
+  it('re-throws source-not-found when trace is missing AND no existing fixture on disk', () => {
+    const { card } = setupSession();
+    // Do NOT write any fixture to disk — only the trace was written.
+    // Redirect the resolver to a non-existent path so sliceTracePrefix throws.
+    let caught: unknown;
+    try {
+      buildEvalCase(card, {
+        evalCaseId: 'no-fallback-fixture',
+        evidenceRowIndex: 0,
+        now: FIXED_NOW,
+        resolveTraceAbsPath: () => '/nonexistent/swept/trace.jsonl',
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(EvalGenError);
+    expect((caught as EvalGenError).code).toBe('source-not-found');
   });
 });
 

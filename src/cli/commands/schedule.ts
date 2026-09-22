@@ -14,10 +14,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { handleCommandError } from '../errors/index.js';
 import {
   loadSchedules,
-  saveSchedules,
   addSchedule,
   removeSchedule,
-  getSchedule,
+  toggleScheduleEnabled,
+  toScheduledTask,
 } from '../../agent/daemon/schedule-store.js';
 import { getTelemetryPath } from '../../paths.js';
 import { trySyncToDaemon, SYNC_FAILED_NOTE } from '../../agent/daemon/http-client.js';
@@ -137,24 +137,12 @@ export function registerScheduleCommand(program: Command): void {
   // schedule enable
   schedule.command('enable <id>').description('Enable a scheduled task').action(async (id: string) => {
     try {
-      const config = getSchedule(id);
-      if (!config) {
+      const updated = toggleScheduleEnabled(id, true);
+      if (!updated) {
         console.error(`Task not found: ${id}`);
         process.exit(1);
       }
-      const schedules = loadSchedules();
-      saveSchedules(
-        schedules.map((s) =>
-          s.id === id ? { ...s, enabled: true, updatedAt: new Date().toISOString() } : s,
-        ),
-      );
-      const syncEnable = await trySyncToDaemon('POST', '/tasks', {
-        taskId: config.id,
-        command: config.command,
-        cron: config.cron,
-        trigger: config.trigger,
-        notifyOn: config.notifyOn,
-      });
+      const syncEnable = await trySyncToDaemon('POST', '/tasks', toScheduledTask(updated));
       if (!syncEnable.synced) console.error(`⚠️  ${SYNC_FAILED_NOTE}`);
       console.log(`✅ Enabled: ${id}`);
     } catch (err) {
@@ -165,17 +153,11 @@ export function registerScheduleCommand(program: Command): void {
   // schedule disable
   schedule.command('disable <id>').description('Disable a scheduled task').action(async (id: string) => {
     try {
-      const config = getSchedule(id);
-      if (!config) {
+      const updated = toggleScheduleEnabled(id, false);
+      if (!updated) {
         console.error(`Task not found: ${id}`);
         process.exit(1);
       }
-      const schedules = loadSchedules();
-      saveSchedules(
-        schedules.map((s) =>
-          s.id === id ? { ...s, enabled: false, updatedAt: new Date().toISOString() } : s,
-        ),
-      );
       const syncDisable = await trySyncToDaemon('DELETE', `/tasks/${id}`);
       if (!syncDisable.synced) console.error(`⚠️  ${SYNC_FAILED_NOTE}`);
       console.log(`✅ Disabled: ${id}`);

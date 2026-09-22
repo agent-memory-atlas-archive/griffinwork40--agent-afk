@@ -162,6 +162,29 @@ export function getSchedule(id: string, path?: string): ScheduledTaskConfig | un
 }
 
 /**
+ * Toggle a schedule's enabled state. Atomically loads, updates, and saves.
+ *
+ * Returns the updated config, or undefined if the ID is not found.
+ *
+ * This is the single source of truth for enable/disable persistence — the CLI
+ * commands and the cancel_schedule tool handler all delegate here so the
+ * toggle logic stays in one place and no fields are silently dropped.
+ */
+export function toggleScheduleEnabled(
+  id: string,
+  enabled: boolean,
+  path?: string,
+): ScheduledTaskConfig | undefined {
+  const schedules = loadSchedules(path);
+  const idx = schedules.findIndex((s) => s.id === id);
+  if (idx === -1) return undefined;
+  const updated = { ...schedules[idx]!, enabled, updatedAt: new Date().toISOString() };
+  schedules[idx] = updated;
+  saveSchedules(schedules, path);
+  return updated;
+}
+
+/**
  * Convert a human-readable name into a URL/file-safe slug.
  * Lowercases, replaces non-alphanumeric chars with hyphens, collapses
  * consecutive hyphens, and strips leading/trailing hyphens.
