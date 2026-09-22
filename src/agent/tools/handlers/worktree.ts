@@ -167,7 +167,11 @@ export function createWorktreeHandler(
       ctx = await resolveRepoContext(execFile, anchor);
     } catch (err) {
       return {
-        content: `Cannot resolve git repo root from ${anchor}: ${errorMessage(err)}`,
+        content:
+          `Cannot resolve git repo root from ${anchor}: ${errorMessage(err)}\n\n` +
+          `This usually means the subagent was dispatched without an explicit \`cwd\` pointing at a git repository. ` +
+          `Fix: pass \`cwd\` set to the project root when dispatching the subagent (e.g. the repo root returned by a prior worktree create, or the session's own git checkout root). ` +
+          `The worktree tool requires a git working directory to locate \`.afk-worktrees/\`.`,
         isError: true,
       };
     }
