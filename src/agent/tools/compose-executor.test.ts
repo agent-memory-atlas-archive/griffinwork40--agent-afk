@@ -2162,6 +2162,39 @@ describe('ComposeExecutor', () => {
       expect(dagOpts.nodes.map((n) => n.id)).toEqual(['good']);
     });
 
+    it('filters edges referencing pre-failed nodes so validateDAG does not throw', async () => {
+      // Node 'bad' fails attachment resolution and is the 'from' in an edge.
+      // Without edge filtering, validateDAG would throw "Edge references
+      // non-existent node: bad", aborting the entire compose call.
+      mockResolveSubagentAttachments.mockRejectedValueOnce(
+        new Error('Unknown inbound image id "img_missing"'),
+      );
+      mockRunSubagentDAG.mockResolvedValue({
+        outputs: { good: 'sibling result' },
+        failed: [],
+        skipped: [],
+      });
+
+      const executor = new ComposeExecutor(makeContext());
+      const result = await executor.execute(makeCall({
+        nodes: [
+          { id: 'bad', prompt: 'analyse', attachments: ['img_missing'] },
+          { id: 'good', prompt: 'sibling task' },
+        ],
+        edges: [{ from: 'bad', to: 'good' }],
+      }));
+
+      // The overall call reports failure (a node failed).
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('img_missing');
+      // runSubagentDAG was still called — the edge was filtered, not passed.
+      expect(mockRunSubagentDAG).toHaveBeenCalledOnce();
+      const dagOpts = mockRunSubagentDAG.mock.calls[0][0] as { nodes: { id: string }[]; edges: { from: string; to: string }[] };
+      expect(dagOpts.nodes.map((n) => n.id)).toEqual(['good']);
+      // The edge referencing 'bad' was filtered out.
+      expect(dagOpts.edges).toEqual([]);
+    });
+
     it('only resolves attachments for nodes that declare them; others are unaffected', async () => {
       const fakeAttachment = {
         mediaType: 'image/jpeg' as const,

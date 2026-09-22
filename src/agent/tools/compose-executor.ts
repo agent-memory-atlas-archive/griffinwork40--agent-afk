@@ -46,6 +46,7 @@ import { errorMessage } from '../../utils/errors.js';
 import { resolveSubagentAttachments } from './subagent/attachment-resolve.js';
 import { inboundAttachmentRegistry as defaultInboundAttachmentRegistry } from '../content/attachment-registry.js';
 import type { InboundAttachmentReader } from '../content/attachment-registry.js';
+
 export interface ComposeExecutorContext {
   // NOTE: compose nodes are NOT wired for the parent-registry fallback. The
   // DAG executor (dag-subagent.ts) forks each node with `parent: { sessionId }`
@@ -851,11 +852,17 @@ export class ComposeExecutor {
       // governed solely by the operator's AFK_MAX_CONCURRENT_SUBAGENT_CALLS
       // ceiling. Adding such a field would let the agent override an operator
       // safety limit, which is why it is absent rather than merely unset here.
+      // Filter edges that reference pre-failed nodes so validateDAG does not
+      // throw "Edge references non-existent node" for an attachment-error node.
+      const failedNodeIds = new Set(attachmentErrors.map((e) => e.id));
+      const dagEdges = failedNodeIds.size > 0
+        ? (parsed.edges ?? []).filter((e) => !failedNodeIds.has(e.from) && !failedNodeIds.has(e.to))
+        : (parsed.edges ?? []);
       const dagResult = await runSubagentDAG({
         manager,
         parentSession: this.ctx.parentSession,
         nodes: dagNodes,
-        edges: parsed.edges ?? [],
+        edges: dagEdges,
         failFast: parsed.fail_fast,
         nodeTimeoutMs: parsed.node_timeout_ms,
         // Item 2: thread the budget so every DAG node is counted individually.
