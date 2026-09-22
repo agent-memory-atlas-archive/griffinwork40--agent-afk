@@ -552,7 +552,7 @@ export class ComposeExecutor {
           : applyParentCredentialFallback({ childModel: nodeModel, resolved: freshKey, parentApiKey: this.ctx.apiKey });
         return {
           id: n.id,
-          agentType: `${n.id} [${i + 1}/${totalNodes}]`,
+          agentType: n.agent_type ?? `${n.id} [${i + 1}/${totalNodes}]`,
           parentId: composeToolUseId,
           // Pass the raw base prompt, not the assembled prompt with ROUTING_DIRECTIVE.
           // Compose nodes are task workers — they must not inherit orchestration
