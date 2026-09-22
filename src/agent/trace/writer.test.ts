@@ -268,16 +268,18 @@ describe('NdjsonTraceWriter', () => {
   });
 
   it('process-exit backstop seals a real crashed subprocess (end-to-end wiring)', async () => {
-    // Spawns a subprocess via the tsx bin wrapper. On Windows pnpm/npm create a
-    // .cmd shim instead of a POSIX shell script, so we pick the right extension
-    // per platform. shell:true is required on Windows to execute .cmd files.
+    // Spawns a child via `node --import tsx/esm` rather than the tsx binary
+    // shim. This avoids two Windows-specific pitfalls:
+    //   1. pnpm/npm produce a .cmd shim on Windows that requires shell:true to
+    //      execute, and PowerShell's handling of .cmd + spawnSync is fragile.
+    //   2. shell:true opens an environment-variable injection surface.
+    // Using process.execPath + the Node loader API keeps the invocation
+    // identical on every platform: no shell, no shim, no extension lookup.
     const { spawnSync } = await import('node:child_process');
     const { fileURLToPath } = await import('node:url');
     const { writeFile: writeFileAsync } = await import('node:fs/promises');
     const here = dirname(fileURLToPath(import.meta.url));
     const writerSrc = join(here, 'writer.ts');
-    const tsxExt = process.platform === 'win32' ? 'tsx.cmd' : 'tsx';
-    const tsxBin = join(here, '..', '..', '..', 'node_modules', '.bin', tsxExt);
 
     // Child: open a writer, write one event (flushed), then throw uncaught.
     // The throw must escape with no handler so Node fires 'exit' and the
@@ -295,12 +297,18 @@ describe('NdjsonTraceWriter', () => {
     );
 
     const childTraceDir = join(traceDir, 'child-trace');
-    const res = spawnSync(tsxBin, [childPath], {
-      env: { ...process.env, CHILD_TRACE_DIR: childTraceDir },
-      encoding: 'utf8',
-      timeout: 30_000,
-      shell: process.platform === 'win32',
-    });
+    const res = spawnSync(
+      process.execPath,
+      ['--import', 'tsx/esm', childPath],
+      {
+        env: { ...process.env, CHILD_TRACE_DIR: childTraceDir },
+        encoding: 'utf8',
+        timeout: 30_000,
+        // No shell: node is a real executable on every platform. shell:true
+        // is never needed here and would widen the env-injection surface.
+        shell: false,
+      },
+    );
     expect(res.status).toBe(1); // crashed (uncaught exception)
 
     const events = await readTrace(join(childTraceDir, 'trace.jsonl'));
