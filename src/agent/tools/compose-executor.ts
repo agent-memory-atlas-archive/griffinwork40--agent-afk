@@ -40,11 +40,7 @@ import { resolveComposeNodeProvider } from './compose-node-provider.js';
 import { buildComposeMaxDepthRefusal } from './skill-depth-message.js';
 import { getSessionsDir } from '../../paths.js';
 import { errorMessage } from '../../utils/errors.js';
-import { resolveSubagentAttachments } from './subagent/attachment-resolve.js';
-import { inboundAttachmentRegistry } from '../content/attachment-registry.js';
 import type { InboundAttachmentReader } from '../content/attachment-registry.js';
-import { appendImageBlocks } from '../content/image-blocks.js';
-import type { ContentBlockParam } from '@anthropic-ai/sdk/resources';
 
 export interface ComposeExecutorContext {
   // NOTE: compose nodes are NOT wired for the parent-registry fallback. The
