@@ -595,9 +595,11 @@ export class ComposeExecutor {
           // forwarded as the ADDITIVE field (AgentConfig.extraReadRoots) so the
           // fork COMPOSES with its inherited read scope rather than pinning it
           // (the readRoots pin path used by afk farm). writeRoots pins exactly.
-          // The downstream validateDagNodeRoots (dag-subagent.ts) enforces the
-          // same breadth guards as the agent tool path — isTooBroadRoot /
-          // ungatedSensitiveRoot.
+          // The downstream validateDagNodeRoots (dag-subagent.ts) enforces
+          // breadth guards (isTooBroadRoot / ungatedSensitiveRoot) on all four
+          // root fields including extraReadRoots. parseNodePaths (above) also
+          // applies isReadDenied to readRoots entries at parse time, matching
+          // the agent tool path's step (b).
           ...(n.cwd !== undefined ? { cwd: n.cwd } : {}),
           ...(n.readRoots !== undefined ? { extraReadRoots: n.readRoots } : {}),
           ...(n.writeRoots !== undefined ? { writeRoots: n.writeRoots } : {}),

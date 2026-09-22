@@ -10,6 +10,7 @@
 
 import path from 'path';
 import type { DAGEdge } from '../dag.js';
+import { isReadDenied, READ_DENYLIST_ENTRY_MARKER } from './handlers/read-denylist.js';
 
 export interface ComposeNodeInput {
   id: string;
@@ -112,6 +113,20 @@ function parseRootArray(
     }
     if (r.split(/[/\\]/).includes('..')) {
       throw new Error(`Node "${id}" ${field} entry must not contain ".." segments`);
+    }
+    // Denylist check — matches the agent tool path's step (b) in
+    // subagent/input-parse.ts. isReadDenied realpaths internally, so a
+    // symlinked credential path is caught here too. Applied only to
+    // readRoots (writeRoots is deliberately excluded — same as the agent
+    // path, per #740).
+    if (field === 'readRoots') {
+      const denied = isReadDenied(r);
+      if (denied.denied) {
+        throw new Error(
+          `Node "${id}" ${field} entry must not target a protected/credential path ` +
+            `(matches ${READ_DENYLIST_ENTRY_MARKER} ${denied.matched}), got: ${JSON.stringify(r)}`,
+        );
+      }
     }
     roots.push(r);
   }

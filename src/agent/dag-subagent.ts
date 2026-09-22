@@ -141,6 +141,7 @@ function validateDagNodeRoots(spec: SubagentDAGNode): void {
   if (spec.cwd !== undefined) candidates.push({ value: spec.cwd, field: 'cwd' });
   for (const r of spec.readRoots ?? []) candidates.push({ value: r, field: 'readRoots' });
   for (const r of spec.writeRoots ?? []) candidates.push({ value: r, field: 'writeRoots' });
+  for (const r of spec.extraReadRoots ?? []) candidates.push({ value: r, field: 'extraReadRoots' });
 
   for (const { value, field } of candidates) {
     // Resolve symlinks before checking — mirrors input-parse.ts's dual-check
