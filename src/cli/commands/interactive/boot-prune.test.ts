@@ -17,10 +17,21 @@ vi.mock('../../../agent/worktree/worktree-sweep.js', async () => {
 });
 
 vi.mock('node:child_process', () => ({
-  execFile: vi.fn((_file: string, _args: string[], cb: (err: Error | null, stdout: { stdout: string; stderr: string }) => void) => {
+  execFile: vi.fn((_file: string, _args: string[], optsOrCb: unknown, maybeCb?: unknown) => {
     // `git rev-parse --git-common-dir` — return a fake .git dir; the
     // boot-prune module then calls dirname() to get the repo root.
-    cb(null, { stdout: '/fake/repo/.git\n', stderr: '' } as unknown as { stdout: string; stderr: string });
+    // Node's promisify calls execFile as (file, args, opts, callback) when
+    // opts are present (ExecFileForGit now accepts opts?:{cwd?} and git.ts
+    // forwards { cwd }), or (file, args, callback) when opts are absent.
+    const cb = typeof maybeCb === 'function'
+      ? maybeCb
+      : (typeof optsOrCb === 'function' ? optsOrCb : undefined);
+    if (typeof cb === 'function') {
+      (cb as (err: Error | null, result: { stdout: string; stderr: string }) => void)(
+        null,
+        { stdout: '/fake/repo/.git\n', stderr: '' },
+      );
+    }
   }),
 }));
 
