@@ -1890,4 +1890,72 @@ describe('ComposeExecutor', () => {
       expect(mockBuildWaveUnit).not.toHaveBeenCalled();
     });
   });
+
+  describe('agent_type resolution', () => {
+    const researchAgent = {
+      name: 'research-agent',
+      definition: {
+        prompt: 'You are a research specialist.',
+        tools: ['read_file', 'grep', 'glob'],
+        model: 'haiku',
+      },
+      source: 'user' as const,
+    };
+    const registry: ReadonlyMap<string, typeof researchAgent> = new Map([
+      ['research-agent', researchAgent],
+    ]);
+
+    it('returns descriptive error for unknown agent_type naming available types', async () => {
+      const executor = new ComposeExecutor(makeContext({ agentRegistry: registry }));
+      const result = await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'task', agent_type: 'nonexistent-agent' }],
+      }));
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('"nonexistent-agent" not found');
+      expect(result.content).toContain('research-agent');
+      expect(mockRunSubagentDAG).not.toHaveBeenCalled();
+    });
+
+    it('applies named agent system prompt to node', async () => {
+      mockRunSubagentDAG.mockResolvedValue({ outputs: { a: 'ok' }, failed: [], skipped: [] });
+      const executor = new ComposeExecutor(makeContext({ agentRegistry: registry }));
+      await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'research task', agent_type: 'research-agent' }],
+      }));
+      const dagOpts = mockRunSubagentDAG.mock.calls[0]?.[0];
+      // Named agent's definition prompt replaces the generic system prompt
+      expect(dagOpts.nodes[0].systemPrompt).toBe('You are a research specialist.');
+    });
+
+    it('sets agentType render label from the named agent', async () => {
+      mockRunSubagentDAG.mockResolvedValue({ outputs: { a: 'ok' }, failed: [], skipped: [] });
+      const executor = new ComposeExecutor(makeContext({ agentRegistry: registry }));
+      await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'research task', agent_type: 'research-agent' }],
+      }));
+      const dagOpts = mockRunSubagentDAG.mock.calls[0]?.[0];
+      expect(dagOpts.nodes[0].agentType).toBe('research-agent [1/1]');
+    });
+
+    it('nodes without agent_type continue to work as generic workers', async () => {
+      mockRunSubagentDAG.mockResolvedValue({ outputs: { a: 'ok' }, failed: [], skipped: [] });
+      const executor = new ComposeExecutor(makeContext({ agentRegistry: registry }));
+      await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'generic task' }],
+      }));
+      const dagOpts = mockRunSubagentDAG.mock.calls[0]?.[0];
+      expect(dagOpts.nodes[0].agentType).toBe('a [1/1]');
+      expect(dagOpts.nodes[0].systemPrompt).toBe('You are a helpful assistant.');
+    });
+
+    it('returns error when agent_type set but no registry wired', async () => {
+      const executor = new ComposeExecutor(makeContext()); // no agentRegistry
+      const result = await executor.execute(makeCall({
+        nodes: [{ id: 'a', prompt: 'task', agent_type: 'research-agent' }],
+      }));
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('"research-agent" not found');
+      expect(mockRunSubagentDAG).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -28,7 +28,13 @@ export interface ComposeNodeInput {
   max_tool_rounds?: number;
   /** Per-node turn budget. Forwarded to the fork config as maxTurns. */
   max_turns?: number;
-  /** Named agent type forwarded to the SubagentDAGNode as agentType. */
+  /**
+   * Named agent type for this node. When set, the compose executor resolves
+   * the agent definition from the registry and applies its system prompt,
+   * tool allowlist, and model defaults — identical to the `agent` tool's
+   * `agent_type` resolution. An unknown type fails the entire compose call
+   * with a clear error naming the available types.
+   */
   agent_type?: string;
 }
 
