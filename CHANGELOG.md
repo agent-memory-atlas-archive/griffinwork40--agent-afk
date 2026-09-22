@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.228.0] - 2026-09-22
+
+### Added
+- visual replay and content block preservation for session resumption (#1996) (a8bb65db)
+
 ## [5.227.1] - 2026-09-22
 
 ### Added
