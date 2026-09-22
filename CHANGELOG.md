@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.225.1] - 2026-09-22
+
+### Fixed
+- add defense-in-depth breadth guards to parseNodePaths (b3e09d5f)
+- add isReadDenied guard to writeRoots + test coverage (e91d1d2e)
+
+### Changed
+- Merge pull request #1975 from griffinwork40/afk/fix-1965-writeroots-denylist-tests (661f2c9a)
+- Merge pull request #1981 from griffinwork40/afk/iso-s2s3-v2-3-xb7kko (a245e762)
+
 ## [5.225.0] - 2026-09-22
 
 ### Added
