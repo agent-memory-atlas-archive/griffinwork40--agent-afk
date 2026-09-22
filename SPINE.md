@@ -13,7 +13,7 @@
 - **INV-006** (2026-09-17, spine-init): package.json advertises dist/index.d.ts as the public types entry point
 - **INV-007** (2026-09-17, spine-init): Audit scripts run against PREPARED SOURCE TREE, not compiled `dist/*.mjs`
 - **INV-008** (2026-09-17, spine-init): Audit contracts throw with every offending file:line on first failure; return success only when all pass
-- **INV-009** (2026-09-17, spine-init): File code-line ceiling is 350 LOC (comments/blanks excluded), ratcheted against `.filesize-baseline.json`
+- **INV-009** (2026-09-17, spine-init): File code-line ceiling is 350 LOC (comments/blanks excluded), ratcheted against `.filesize-baseline.json` (partially wea
 - **INV-010** (2026-09-17, spine-init): Footer URL must be visible on every post regardless of content length
 - **INV-011** (2026-09-17, spine-init): When `AFK_RELEASE_THREADS_TOKEN` is set, it MUST route posts to the designated thread
 - **INV-012** (2026-09-17, spine-init): Pass postText to spawnSync as an argv element, NOT as part of a shell command string
@@ -27,7 +27,7 @@
 - **INV-020** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Handler exception caught in hook dispatch must wrap in HookBlockedError (fail-safe, not fail-open)
 - **INV-021** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Hook handler return { decision: 'block' } must short-circuit the handler chain immediately
 - **INV-022** (2026-09-18, f1884bb2-c075-46d5-b0ea-f61d48342e64): Overlay content must not exceed viewport height; cap after word-wrap to prevent ghost-row duplicates in scrollback
-- **INV-023** (2026-09-22, d09d5fe9): All file persistence must use src/utils/atomic-write.ts (tmp+rename); no inline atomic-write implementations (#1921)
+- **INV-023** (2026-09-22, d09d5fe9): All file persistence must use src/utils/atomic-write.ts (tmp+rename); no inline atomic-write implementations (#1921) (re
 - **INV-024** (2026-09-22, 9e37173b): GrantManager interface must live in agent/tools/ layer, not cli/ — agent layer must not import cli/ for its own type definitions (#1856)
 - **INV-025** (2026-09-22, spine-audit): Abort signal is unconditional and terminal — if `signal.aborted` is true, callers must throw AbortError even if a hook would return `continue: true`. Abort takes precedence over every other decision surface (`src/agent/abort-graph.ts:9-12`)
 - **INV-026** (2026-09-22, spine-audit): In AbortGraph.abort(), the full descendant list must be materialized via BFS BEFORE any controller.abort() fires, and the emitAbort trace event must fire BEFORE the controllers — firing aborts inside the BFS races addEventListener listeners from linkChild (`src/agent/abort-graph.ts:203-236`)
@@ -50,6 +50,13 @@
 - **INV-043** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Goals scoped per git repository via projectKey parameter; fallback to 'current' key for backward compatibility (reinforc
 - **INV-044** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key derivation uses git-common-dir mode so linked worktrees of same repo share the same goal key (reinforced 202
 - **INV-045** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Goal injection via injectGoalPrompt() must derive projectKey from config.cwd and pass to buildGoalPromptFragment() (rein
+- **INV-046** (2026-09-22, af7dde45-59bf-448b-a092-700aed35e925): Orphan tool_use repair must scan all assistant turns, not just the tail, and splice repairs mid-sequence (reinforced 202
+- **INV-047** (2026-09-22, af7dde45-59bf-448b-a092-700aed35e925): Content blocks deserialized from disk must be validated against ALLOWED_BLOCK_TYPES allowlist before forwarding to Anthr
+- **INV-048** (2026-09-22, 480fa9c1-899d-4a8a-a884-06beac35cd0a): Orphan repair helpers must be factored to enable mid-sequence pairing validation across any assistant/user boundary (rei
+- **INV-049** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): isSubagentContext() extracted to src/agent/hooks/hook-utils.ts; all subagent checks must use this function, not inline p
+- **INV-050** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Abort signal forwarding must use forwardAbortSignal() utility from src/utils/abort.ts; hand-coded abort listeners must n
+- **INV-051** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Error status extraction must use getErrorStatus() from src/agent/providers/shared/error-status.ts; both Anthropic and Op
+- **INV-052** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): pinnedReadRoots suppresses parent inheritance; extraReadRoots composes additively. Field name signals semantics to calle
 
 
 ## Explicitly Rejected Patterns
@@ -60,7 +67,7 @@
 - **REJ-004** (2026-09-17, spine-init): Do not extract sessionSummary and costTokenLine as separate render components (reverted in #1401)
 - **REJ-005** (2026-09-22, spine-audit): Do not use AgentConfig.tools.allowedTools to enforce tool permissions on subagents — it is telemetry-only and never reaches the dispatcher. Only permissions.allowedTools on the constructed provider enforces (`src/agent/tools/nesting.ts:568-572`)
 - **REJ-006** (2026-09-22, spine-audit): Do not advertise MCP sampling capability in CLIENT_CAPABILITIES — sampling-dependent server tools silently hang waiting for a sampling/createMessage response that never comes (`src/agent/mcp/client.ts:14-22`)
-- **REJ-007** (2026-09-22, spine-audit): Do not use Date.now() or pid+Date.now() for atomic temp file naming — concurrent writes within the same ms share a name and silently overwrite. Use crypto.randomBytes(6) (`src/utils/atomic-write.ts:24-30`)
+- **REJ-007** (2026-09-22, spine-audit): Do not use Date.now() or pid+Date.now() for atomic temp file naming — concurrent writes within the same ms share a name 
 - **REJ-008** (2026-09-22, spine-audit): Do not fork a new session on /model switch — doing so resets cost/token/turn accumulators and re-fires SessionStart/SessionEnd hooks. ProviderRouter swaps only the inner provider below the session level (`src/agent/providers/router/provider-router.ts:21-25`)
 - **REJ-009** (2026-09-22, spine-audit): Path-approval hook is NOT a security boundary against an adversarial model — it only intercepts typed file tools. Bash has known bypasses (interpreter scripts, variable assembly, /proc/self/fd, brace expansion). OS-level sandboxing required for adversarial containment (`src/agent/tools/hooks/path-approval-hook.ts:9-17`)
 
@@ -77,3 +84,4 @@
 - **TST-008** (2026-09-22, spine-audit): Worktree sweep MIN_EMPTY_AGE_MS (1 hour) and the occupancy heartbeat interval are deliberately cross-referenced — raising the heartbeat above the empty-age gate silently re-breaks ghost-reaping with no test failures (`src/agent/worktree/worktree-sweep.ts:214-224`)
 - **TST-009** (2026-09-22, spine-audit): execFile callers that produce large output MUST set maxBuffer — Node's default 1MB cap rejects the promise on overflow rather than truncating. In the sweep engine, every failure path fails safe by protecting the worktree (`src/agent/worktree/worktree-sweep.ts:40-47`)
 - **TST-010** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key format: `proj.<sanitized-basename>-<sha1_hex8>`; sanitizes special chars to `_`, caps at 128 chars
+- **TST-011** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): Compaction core algorithm factored to shared/compaction.ts; provider-specific ops passed as collaborators to runCompacti

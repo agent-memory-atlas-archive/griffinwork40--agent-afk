@@ -30,10 +30,10 @@
 
 import { Command } from 'commander';
 import { execFileSync } from 'child_process';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
-import { basename, dirname, join } from 'path';
-import { randomBytes } from 'crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { createInterface } from 'node:readline';
+import { atomicWriteFile } from '../../utils/atomic-write.js';
 import { palette } from '../palette.js';
 import { handleCommandError } from '../errors/index.js';
 import { decoratePlaywrightLaunchError } from '../../browser/playwright-missing.js';
@@ -127,10 +127,7 @@ export function readMcpConfigFile(path: string): McpConfigFile {
  * never leaves a truncated config. Mirrors the pattern in schedule-store.ts.
  */
 export function writeMcpConfigFileAtomic(path: string, cfg: McpConfigFile): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = join(dirname(path), `.mcp.json.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
-  writeFileSync(tmp, `${JSON.stringify(cfg, null, 2)}\n`, 'utf-8');
-  renameSync(tmp, path);
+  atomicWriteFile(path, `${JSON.stringify(cfg, null, 2)}\n`, { mode: 0o600 });
 }
 
 /**
@@ -302,13 +299,7 @@ export function registerBrowserCommand(program: Command): void {
         // Atomic 0600 write (temp in the same dir → no EXDEV, then POSIX rename):
         // the vault is never observed truncated or at looser perms, closing the
         // write-then-chmod window on freshly-written credentials.
-        const tmp = join(
-          dirname(statePath),
-          `.${basename(statePath)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`,
-        );
-        writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 });
-        chmodSync(tmp, 0o600);
-        renameSync(tmp, statePath);
+        atomicWriteFile(statePath, JSON.stringify(state), { mode: 0o600, mkdirp: false });
         await browserInstance.close().catch(() => undefined);
 
         console.log(palette.success(`✓ Saved session for profile "${profile}"`));
