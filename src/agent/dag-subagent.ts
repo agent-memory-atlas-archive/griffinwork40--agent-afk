@@ -63,6 +63,12 @@ export interface SubagentDAGNode {
    * it. Use this instead of `readRoots` when the goal is to widen access beyond
    * the fork's natural scope without suppressing inheritance (the `readRoots`
    * pin path used by `afk farm`).
+   *
+   * @deprecated Prefer `manager.parentReadRoots` for additive read scope
+   * widening. Direct use of `extraReadRoots` on a node spec bypasses the
+   * manager's consolidated read-scope tracking and will be removed in a future
+   * release. Callers currently setting this field should migrate to passing
+   * extra roots through the SubagentManager construction options instead.
    */
   extraReadRoots?: string[];
   /**
@@ -113,6 +119,12 @@ export interface SubagentDAGNode {
    * requiring synchronous resolution or changing the base `promptBuilder`
    * signature. Prefer this over `promptBuilder` when the prompt construction
    * involves I/O (e.g. reading attachment files).
+   *
+   * @deprecated This field is scheduled for removal once the compose executor
+   * migrates to a unified async prompt contract. New callers should use
+   * `promptBuilder` for synchronous prompts; the multimodal attachment use
+   * case will be served by a dedicated `attachments` field on the node spec.
+   * Existing callers will receive a compatibility shim during the transition.
    */
   buildPromptAsync?: (
     inputs: Record<string, unknown>,
