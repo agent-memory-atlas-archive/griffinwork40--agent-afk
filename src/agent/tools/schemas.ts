@@ -159,6 +159,13 @@ export const editFileTool: AnthropicToolDef = {
         description:
           'If true, replace all occurrences. If false (default), fail when multiple matches exist.',
       },
+      expected_hash: {
+        type: 'string',
+        description:
+          'SHA-256 hash to verify the file has not changed (format: "sha256:<hex>"). ' +
+          "If the file's current hash does not match, the edit is rejected before any write occurs. " +
+          'Use to guard against stale-context overwrites after a prior patch_apply modified the file.',
+      },
     },
     required: ['file_path', 'old_string', 'new_string'],
   },
