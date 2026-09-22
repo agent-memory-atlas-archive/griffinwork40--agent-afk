@@ -43,6 +43,9 @@ import { resolveComposeNodeProvider } from './compose-node-provider.js';
 import { buildComposeMaxDepthRefusal } from './skill-depth-message.js';
 import { getSessionsDir } from '../../paths.js';
 import { errorMessage } from '../../utils/errors.js';
+import { resolveSubagentAttachments } from './subagent/attachment-resolve.js';
+import { inboundAttachmentRegistry as defaultInboundAttachmentRegistry } from '../content/attachment-registry.js';
+import type { InboundAttachmentReader } from '../content/attachment-registry.js';
 export interface ComposeExecutorContext {
   // NOTE: compose nodes are NOT wired for the parent-registry fallback. The
   // DAG executor (dag-subagent.ts) forks each node with `parent: { sessionId }`
@@ -165,6 +168,14 @@ export interface ComposeExecutorContext {
   agentRegistry?: AgentRegistry;
   /** Tree-wide delegation budget. Opt-in: undefined when no budget env vars set. */
   delegationBudget?: import('./delegation-budget.js').DelegationBudget;
+  /**
+   * Inbound attachment registry for resolving image IDs in per-node
+   * `attachments` arrays. Falls back to the module-scope singleton
+   * (`defaultInboundAttachmentRegistry`) when absent — matching the pattern
+   * SubagentExecutor uses (subagent-executor.ts). Wired from wire-executors.ts
+   * via the same `inboundAttachmentRegistry` import that the agent tool uses.
+   */
+  inboundAttachmentRegistry?: InboundAttachmentReader;
 
   /**
    * Callback wired to the per-call compose {@link SubagentManager} so every
@@ -566,7 +577,7 @@ export class ComposeExecutor {
         }
       }
 
-      const dagNodes: SubagentDAGNode[] = parsed.nodes.map((n, i) => {
+      const dagNodes: SubagentDAGNode[] = await Promise.all(parsed.nodes.map(async (n, i) => {
         // Named-agent lookup (already validated above; cannot be undefined here).
         const namedAgent = n.agent_type !== undefined
           ? this.ctx.agentRegistry?.get(n.agent_type)
@@ -583,7 +594,6 @@ export class ComposeExecutor {
           : undefined;
         const effectiveAllowedTools = resolvedAccess?.allowedTools;
         const effectiveReadOnlyBash = resolvedAccess?.bashReadOnly === true;
-
         // Resolve the node's effective model and provider FIRST so we can
         // decide whether to forward an API key. Mirrors the resolvedChildApiKey
         // pattern in SubagentExecutor (see subagent-executor.ts:433-444).
@@ -658,6 +668,21 @@ export class ComposeExecutor {
         const nodeSystemPrompt = namedAgent !== undefined
           ? namedAgent.definition.prompt
           : this.ctx.systemPrompt;
+
+        // Attachment resolution: when a node declares `attachments`, resolve
+        // them to ImageBlockAttachment[] using the same pipeline as the agent
+        // tool (subagent-executor.ts:717-747). Errors are surfaced as isError
+        // results matching the agent tool's error handling pattern.
+        let resolvedAttachments: import('../content/image-blocks.js').ImageBlockAttachment[] | undefined;
+        if (n.attachments !== undefined && n.attachments.length > 0) {
+          resolvedAttachments = await resolveSubagentAttachments({
+            paths: n.attachments,
+            resolveBase: n.cwd ?? this.currentCwd,
+            readRoots: nodeReadRoots,
+            sessionId: this.ctx.parentSession.sessionId,
+            registry: this.ctx.inboundAttachmentRegistry ?? defaultInboundAttachmentRegistry,
+          });
+        }
 
         return {
           id: n.id,
@@ -744,8 +769,12 @@ export class ComposeExecutor {
           ...(nodeProviderOverride !== undefined
             ? { provider: nodeProviderOverride }
             : resolveComposeNodeProvider(nodeModel, this.ctx.workspaceStore, this.ctx.openaiBaseUrl)),
+          // Per-node resolved attachments (undefined = no attachments, preserves
+          // prior behaviour exactly — dag-subagent.ts only builds image blocks
+          // when this field is set and non-empty).
+          ...(resolvedAttachments !== undefined ? { resolvedAttachments } : {}),
         };
-      });
+      }));
 
       // Wave manifest: create before the DAG starts so a crash mid-run leaves
       // a recoverable record. Only for ≥2 nodes (no manifest for solo dispatch).

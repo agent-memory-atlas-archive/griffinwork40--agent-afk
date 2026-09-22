@@ -359,6 +359,7 @@ export function wireExecutors(opts: WireExecutorsOptions): WiredExecutors {
     ...(opts.workspaceStore !== undefined ? { workspaceStore: opts.workspaceStore } : {}),
     agentRegistry,
     ...budgetOpt,
+    inboundAttachmentRegistry,
   });
 
   return { rootManager, subagentExecutor, skillExecutor, composeExecutor };

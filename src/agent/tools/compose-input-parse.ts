@@ -36,6 +36,15 @@ export interface ComposeNodeInput {
    * with a clear error naming the available types.
    */
   agent_type?: string;
+  /**
+   * Optional inbound image ids or absolute image paths to attach to this
+   * node's initial prompt. Same semantics as the `agent` tool's attachments
+   * field: image IDs are resolved against the session's inbound attachment
+   * registry; absolute paths are read under the parent's read-root policy.
+   * Resolved to `ImageBlockAttachment[]` in compose-executor.ts and injected
+   * as multimodal `ContentBlockParam[]` blocks via `appendImageBlocks`.
+   */
+  attachments?: string[];
 }
 
 export interface ComposeInput {
@@ -291,6 +300,21 @@ export function parseComposeInput(input: unknown): ParseResult {
       nodeAgentType = n['agent_type'];
     }
 
+    let nodeAttachments: string[] | undefined;
+    if (n['attachments'] !== undefined) {
+      if (!Array.isArray(n['attachments'])) {
+        throw new Error(`Node "${id}" attachments must be an array`);
+      }
+      const atts: string[] = [];
+      for (const a of n['attachments'] as unknown[]) {
+        if (typeof a !== 'string' || a.trim().length === 0) {
+          throw new Error(`Node "${id}" attachments entries must be non-empty strings`);
+        }
+        atts.push(a);
+      }
+      if (atts.length > 0) nodeAttachments = atts;
+    }
+
     parsed.push({
       id,
       prompt,
@@ -301,6 +325,7 @@ export function parseComposeInput(input: unknown): ParseResult {
       ...(nodeMaxToolRounds !== undefined ? { max_tool_rounds: nodeMaxToolRounds } : {}),
       ...(nodeMaxTurns !== undefined ? { max_turns: nodeMaxTurns } : {}),
       ...(nodeAgentType !== undefined ? { agent_type: nodeAgentType } : {}),
+      ...(nodeAttachments !== undefined ? { attachments: nodeAttachments } : {}),
     });
   }
 
