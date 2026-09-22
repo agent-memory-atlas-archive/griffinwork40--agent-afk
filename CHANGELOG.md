@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.2] - 2026-09-22
+
+### Fixed
+- rename SubagentDAGNode.readRoots to pinnedReadRoots + grant ~/.afk/skills to confined forks (#2030) (80fe7dec)
+- add expected_hash input gate to edit_file (#2028) (f030e2ed)
+
+### Changed
+- Merge pull request #2032 from griffinwork40/afk/i-don-t-have (96d0d063)
+- deduplicate CLI and slash command display formatters (#1836) (#2021) (f0f8c6bd)
+
 ## [5.230.1] - 2026-09-22
 
 ### Fixed
