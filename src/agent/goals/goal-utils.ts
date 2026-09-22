@@ -53,12 +53,13 @@ export function projectKeyForCwd(
 
   if (!root) return FALLBACK_KEY;
 
-  const slug = sanitizeKeySegment(basename(root));
+  // Cap only the slug so the 8-char hex hash is always preserved.
+  // key = "proj." (5) + slug + "-" (1) + hash (8) = slug budget: MAX_KEY_LEN - 14
+  const slug = sanitizeKeySegment(basename(root)).slice(0, MAX_KEY_LEN - 14);
   const hash = createHash('sha1').update(root).digest('hex').slice(0, 8);
   const key = `proj.${slug}-${hash}`;
 
-  // Ensure the assembled key never exceeds the StateStore limit.
-  return key.slice(0, MAX_KEY_LEN);
+  return key;
 }
 
 /**
