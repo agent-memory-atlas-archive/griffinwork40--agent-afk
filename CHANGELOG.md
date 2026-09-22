@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.225.4] - 2026-09-22
+
+### Fixed
+- add migration note for extraReadRoots removal + per-node cwd test (ba006c5a)
+- widen forkSubagent try/catch to cover register-to-active.set span (1576478a)
+- remove dead inboundAttachmentRegistry field (3687928c)
+
+### Changed
+- Merge pull request #1989 from griffinwork40/fix/issue-1922-fork-subagent-try-catch (c8645572)
+- Merge pull request #1990 from griffinwork40/fix/issue-1984-v2 (c6b3142b)
+- Merge pull request #1987 from griffinwork40/fix/issue-1966-remove-dead-registry-field (b0606d92)
+- Merge pull request #1988 from griffinwork40/chore/1925-internal-annotation-accountDenialBreakerPostGate (75f6aaae)
+- add @internal annotation to accountDenialBreakerPostGate (b2b6ef68)
+
 ## [5.225.3] - 2026-09-22
 
 ### Fixed
