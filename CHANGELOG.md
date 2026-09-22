@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.225.2] - 2026-09-22
+
+### Fixed
+- resolve SPINE.md to main repo root in worktrees, auto-stage after write (c9e40a9b)
+
+### Changed
+- Merge pull request #1977 from griffinwork40/fix/issue-1926-replay-suspected-loop-parallel (adcd3a3f)
+- Merge pull request #1976 from griffinwork40/fix/spine-worktree-resolution (3df7d24a)
+- replay observeSuspectedLoop after parallel wave (#1926) (7cb51e12)
+
 ## [5.225.1] - 2026-09-22
 
 ### Fixed
