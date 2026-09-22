@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.226.1] - 2026-09-22
+
+### Fixed
+- wire agentRegistry + inherit model + budgets + workspace store for named agent_type nodes (3e449f1b)
+- resolve named agent definitions for per-node agent_type (7c9c8d2d)
+- complete invariant comment, add extraReadRoots validation, per-node cwd manifest test (0f3883fb)
+- user-facing error names in validateDagNodeRoots + manifest cwd test (4ed4257f)
+
+### Changed
+- Merge pull request #1986 from griffinwork40/fix/issue-1982-resolve-agent-type (c1a63241)
+- Merge pull request #1979 from griffinwork40/fix/issue-1967-dag-error-names (e99cdfc2)
+
 ## [5.226.0] - 2026-09-22
 
 ### Added
