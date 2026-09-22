@@ -165,6 +165,12 @@ export interface SubagentDAGOptions {
  *
  * Farm's pinned roots (worktree subdirectories) pass both guards — they are
  * deep project-specific paths, not home / filesystem root / AFK dirs.
+ *
+ * // Invariant: the `field` strings in `candidates` are the USER-FACING names
+ * // `cwd`, `readRoots`, `writeRoots`, and `extraReadRoots` — matching the
+ * // {@link SubagentDAGNode} interface, not any internal alias. Error messages
+ * // interpolate `field` directly, so users always see the name they set on
+ * // the node spec.
  */
 function validateDagNodeRoots(spec: SubagentDAGNode): void {
   const candidates: Array<{ value: string; field: string }> = [];
