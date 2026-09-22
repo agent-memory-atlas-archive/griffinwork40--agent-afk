@@ -11,6 +11,28 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.225.5] - 2026-09-22
+
+### Fixed
+- tighten executor validation + add disable-re-enable test (6fc76987)
+- robust cross-platform tsx invocation in writer backstop test (104daea0)
+- replace POSIX tsx shim with cross-platform spawn in writer.test.ts (13d37b98)
+- tighten executor validation and add re-enable regression test (54ee266b)
+- address review feedback (3416ff9f)
+- address review feedback — JSDoc, conservative-fallback test, observability counter (e0085230)
+- address review feedback — Gap 2 parallel gate path, Gap 1 precondition guard, Gap 3 dedup (934b3bff)
+- scope closure-anomaly-abort detector to root sessions only (#1919) (53146b90)
+
+### Changed
+- Merge pull request #1983 from griffinwork40/fix/win32-tsx-shim-writer-test (001e6d91)
+- Merge pull request #1953 from griffinwork40/fix/issue-1950-executor-validation (b1f9f6bd)
+- Merge pull request #1937 from griffinwork40/afk/fix-1928-resolvereporoot (027ecb9c)
+- Merge pull request #1935 from griffinwork40/afk/fix-1919-closure-anomaly-root-only (ccb33bd1)
+- Merge pull request #1934 from griffinwork40/afk/fix-1923-test-gaps (6b95653e)
+- Revert "fix(daemon): tighten executor validation + add disable-re-enable test" (a79e63c6)
+- consolidate resolveRepoRoot() survivors + add git.ts unit tests (#1928) (86377075)
+- close parallel gate path test coverage gaps (#1923) (31f35ab6)
+
 ## [5.225.4] - 2026-09-22
 
 ### Fixed
