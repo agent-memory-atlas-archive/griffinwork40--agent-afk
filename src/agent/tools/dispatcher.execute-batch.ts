@@ -24,6 +24,7 @@ import {
 import type { IndexedCall, BatchExecDeps } from './dispatcher.batch-process.js';
 import {
   accountDenialBreakerPostGate,
+  replayObserveSuspectedLoopPostGate,
 } from './dispatcher.pre-dispatch-gates.js';
 import type {
   RunPreDispatchGatesOpts,
@@ -187,6 +188,18 @@ export async function executeBatchImpl(
       blockResult,
       gateDeps,
     );
+  }
+
+  // Post-parallel suspected-loop observer replay for non-blocked safe calls.
+  // observeSuspectedLoop was skipped inside the parallel closures to avoid a
+  // concurrent read-modify-write race on the sliding window state. Replay it
+  // now, sequentially, for each safe index that was NOT blocked — matching the
+  // sequential path where the observer runs after a call passes the gate.
+  // This closes the coverage gap for sessions (e.g. read-heavy recon agents)
+  // that only issue safe tool calls and never hit the sequential gate path.
+  for (const i of safeIndices) {
+    if (blocked.has(i)) continue;
+    replayObserveSuspectedLoopPostGate(calls[i]!, gateDeps);
   }
 
   // Gate unsafe calls sequentially (may prompt on interactive surfaces).

@@ -1512,6 +1512,47 @@ describe('SessionToolDispatcher', () => {
       const last = results[DENIAL_CIRCUIT_BREAKER_THRESHOLD - 1]!;
       expect(last.failureClass).toBe('denial-breaker');
     });
+
+    it('parallel wave replays observeSuspectedLoop for non-blocked safe calls (#1926)', async () => {
+      // Validates the fix for #1926: replayObserveSuspectedLoopPostGate fires
+      // after the parallel wave so read-heavy recon agents (which only issue safe
+      // tool calls and never hit the sequential gate path) are covered by the
+      // suspected-loop telemetry window.
+      //
+      // Strategy: use a forked child dispatcher (parentSessionId set) to arm the
+      // observe-only window. Submit SUSPECTED_LOOP_WINDOW_SIZE identical safe
+      // calls in one executeBatch so all gates run in parallel. The observer
+      // must replay sequentially after the wave and fire the suspected_loop event.
+      const { SUSPECTED_LOOP_WINDOW_SIZE } = await import('./suspected-loop-detector.js');
+      const signal = new AbortController().signal;
+      const writer = new InMemoryTraceWriter();
+
+      const dispatcher = makeDispatcher({
+        handlers: new Map([['read_file', async () => ({ content: 'read' })]]),
+        permissions: { allowedTools: ['read_file'] },
+        parentSessionId: 'parent-replay-test',
+        traceWriter: writer,
+      });
+
+      // Submit exactly SUSPECTED_LOOP_WINDOW_SIZE identical read_file calls so
+      // the window threshold is crossed on the parallel path.
+      const calls = Array.from({ length: SUSPECTED_LOOP_WINDOW_SIZE }, (_, idx) =>
+        ({ id: `r${idx}`, name: 'read_file', input: {}, signal }),
+      );
+      const results = await dispatcher.executeBatch(calls);
+
+      // All calls should succeed — observe-only, never blocks.
+      for (const r of results) {
+        expect(r.isError).toBeUndefined();
+        expect(r.content).toBe('read');
+      }
+
+      // The suspected_loop trace event must have fired despite the parallel gate path.
+      const loopEvents = writer.events.filter(
+        (e) => e.kind === 'session_phase' && e.payload.phase === 'suspected_loop',
+      );
+      expect(loopEvents).toHaveLength(1);
+    });
   });
 
   // ---------------------------------------------------------------------------

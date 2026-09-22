@@ -429,6 +429,34 @@ export function accountDenialBreakerPostGate(
 }
 
 /**
+ * Post-parallel suspected-loop observer replay for non-blocked safe calls.
+ *
+ * When `runPreDispatchGates` runs with `parallelSafe: true`, it skips
+ * `observeSuspectedLoop` to avoid a concurrent read-modify-write race on the
+ * per-dispatcher sliding window state. This function re-runs the observer
+ * sequentially after `runParallelGates` returns, so the loop-telemetry window
+ * covers sessions that ONLY issue safe (read-heavy / recon) tool calls — the
+ * population where parallel dispatch is most active.
+ *
+ * Like the original `observeSuspectedLoop`, this has NO effect on dispatch:
+ * it is purely observe-only, never blocking, never altering the result, and
+ * never changing control flow. The trace write is fire-and-forget.
+ *
+ * Callers: {@link executeBatchImpl} iterates the safe indices that were NOT
+ * blocked and calls this once per call so the window advances for every call
+ * that actually passed the gate (blocked calls do not advance the window,
+ * matching the sequential path where the observer runs AFTER the gate).
+ *
+ * @internal
+ */
+export function replayObserveSuspectedLoopPostGate(
+  call: ToolCall,
+  deps: PreDispatchGateDeps,
+): void {
+  observeSuspectedLoop(call, deps);
+}
+
+/**
  * Options for {@link runPreDispatchGates}.
  */
 export interface RunPreDispatchGatesOpts {
