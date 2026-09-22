@@ -439,6 +439,12 @@ export const SessionPhaseNameSchema = z.enum([
   // One bootstrap warning, emitted per-warning at push time (#754). See
   // SessionPhaseName JSDoc in types.ts — metadata carries producer + message.
   'boot_warning',
+  // Workspace subscription lifecycle. See SessionPhaseName JSDoc in types.ts.
+  'workspace_subscribed',
+  'workspace_delivery',
+  // Gate-shape telemetry for parallel dispatch (#1924). See SessionPhaseName
+  // JSDoc in types.ts — metadata carries safeCount, unsafeCount, parallelGatesMs.
+  'gate_shape',
 ]);
 
 export const SessionPhasePayloadSchema = z.object({

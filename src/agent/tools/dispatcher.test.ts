@@ -1553,6 +1553,64 @@ describe('SessionToolDispatcher', () => {
       );
       expect(loopEvents).toHaveLength(1);
     });
+
+    it('emits a gate_shape session-phase event after Phase 1 gates settle (#1924)', async () => {
+      // gate_shape carries safeCount, unsafeCount, and parallelGatesMs.
+      // Use a batch with mixed safe + unsafe calls so both counts are nonzero.
+      const signal = new AbortController().signal;
+      const writer = new InMemoryTraceWriter();
+
+      const dispatcher = makeDispatcher({
+        handlers: new Map([
+          ['read_file', async () => ({ content: 'read' })],
+          ['bash', async () => ({ content: 'ran' })],
+        ]),
+        permissions: { allowedTools: ['read_file', 'bash'] },
+        traceWriter: writer,
+      });
+
+      // read_file is safe-classified (runs parallel gate); bash is unsafe.
+      await dispatcher.executeBatch([
+        { id: 'r1', name: 'read_file', input: {}, signal },
+        { id: 'b1', name: 'bash', input: { command: 'echo hi' }, signal },
+      ]);
+
+      const gateShapeEvents = writer.events.filter(
+        (e) => e.kind === 'session_phase' && e.payload.phase === 'gate_shape',
+      );
+      expect(gateShapeEvents).toHaveLength(1);
+      const meta = gateShapeEvents[0]!.payload.metadata as Record<string, number>;
+      expect(meta['safeCount']).toBe(1);
+      expect(meta['unsafeCount']).toBe(1);
+      expect(typeof meta['parallelGatesMs']).toBe('number');
+    });
+
+    it('gate_shape emitted for all-safe batches with correct counts (#1924)', async () => {
+      const signal = new AbortController().signal;
+      const writer = new InMemoryTraceWriter();
+
+      const dispatcher = makeDispatcher({
+        handlers: new Map([
+          ['read_file', async () => ({ content: 'read' })],
+          ['glob', async () => ({ content: 'globs' })],
+        ]),
+        permissions: { allowedTools: ['read_file', 'glob'] },
+        traceWriter: writer,
+      });
+
+      await dispatcher.executeBatch([
+        { id: 'r1', name: 'read_file', input: {}, signal },
+        { id: 'g1', name: 'glob', input: {}, signal },
+      ]);
+
+      const gateShapeEvents = writer.events.filter(
+        (e) => e.kind === 'session_phase' && e.payload.phase === 'gate_shape',
+      );
+      expect(gateShapeEvents).toHaveLength(1);
+      const meta = gateShapeEvents[0]!.payload.metadata as Record<string, number>;
+      expect(meta['safeCount']).toBe(2);
+      expect(meta['unsafeCount']).toBe(0);
+    });
   });
 
   // ---------------------------------------------------------------------------

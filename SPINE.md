@@ -44,6 +44,12 @@
 - **INV-037** (2026-09-22, spine-audit): Worktree sweep commitsUnpushed fails SAFE — if no upstream is configured, ref is unreadable, or any git error occurs, it is treated as commitsUnpushed === commitsAhead (unreplaceable). Must never be derived from commitsAhead === 0 (`src/agent/worktree/worktree-sweep.ts:108-115`)
 - **INV-038** (2026-09-22, spine-audit): env.ts secret entries must be enumerable: false to prevent credential leakage via JSON.stringify(env) or Object.keys(env). Duplicate ENV_REGISTRY names throw at module load via _seenEnvNames guard (`src/config/env.ts:1960-1990`)
 - **INV-039** (2026-09-22, spine-audit): ProviderRouter is only instantiated when config.provider is unset. When a caller injects a provider, the router is never constructed — code assuming the router is always present will bypass per-turn credential resolution and model-switch-notice injection (`src/agent/providers/router/provider-router.ts:29-31`)
+- **INV-040** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Trace writers are fire-and-forget observability; absence never affects dispatch logic or correctness (reinforced 2026-09
+- **INV-041** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Gate-shape telemetry (safeCount, unsafeCount, parallelGatesMs) emitted exactly once per batch after Phase 1 gates settle
+- **INV-042** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Parallel gate wall-clock must be measured from phase entry, not per-gate; captured before wave begins, read after settle
+- **INV-043** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Goals scoped per git repository via projectKey parameter; fallback to 'current' key for backward compatibility (reinforc
+- **INV-044** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key derivation uses git-common-dir mode so linked worktrees of same repo share the same goal key (reinforced 202
+- **INV-045** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Goal injection via injectGoalPrompt() must derive projectKey from config.cwd and pass to buildGoalPromptFragment() (rein
 
 
 ## Explicitly Rejected Patterns
@@ -70,3 +76,4 @@
 - **TST-007** (2026-09-22, spine-audit): Atomic temp files default to mode 0o600 (owner read/write only) so secrets are not briefly world-readable between write and rename (`src/utils/atomic-write.ts:50-55`)
 - **TST-008** (2026-09-22, spine-audit): Worktree sweep MIN_EMPTY_AGE_MS (1 hour) and the occupancy heartbeat interval are deliberately cross-referenced — raising the heartbeat above the empty-age gate silently re-breaks ghost-reaping with no test failures (`src/agent/worktree/worktree-sweep.ts:214-224`)
 - **TST-009** (2026-09-22, spine-audit): execFile callers that produce large output MUST set maxBuffer — Node's default 1MB cap rejects the promise on overflow rather than truncating. In the sweep engine, every failure path fails safe by protecting the worktree (`src/agent/worktree/worktree-sweep.ts:40-47`)
+- **TST-010** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key format: `proj.<sanitized-basename>-<sha1_hex8>`; sanitizes special chars to `_`, caps at 128 chars

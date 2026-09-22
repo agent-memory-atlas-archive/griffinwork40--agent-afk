@@ -30,6 +30,8 @@ import type {
   RunPreDispatchGatesOpts,
   PreDispatchGateDeps,
 } from './dispatcher.pre-dispatch-gates.js';
+import { emitSessionPhase } from '../trace/emit.js';
+import type { TraceSink } from '../trace/index.js';
 import type { ToolCall, ToolResult } from '../providers/anthropic-direct/types.js';
 import type { ToolActivityReporter } from '../providers/shared/tool-activity.js';
 import type { RepeatFailureGuard } from './repeat-failure-guard.js';
@@ -78,6 +80,13 @@ export interface ExecuteBatchDeps {
    * `state.denialBreaker` sequentially after `runParallelGates` returns.
    */
   gateDeps: () => PreDispatchGateDeps;
+  /**
+   * Witness trace writer. When present, `executeBatchImpl` emits a
+   * `gate_shape` session-phase event after Phase 1 gate execution, carrying
+   * `{ safeCount, unsafeCount, parallelGatesMs }`. Fire-and-forget; absent
+   * trace writers suppress the event with no side effects.
+   */
+  traceWriter: TraceSink | undefined;
 }
 
 /**
@@ -158,10 +167,13 @@ export async function executeBatchImpl(
   // Pass parallelSafe: true so runPreDispatchGates skips the race-prone
   // read-modify-write counters (state.repeatBreaker, state.denialBreaker).
   // Denial-breaker accounting runs sequentially after the wave settles.
+  // Time the parallel wave for gate_shape telemetry (#1924).
+  const parallelGatesStart = Date.now();
   await runParallelGates(
     safeIndices, calls, results, blocked,
     (call) => deps.runPreDispatchGates(call, { parallelSafe: true }),
   );
+  const parallelGatesMs = Date.now() - parallelGatesStart;
 
   // Post-parallel denial-breaker accounting for blocked safe calls.
   // recordForkReadDenial was skipped inside the parallel closures to avoid a
@@ -210,6 +222,17 @@ export async function executeBatchImpl(
       blocked.add(i);
     }
   }
+
+  // Gate-shape telemetry (#1924): emit partition sizes + parallel-gate wall-clock
+  // after all Phase 1 gates settle. Fire-and-forget; no effect on dispatch.
+  void emitSessionPhase(deps.traceWriter, {
+    phase: 'gate_shape',
+    metadata: {
+      safeCount: safeIndices.length,
+      unsafeCount: unsafeIndices.length,
+      parallelGatesMs,
+    },
+  });
 
   // Phase 2: partition non-blocked calls into batches and execute.
   const executableCalls: IndexedCall[] = calls

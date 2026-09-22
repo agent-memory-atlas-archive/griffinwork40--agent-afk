@@ -723,6 +723,7 @@ export class SessionToolDispatcher implements ToolDispatcher {
       sessionId: this.sessionId,
       maxConcurrentSafeCalls: this.maxConcurrentSafeCalls,
       gateDeps: () => this.gateDeps(),
+      traceWriter: this.traceWriter,
     }, onActivity);
   }
 

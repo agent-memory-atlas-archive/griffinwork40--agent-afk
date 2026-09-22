@@ -374,6 +374,36 @@ describe('parseComposeInput — per-node max_turns', () => {
   });
 });
 
+describe('parseComposeInput — per-node agent_type', () => {
+  it('accepts a valid agent_type string', () => {
+    const { parsed } = parseComposeInput(minimal({ agent_type: 'my-researcher' }));
+    expect(parsed.nodes[0]!.agent_type).toBe('my-researcher');
+  });
+
+  it('omits agent_type when not provided', () => {
+    const { parsed } = parseComposeInput(minimal());
+    expect(parsed.nodes[0]!.agent_type).toBeUndefined();
+  });
+
+  it('rejects empty string agent_type', () => {
+    expect(() => parseComposeInput(minimal({ agent_type: '' }))).toThrow(
+      /non-empty string/,
+    );
+  });
+
+  it('rejects whitespace-only agent_type', () => {
+    expect(() => parseComposeInput(minimal({ agent_type: '   ' }))).toThrow(
+      /non-empty string/,
+    );
+  });
+
+  it('rejects non-string agent_type', () => {
+    expect(() => parseComposeInput(minimal({ agent_type: 42 }))).toThrow(
+      /non-empty string/,
+    );
+  });
+});
+
 describe('parseComposeInput — combined fields', () => {
   it('passes all five fields through when valid', () => {
     const input = {

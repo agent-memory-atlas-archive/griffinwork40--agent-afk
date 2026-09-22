@@ -834,7 +834,15 @@ export type SessionPhaseName =
   // subscriber's ring buffer. Both carry agent + subscription context in
   // `metadata`. Fire-and-forget (consistent with other Pillar 1/2 events).
   | 'workspace_subscribed'
-  | 'workspace_delivery';
+  | 'workspace_delivery'
+  // Gate-shape telemetry for parallel dispatch (#1924). A single event emitted
+  // from `executeBatchImpl` after Phase 1 gates settle, carrying the partition
+  // sizes and wall-clock cost of the parallel gate wave. PURE OBSERVABILITY —
+  // never alters dispatch. Absent for the length-1 fast path (no batching).
+  // `metadata` keys: `safeCount` (tools gated in parallel), `unsafeCount`
+  // (tools gated sequentially), `parallelGatesMs` (wall-clock for the parallel
+  // gate wave, or 0 when there were no safe calls).
+  | 'gate_shape';
 
 export interface SessionPhasePayload {
   /** Which lifecycle milestone this record marks. */
