@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.226.4] - 2026-09-22
+
+### Fixed
+- revert misleading compose agent_type safety claim in fix-pr SKILL.md (#2001) (f6512776)
+
 ## [5.226.3] - 2026-09-22
 
 ### Fixed
