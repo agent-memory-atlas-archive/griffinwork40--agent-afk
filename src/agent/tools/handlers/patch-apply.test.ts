@@ -288,3 +288,109 @@ describe('patch_apply — render.diff sidecar', () => {
     expect(result.render).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #2028: stale-context re-read warning
+// ---------------------------------------------------------------------------
+
+describe('patch_apply — stale-context re-read warning (#2028)', () => {
+  it('includes _reread_warning in result when files are applied', async () => {
+    const filePath = await writeTemp('warn-single.txt', 'before\n');
+    const handler = createPatchApplyHandler(tempDir);
+
+    const result = await handler(
+      { changes: [{ path: filePath, content: 'after\n' }] },
+      signal,
+      makeCtx(),
+    );
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(result.content as string);
+    expect(parsed.status).toBe('applied');
+    // Must include the re-read warning so the agent knows its context is stale.
+    expect(parsed).toHaveProperty('_reread_warning');
+    expect(typeof parsed._reread_warning).toBe('string');
+    expect(parsed._reread_warning).toContain('read_file');
+    expect(parsed._reread_warning).toContain('IMPORTANT');
+    // Modified path(s) listed so the agent knows exactly which files to re-read.
+    expect(parsed._reread_warning).toContain(filePath);
+  });
+
+  it('includes _reread_warning listing all modified paths for multi-file patches', async () => {
+    const file1 = await writeTemp('warn-a.txt', 'aaa\n');
+    const file2 = await writeTemp('warn-b.txt', 'bbb\n');
+    const handler = createPatchApplyHandler(tempDir);
+
+    const result = await handler(
+      {
+        changes: [
+          { path: file1, content: 'AAA\n' },
+          { path: file2, content: 'BBB\n' },
+        ],
+      },
+      signal,
+      makeCtx(),
+    );
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(result.content as string);
+    expect(parsed.status).toBe('applied');
+    expect(parsed).toHaveProperty('_reread_warning');
+    // Both paths must appear in the warning.
+    expect(parsed._reread_warning).toContain(file1);
+    expect(parsed._reread_warning).toContain(file2);
+  });
+
+  it('omits _reread_warning on dry_run (no files written to disk)', async () => {
+    const filePath = await writeTemp('warn-dry.txt', 'hello\n');
+    const handler = createPatchApplyHandler(tempDir);
+
+    const result = await handler(
+      { changes: [{ path: filePath, content: 'goodbye\n' }], dry_run: true },
+      signal,
+      makeCtx(),
+    );
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(result.content as string);
+    expect(parsed.status).toBe('dry_run');
+    // No warning on dry_run — disk was not touched.
+    expect(parsed).not.toHaveProperty('_reread_warning');
+  });
+
+  it('omits _reread_warning when changes array is empty', async () => {
+    const handler = createPatchApplyHandler(tempDir);
+
+    const result = await handler({ changes: [] }, signal, makeCtx());
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(result.content as string);
+    expect(parsed.status).toBe('applied');
+    expect(parsed).not.toHaveProperty('_reread_warning');
+  });
+
+  it('omits _reread_warning when patch validation fails', async () => {
+    const filePath = await writeTemp('warn-fail.txt', 'current\n');
+    const handler = createPatchApplyHandler(tempDir);
+
+    const result = await handler(
+      {
+        changes: [
+          {
+            path: filePath,
+            expected_hash: `sha256:${sha256('wrong content')}`,
+            content: 'new\n',
+          },
+        ],
+      },
+      signal,
+      makeCtx(),
+    );
+
+    expect(result.isError).toBe(true);
+    const parsed = JSON.parse(result.content as string);
+    expect(parsed.status).toBe('validation_failed');
+    // No warning — the patch failed, disk was not touched.
+    expect(parsed).not.toHaveProperty('_reread_warning');
+  });
+});

@@ -183,17 +183,29 @@ export function createPatchApplyHandler(cwd?: string): ToolHandler {
       applyResult.status === 'validation_failed' ||
       applyResult.status === 'partial_failure';
 
+    // Issue #2028: when files are actually written to disk, the agent's
+    // in-context copy of those files is now stale. A subsequent edit_file call
+    // using pre-patch content as old_string can silently revert the patch.
+    // Surface a clear instruction in the result so the agent re-reads before
+    // any further edits.
+    const modifiedPaths = applyResult.files_changed.map((f) => f.path);
+    const rereadWarning =
+      applyResult.status === 'applied' && modifiedPaths.length > 0
+        ? `IMPORTANT: ${modifiedPaths.length} file(s) were written to disk. Your in-context copy of ${modifiedPaths.length === 1 ? 'this file is' : 'these files are'} now stale. You MUST call read_file on each modified path before any subsequent edit_file call — otherwise edit_file may match against pre-patch content and silently revert these changes. Modified paths: ${modifiedPaths.join(', ')}`
+        : undefined;
+
+    const resultObj: Record<string, unknown> = {
+      status: applyResult.status,
+      diff: applyResult.diff,
+      files_changed: applyResult.files_changed,
+      errors: applyResult.errors,
+    };
+    if (rereadWarning !== undefined) {
+      resultObj['_reread_warning'] = rereadWarning;
+    }
+
     return {
-      content: JSON.stringify(
-        {
-          status: applyResult.status,
-          diff: applyResult.diff,
-          files_changed: applyResult.files_changed,
-          errors: applyResult.errors,
-        },
-        null,
-        2,
-      ),
+      content: JSON.stringify(resultObj, null, 2),
       isError,
       ...(applyResult.structuredDiff ? { render: { diff: applyResult.structuredDiff } } : {}),
     };
