@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.226.3] - 2026-09-22
+
+### Fixed
+- correct stale compose limitations in fix-pr SKILL.md (#1994) (347c1d8c)
+- buffer streaming content chunks in mid-turn task view (#1995) (58afe726)
+
 ## [5.226.2] - 2026-09-22
 
 ### Changed
