@@ -27,6 +27,7 @@
 - **INV-020** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Handler exception caught in hook dispatch must wrap in HookBlockedError (fail-safe, not fail-open)
 - **INV-021** (2026-09-18, 3c2d6194-0ab7-4c30-a9e2-56e9d477ae2d): Hook handler return { decision: 'block' } must short-circuit the handler chain immediately
 - **INV-022** (2026-09-18, f1884bb2-c075-46d5-b0ea-f61d48342e64): Overlay content must not exceed viewport height; cap after word-wrap to prevent ghost-row duplicates in scrollback
+- **INV-023** (2026-09-22, d09d5fe9): All file persistence must use src/utils/atomic-write.ts (tmp+rename); no inline atomic-write implementations (#1921)
 
 
 ## Explicitly Rejected Patterns
