@@ -11,7 +11,7 @@
 
 import path from 'path';
 import { computeInheritedReadRoots } from '../subagent-read-scope.js';
-import { getAfkStateDir, getAgentFrameworkDir } from '../../paths.js';
+import { getAfkStateDir, getAgentFrameworkDir, getSkillsDir } from '../../paths.js';
 
 // ── Read-scope resolution ──────────────────────────────────────────────
 
@@ -88,6 +88,8 @@ export async function resolveReadScope(
     ...(parentUnconfined ? {} : { afkStateRoot: getAfkStateDir() }),
     // Gap C: grant ~/.afk/agent-framework to confined forks.
     ...(parentUnconfined ? {} : { afkFrameworkRoot: getAgentFrameworkDir() }),
+    // Gap D: grant ~/.afk/skills to confined forks (user-installed skill defs).
+    ...(parentUnconfined ? {} : { afkSkillsRoot: getSkillsDir() }),
   });
 
   // ── Compose extraReadRoots (additive, #662) ──

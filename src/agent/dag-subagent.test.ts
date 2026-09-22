@@ -639,7 +639,7 @@ describe('runSubagentDAG', () => {
       const result = await runSubagentDAG({
         manager,
         parentSession: makeParent(),
-        nodes: [{ id: 'A', systemPrompt: 's', promptBuilder: () => 'p', readRoots: ['/'] }],
+        nodes: [{ id: 'A', systemPrompt: 's', promptBuilder: () => 'p', pinnedReadRoots: ['/'] }],
         edges: [],
       });
       expect(result.failed).toHaveLength(1);

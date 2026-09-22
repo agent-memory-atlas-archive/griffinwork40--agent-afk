@@ -57,6 +57,7 @@
 - **INV-050** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Abort signal forwarding must use forwardAbortSignal() utility from src/utils/abort.ts; hand-coded abort listeners must n
 - **INV-051** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Error status extraction must use getErrorStatus() from src/agent/providers/shared/error-status.ts; both Anthropic and Op
 - **INV-052** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): pinnedReadRoots suppresses parent inheritance; extraReadRoots composes additively. Field name signals semantics to calle
+- **INV-053** (2026-09-22, 4bfcc723-17a3-457b-8cfc-192ac9cccc71): Confined subagents must be granted read access to the skills directory to discover sibling skill definitions.
 
 
 ## Explicitly Rejected Patterns
