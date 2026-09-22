@@ -19,10 +19,10 @@ import { readFile } from 'node:fs/promises';
 import type { ToolHandler } from '../types.js';
 import {
   loadSchedules,
-  saveSchedules,
   addSchedule,
   removeSchedule,
   getSchedule,
+  toggleScheduleEnabled,
   toScheduledTask,
 } from '../../daemon/schedule-store.js';
 import { getTelemetryPath } from '../../../paths.js';
@@ -204,18 +204,12 @@ export const cancelScheduleHandler: ToolHandler = async (input, _signal) => {
     sync = await trySyncToDaemon('DELETE', `/tasks/${taskId}`);
   } else if (enable) {
     // Re-enable a previously disabled task and register with daemon
-    const schedules = loadSchedules();
-    const updated = schedules.map((s) =>
-      s.id === taskId ? { ...s, enabled: true, updatedAt: new Date().toISOString() } : s,
-    );
-    saveSchedules(updated);
-    sync = await trySyncToDaemon('POST', '/tasks', toScheduledTask({ ...existing, enabled: true }));
+    const updated = toggleScheduleEnabled(taskId, true);
+    // updated is always defined here: existing was confirmed above and the
+    // store is consistent, so the id will be found.
+    sync = await trySyncToDaemon('POST', '/tasks', toScheduledTask(updated!));
   } else {
-    const schedules = loadSchedules();
-    const updated = schedules.map((s) =>
-      s.id === taskId ? { ...s, enabled: false, updatedAt: new Date().toISOString() } : s,
-    );
-    saveSchedules(updated);
+    toggleScheduleEnabled(taskId, false);
     // Unregister from running daemon — task won't auto-restart unless daemon restarts
     sync = await trySyncToDaemon('DELETE', `/tasks/${taskId}`);
   }

@@ -14,6 +14,7 @@ import {
   removeSchedule,
   getSchedule,
   saveSchedules,
+  toggleScheduleEnabled,
   toScheduledTask,
   type ScheduledTaskConfig,
 } from './schedule-store.js';
@@ -276,6 +277,72 @@ describe('getSchedule', () => {
   });
 });
 
+// ── toggleScheduleEnabled ────────────────────────────────────────────────────
+
+describe('toggleScheduleEnabled', () => {
+  let tmpDir: string;
+
+  afterEach(() => {
+    if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('enables a disabled task and returns the updated config', () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'schedule-store-'));
+    const path = join(tmpDir, 'schedules.json');
+    addSchedule({ name: 'Flip Me', command: '/flip', cron: '* * * * *', enabled: false }, path);
+
+    const result = toggleScheduleEnabled('flip-me', true, path);
+    expect(result).toBeDefined();
+    expect(result?.id).toBe('flip-me');
+    expect(result?.enabled).toBe(true);
+    expect(loadSchedules(path)[0]?.enabled).toBe(true);
+  });
+
+  it('disables an enabled task and returns the updated config', () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'schedule-store-'));
+    const path = join(tmpDir, 'schedules.json');
+    addSchedule({ name: 'On Task', command: '/on', cron: '* * * * *', enabled: true }, path);
+
+    const result = toggleScheduleEnabled('on-task', false, path);
+    expect(result?.enabled).toBe(false);
+    expect(loadSchedules(path)[0]?.enabled).toBe(false);
+  });
+
+  it('preserves all other fields (executor, notifyOn, notifyChat) when toggling', () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'schedule-store-'));
+    const path = join(tmpDir, 'schedules.json');
+    addSchedule(
+      {
+        name: 'Full Task',
+        command: 'echo hi',
+        cron: '0 1 * * *',
+        enabled: false,
+        executor: 'shell',
+        notifyOn: 'always',
+        notifyChat: 'ops',
+      },
+      path,
+    );
+
+    const result = toggleScheduleEnabled('full-task', true, path);
+    expect(result?.executor).toBe('shell');
+    expect(result?.notifyOn).toBe('always');
+    expect(result?.notifyChat).toBe('ops');
+    expect(result?.enabled).toBe(true);
+  });
+
+  it('returns undefined for an unknown id and does not mutate the store', () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'schedule-store-'));
+    const path = join(tmpDir, 'schedules.json');
+    addSchedule({ name: 'Real Task', command: '/real', cron: '* * * * *', enabled: true }, path);
+
+    const result = toggleScheduleEnabled('ghost-task', false, path);
+    expect(result).toBeUndefined();
+    // The real task must be untouched
+    expect(loadSchedules(path)[0]?.enabled).toBe(true);
+  });
+});
+
 // ── toScheduledTask ──────────────────────────────────────────────────────────
 
 describe('toScheduledTask', () => {
@@ -368,6 +435,21 @@ describe('toScheduledTask', () => {
     };
     const task = toScheduledTask(config);
     expect('notifyChat' in task).toBe(false);
+  });
+
+  it('preserves executor when round-tripped through toScheduledTask', () => {
+    const config: ScheduledTaskConfig = {
+      id: 'exec-task',
+      name: 'Exec Task',
+      command: 'echo hi',
+      cron: '* * * * *',
+      executor: 'shell',
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const task = toScheduledTask(config);
+    expect(task.executor).toBe('shell');
   });
 
   it('saveSchedules + loadSchedules round-trips correctly', () => {

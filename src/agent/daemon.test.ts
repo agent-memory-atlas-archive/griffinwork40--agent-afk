@@ -782,6 +782,26 @@ describe('POST /tasks and DELETE /tasks/:id routes', () => {
     expect(task?.notifyChat).toBeUndefined();
   });
 
+  it('POST /tasks preserves executor: "shell" through GET /tasks', async () => {
+    const h = await spinDaemon();
+    const res = await fetch(`http://localhost:${h.port}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskId: 'shell-task',
+        command: 'echo hello',
+        cron: '* * * * *',
+        executor: 'shell',
+      }),
+    });
+    expect(res.status).toBe(201);
+
+    const listRes = await fetch(`http://localhost:${h.port}/tasks`);
+    const tasks = (await listRes.json()) as Array<{ taskId: string; executor?: string }>;
+    const task = tasks.find((t) => t.taskId === 'shell-task');
+    expect(task?.executor).toBe('shell');
+  });
+
   it('DELETE /tasks/:id for registered task → 200', async () => {
     const h = await spinDaemon();
     // Register first
