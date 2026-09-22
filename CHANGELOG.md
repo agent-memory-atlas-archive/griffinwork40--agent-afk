@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.226.2] - 2026-09-22
+
+### Changed
+- audit and backfill 25 missing architectural entries (cd111c55)
+- Merge pull request #1875 from griffinwork40/afk/fix-1856-grant-manager (b8831284)
+- fix GrantManager layer inversion (#1856) (80472b07)
+
 ## [5.226.1] - 2026-09-22
 
 ### Fixed
