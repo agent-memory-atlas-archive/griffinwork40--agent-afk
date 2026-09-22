@@ -418,6 +418,8 @@ export function resetDenialBreaker(state: PreDispatchGateMutableState): void {
  * Returns the (potentially upgraded) `ToolResult`: at the threshold it
  * replaces the original block with a `denial-breaker` error, identical to
  * what `recordForkReadDenial` would have returned in the sequential path.
+ *
+ * @internal
  */
 export function accountDenialBreakerPostGate(
   call: ToolCall,
