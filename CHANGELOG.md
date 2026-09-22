@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.224.3] - 2026-09-22
+
+### Changed
+- extract _onTerminal callback into fork-terminal-hook.ts (#1931) (#1936) (6676d3b5)
+- recategorize concurrency env vars from model to process (#1905) (#1932) (6105cfcd)
+
 ## [5.224.2] - 2026-09-22
 
 ### Fixed
