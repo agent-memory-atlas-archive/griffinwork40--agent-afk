@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.0] - 2026-09-22
+
+### Added
+- add per-node attachments for multimodal DAG workflows (50121314)
+
+### Fixed
+- filter edges referencing pre-failed attachment nodes (#1993) (fd7d0086)
+- isolate per-node attachment resolution errors (#1993) (c2db9779)
+
+### Changed
+- Merge pull request #1993 from griffinwork40/afk/iso-agent-tool-1-souy55 (2772724a)
+- add coverage for resolvedAttachments branch in dag-subagent (ba6a2e3a)
+
 ## [5.229.0] - 2026-09-22
 
 ### Added
