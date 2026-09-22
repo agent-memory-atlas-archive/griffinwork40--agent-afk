@@ -2538,6 +2538,10 @@ describe('SessionToolDispatcher — canUseTool (Dim 8 in-process permission poli
   // Gap 1: stateful canUseTool counter via executeBatch (safe-classified tools)
   // -------------------------------------------------------------------------
   it('executeBatch: stateful canUseTool counter is incremented once per safe call (#1923)', async () => {
+    // Precondition: read_file must be concurrency-safe so executeBatch routes
+    // it through the parallel gate path. If this fails, the test has silently
+    // regressed to exercising the sequential path.
+    expect(defaultConcurrencyClassifier('read_file')).toBe(true);
     // The policy tracks how many times it was invoked. Because read_file is
     // safe-classified, executeBatch runs gates in parallel — the counter must
     // still reach N (one increment per call), proving canUseTool is not skipped
@@ -2572,34 +2576,42 @@ describe('SessionToolDispatcher — canUseTool (Dim 8 in-process permission poli
   // Gap 2: canUseTool returning updatedInput via executeBatch (safe-classified)
   // -------------------------------------------------------------------------
   it('executeBatch: canUseTool updatedInput rewrites handler input for safe calls (#1923)', async () => {
-    // The policy appends a suffix to message so we can distinguish the
-    // rewritten value from the original. Each call gets a different original
-    // message, and the handler is the echo handler that returns message as
-    // content — so if updatedInput is applied, the content will be rewritten.
+    // Precondition: read_file must be concurrency-safe so executeBatch routes
+    // calls through the parallel gate path — the path whose updatedInput
+    // propagation this test is exercising.
+    expect(defaultConcurrencyClassifier('read_file')).toBe(true);
+    // The policy appends '-rewritten' to file_path so we can distinguish the
+    // rewritten value from the original. The mock handler returns file_path as
+    // content — so if updatedInput is applied through the parallel gate, the
+    // content will contain the rewritten path.
     const rewritePolicy: CanUseTool = async (_name, input) => {
-      const original = (input as { message?: string }).message ?? '';
+      const original = (input as { file_path?: string }).file_path ?? '';
       return {
         behavior: 'allow',
-        updatedInput: { message: `${original}-rewritten` },
+        updatedInput: { file_path: `${original}-rewritten` },
       };
     };
+    const handler = vi.fn(async (input: unknown) => ({
+      content: (input as { file_path?: string }).file_path ?? '',
+    }));
     const d = makeDispatcher({
-      handlers: new Map<string, ToolHandler>([['echo', echoHandler()]]),
-      permissions: { allowedTools: ['echo'] },
+      handlers: new Map<string, ToolHandler>([['read_file', handler]]),
+      permissions: { allowedTools: ['read_file'] },
       canUseTool: rewritePolicy,
     });
-    const calls = ['a', 'b', 'c'].map((msg, i) => ({
+    const calls = ['a.txt', 'b.txt', 'c.txt'].map((fp, i) => ({
       id: `call-${i}`,
-      name: 'echo',
-      input: { message: msg },
+      name: 'read_file',
+      input: { file_path: fp },
       signal: new AbortController().signal,
     }));
     const results = await d.executeBatch(calls);
     expect(results).toHaveLength(3);
-    // Handler must receive the rewritten message, not the original.
-    expect(results[0]!.content).toBe('a-rewritten');
-    expect(results[1]!.content).toBe('b-rewritten');
-    expect(results[2]!.content).toBe('c-rewritten');
+    // Handler must receive the rewritten file_path, not the original.
+    expect(results[0]!.content).toBe('a.txt-rewritten');
+    expect(results[1]!.content).toBe('b.txt-rewritten');
+    expect(results[2]!.content).toBe('c.txt-rewritten');
+    expect(handler).toHaveBeenCalledTimes(3);
   });
 });
 
