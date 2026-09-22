@@ -62,7 +62,7 @@
 
 export { createHookRegistry } from './hook-registry.js';
 import type { SubagentTrace } from './subagent/result.js';
-import type { GrantManager } from '../cli/slash/commands/allow-dir.js';
+import type { GrantManager } from './tools/grant-manager.js';
 
 export type HarnessHookEvent =
   | 'SessionStart'

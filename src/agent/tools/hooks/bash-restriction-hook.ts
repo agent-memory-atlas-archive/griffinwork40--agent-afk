@@ -138,7 +138,7 @@ export interface BashRestrictionHookOptions {
    * code must NOT populate it. Survives so existing unit tests need not be
    * rewritten.
    */
-  getGrantManager?: () => (import('../../../cli/slash/commands/allow-dir.js').GrantManager | undefined);
+  getGrantManager?: () => (import('../grant-manager.js').GrantManager | undefined);
   /**
    * When true, skip the interpreter-eval denylist (check 1 below). The
    * restricted-root substring check (check 2) is unaffected. Wired from

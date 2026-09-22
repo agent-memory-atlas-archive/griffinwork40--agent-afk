@@ -22,7 +22,7 @@ import { createPathApprovalHook } from './path-approval-hook.js';
 import { resolveAndContain } from '../handlers/_cwd-utils.js';
 import { _resetReadDenylistCacheForTests } from '../handlers/read-denylist.js';
 import type { ToolHandlerContext } from '../types.js';
-import type { GrantManager } from '../../../cli/slash/commands/allow-dir.js';
+import type { GrantManager } from '../grant-manager.js';
 import type { PreToolUseContext, PostToolUseContext } from '../../hooks.js';
 import * as permissionsStore from '../../permissions-store.js';
 
