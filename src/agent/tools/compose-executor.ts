@@ -592,7 +592,14 @@ export class ComposeExecutor {
         //   call-site n.model > definition model > ctx.defaultSubagentModel
         // The named agent's model is threaded in as a fallback when the call
         // site did not supply an explicit model.
-        const definitionModel = namedAgent?.definition.model;
+        // Item 2: translate 'inherit' in definition model to the parent model
+        // (ctx.defaultModel), matching child-config.ts:183-185 semantics.
+        // Without this, the literal string "inherit" is passed to resolveChildModel
+        // which does not interpret it, resulting in an unusable model string.
+        const rawDefinitionModel = namedAgent?.definition.model;
+        const definitionModel = rawDefinitionModel === 'inherit'
+          ? this.ctx.defaultModel
+          : rawDefinitionModel;
         const nodeModel = resolveChildModel({
           callSiteModel: n.model ?? definitionModel,
           defaultSubagentModel: this.ctx.defaultSubagentModel,
@@ -622,17 +629,26 @@ export class ComposeExecutor {
         //
         // Precedence: resolveComposeNodeProvider (workspace) is combined with the
         // restricted surface below via a layered override: when BOTH a named-agent
-        // restriction AND a workspace store are active, the named-agent restriction
-        // takes priority — the workspace provider is not applied (workspace tools
-        // may be outside the named agent's declared surface, and we must never
-        // widen the declared allowlist). This is the conservative choice; a future
-        // pass could intersect the workspace tools into effectiveAllowedTools.
+        // restriction AND a workspace store are active, the workspace store is
+        // passed to buildSkillRestrictedProvider only when the agent's declared
+        // allowlist includes workspace tools — the allowlist is the authority and
+        // we never widen beyond what the named agent declared.
+        //
+        // Item 4: pass workspaceStore so agents whose allowlist includes
+        // workspace_publish / workspace_query retain access despite tool restriction.
+        const nodeWorkspaceStore =
+          this.ctx.workspaceStore !== undefined &&
+          effectiveAllowedTools !== undefined &&
+          effectiveAllowedTools.some((t) => t === 'workspace_publish' || t === 'workspace_query')
+            ? this.ctx.workspaceStore
+            : undefined;
         const nodeProviderOverride = (effectiveAllowedTools !== undefined || effectiveReadOnlyBash)
           ? buildSkillRestrictedProvider(
               effectiveAllowedTools ?? [...CHILD_ALLOWED_TOOLS],
               nodeModel,
               effectiveReadOnlyBash,
               this.ctx.openaiBaseUrl,
+              nodeWorkspaceStore,
             )
           : undefined;
 
@@ -688,13 +704,24 @@ export class ComposeExecutor {
           // Budget enforcement: per-node max_tool_rounds overrides compose-level
           // max_tool_rounds_per_node. Omitted when unset so the fork keeps
           // SUBAGENT_DEFAULT_MAX_TOOL_USE_ITERATIONS (subagent.ts).
+          // Item 3: named-agent definition.maxToolUseIterations is a fallback
+          // beneath explicit per-node / compose-level values (mirrors child-config.ts:282-286).
           ...(() => {
-            const effectiveRounds = n.max_tool_rounds ?? maxToolRoundsPerNode;
+            const effectiveRounds = n.max_tool_rounds ?? maxToolRoundsPerNode
+              ?? (namedAgent?.definition.maxToolUseIterations !== undefined
+                ? Math.max(1, Math.floor(namedAgent.definition.maxToolUseIterations))
+                : undefined);
             return effectiveRounds !== undefined ? { maxToolUseIterations: effectiveRounds } : {};
           })(),
           // Per-node turn budget: forwarded to the fork config as maxTurns.
+          // Item 3: named-agent definition.maxTurns is a fallback beneath explicit
+          // per-node values (mirrors child-config.ts:271-274).
           // Omitted when unset so the node inherits the session default.
-          ...(n.max_turns !== undefined ? { maxTurns: n.max_turns } : {}),
+          ...(n.max_turns !== undefined
+            ? { maxTurns: n.max_turns }
+            : namedAgent?.definition.maxTurns !== undefined
+              ? { maxTurns: Math.max(1, Math.floor(namedAgent.definition.maxTurns)) }
+              : {}),
           // Per-node filesystem overrides: cwd, extraReadRoots, writeRoots. When
           // set on the node, they refine the fork's scope. extraReadRoots is
           // forwarded as the ADDITIVE field (AgentConfig.extraReadRoots) so the

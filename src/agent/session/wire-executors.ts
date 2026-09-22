@@ -357,6 +357,7 @@ export function wireExecutors(opts: WireExecutorsOptions): WiredExecutors {
     maxDepth,
     ...traceOpt,
     ...(opts.workspaceStore !== undefined ? { workspaceStore: opts.workspaceStore } : {}),
+    agentRegistry,
     ...budgetOpt,
   });
 
