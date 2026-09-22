@@ -375,7 +375,7 @@ describe('ComposeExecutor', () => {
       expect(dagOpts.nodes[0].cwd).toBe('/repo/packages/web');
     });
 
-    it('per-node readRoots and writeRoots thread through to SubagentDAGNode', async () => {
+    it('per-node readRoots threads through as extraReadRoots and writeRoots threads as writeRoots in SubagentDAGNode', async () => {
       mockRunSubagentDAG.mockResolvedValue({
         outputs: { a: 'done' },
         failed: [],
@@ -393,11 +393,15 @@ describe('ComposeExecutor', () => {
       }));
 
       const dagOpts = mockRunSubagentDAG.mock.calls[0][0];
-      expect(dagOpts.nodes[0].readRoots).toEqual(['/shared/config']);
+      // readRoots from the compose input is forwarded as extraReadRoots so
+      // the fork COMPOSES with its inherited read scope rather than pinning it
+      // (the readRoots farm-pin path suppresses scope inheritance).
+      expect(dagOpts.nodes[0].extraReadRoots).toEqual(['/shared/config']);
+      expect('readRoots' in dagOpts.nodes[0]).toBe(false);
       expect(dagOpts.nodes[0].writeRoots).toEqual(['/output/artifacts']);
     });
 
-    it('omits cwd/readRoots/writeRoots from SubagentDAGNode when not provided', async () => {
+    it('omits cwd/readRoots/extraReadRoots/writeRoots from SubagentDAGNode when not provided', async () => {
       mockRunSubagentDAG.mockResolvedValue({
         outputs: { a: 'done' },
         failed: [],
@@ -413,6 +417,7 @@ describe('ComposeExecutor', () => {
       const node = dagOpts.nodes[0];
       expect('cwd' in node).toBe(false);
       expect('readRoots' in node).toBe(false);
+      expect('extraReadRoots' in node).toBe(false);
       expect('writeRoots' in node).toBe(false);
     });
 

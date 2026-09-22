@@ -79,7 +79,7 @@ function parseNodePaths(n: Record<string, unknown>, id: string): {
     if (!path.isAbsolute(cwd)) {
       throw new Error(`Node "${id}" cwd must be an absolute path (got "${cwd}")`);
     }
-    if (cwd.includes('..')) {
+    if (cwd.split(/[/\\]/).includes('..')) {
       throw new Error(`Node "${id}" cwd must not contain ".." segments`);
     }
   }
@@ -110,7 +110,7 @@ function parseRootArray(
     if (!path.isAbsolute(r)) {
       throw new Error(`Node "${id}" ${field} entry must be an absolute path (got "${r}")`);
     }
-    if (r.includes('..')) {
+    if (r.split(/[/\\]/).includes('..')) {
       throw new Error(`Node "${id}" ${field} entry must not contain ".." segments`);
     }
     roots.push(r);

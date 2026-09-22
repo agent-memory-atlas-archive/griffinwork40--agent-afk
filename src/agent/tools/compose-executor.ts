@@ -590,12 +590,16 @@ export class ComposeExecutor {
           // winds down gracefully. Omitted when unset so the fork keeps
           // SUBAGENT_DEFAULT_MAX_TOOL_USE_ITERATIONS (subagent.ts).
           ...(maxToolRoundsPerNode !== undefined ? { maxToolUseIterations: maxToolRoundsPerNode } : {}),
-          // Per-node filesystem overrides: cwd, readRoots, writeRoots. When set
-          // on the node, they override the parent session defaults. The downstream
-          // validateDagNodeRoots (dag-subagent.ts) enforces the same breadth
-          // guards as the agent tool path — isTooBroadRoot / ungatedSensitiveRoot.
+          // Per-node filesystem overrides: cwd, extraReadRoots, writeRoots. When
+          // set on the node, they refine the fork's scope. extraReadRoots is
+          // forwarded as the ADDITIVE field (AgentConfig.extraReadRoots) so the
+          // fork COMPOSES with its inherited read scope rather than pinning it
+          // (the readRoots pin path used by afk farm). writeRoots pins exactly.
+          // The downstream validateDagNodeRoots (dag-subagent.ts) enforces the
+          // same breadth guards as the agent tool path — isTooBroadRoot /
+          // ungatedSensitiveRoot.
           ...(n.cwd !== undefined ? { cwd: n.cwd } : {}),
-          ...(n.readRoots !== undefined ? { readRoots: n.readRoots } : {}),
+          ...(n.readRoots !== undefined ? { extraReadRoots: n.readRoots } : {}),
           ...(n.writeRoots !== undefined ? { writeRoots: n.writeRoots } : {}),
           // Workspace-enabled provider (see compose-node-provider.ts).
           ...resolveComposeNodeProvider(nodeModel, this.ctx.workspaceStore, this.ctx.openaiBaseUrl),

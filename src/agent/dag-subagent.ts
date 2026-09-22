@@ -56,6 +56,15 @@ export interface SubagentDAGNode {
    */
   readRoots?: string[];
   /**
+   * Additive extra read roots for this node's subagent session. Corresponds to
+   * `AgentConfig.extraReadRoots` — DISTINCT from {@link readRoots}: this field
+   * COMPOSES with the child's inherited read scope (union) rather than pinning
+   * it. Use this instead of `readRoots` when the goal is to widen access beyond
+   * the fork's natural scope without suppressing inheritance (the `readRoots`
+   * pin path used by `afk farm`).
+   */
+  extraReadRoots?: string[];
+  /**
    * Allowed roots for write-class tools in this node's subagent session.
    * Corresponds to `AgentConfig.writeRoots`.
    */
@@ -210,6 +219,7 @@ export async function runSubagentDAG(options: SubagentDAGOptions): Promise<DAGRu
             ...(spec.canUseTool !== undefined ? { canUseTool: spec.canUseTool } : {}),
             ...(spec.cwd !== undefined ? { cwd: spec.cwd } : {}),
             ...(spec.readRoots !== undefined ? { readRoots: spec.readRoots } : {}),
+            ...(spec.extraReadRoots !== undefined ? { extraReadRoots: spec.extraReadRoots } : {}),
             ...(spec.writeRoots !== undefined ? { writeRoots: spec.writeRoots } : {}),
             ...(spec.apiKey !== undefined ? { apiKey: spec.apiKey } : {}),
             ...(spec.maxToolUseIterations !== undefined

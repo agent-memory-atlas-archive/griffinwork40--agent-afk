@@ -31,6 +31,13 @@ describe('parseComposeInput — per-node cwd', () => {
     );
   });
 
+  it('accepts cwd with ".." as a substring (not a segment)', () => {
+    // Paths like /repo/package..backup contain ".." but as a filename
+    // substring, NOT as a bare path segment — must not be rejected.
+    const { parsed } = parseComposeInput(minimal({ cwd: '/repo/package..backup' }));
+    expect(parsed.nodes[0]!.cwd).toBe('/repo/package..backup');
+  });
+
   it('rejects non-string cwd', () => {
     expect(() => parseComposeInput(minimal({ cwd: 42 }))).toThrow(
       /cwd must be a non-empty string/,
@@ -76,6 +83,13 @@ describe('parseComposeInput — per-node readRoots', () => {
     expect(() => parseComposeInput(minimal({ readRoots: ['/foo/../bar'] }))).toThrow(
       /readRoots entry must not contain "\.\." segments/,
     );
+  });
+
+  it('accepts readRoots entry with ".." as a substring (not a segment)', () => {
+    // e.g. /repo/package..backup is a valid path that contains ".." but not as
+    // a bare traversal segment — matches the agent tool's behaviour (#662).
+    const { parsed } = parseComposeInput(minimal({ readRoots: ['/repo/package..backup'] }));
+    expect(parsed.nodes[0]!.readRoots).toEqual(['/repo/package..backup']);
   });
 
   it('rejects non-string entries in readRoots', () => {
