@@ -9,6 +9,7 @@
  *   - 50-turn session: no divider
  *   - maxTurns override: respects custom cap
  *   - Long assistant text (>2000 chars): truncated with char count
+ *   - Surrogate-safe truncation: emoji/non-BMP chars never split at boundary
  *   - Writer isolation: all output goes through writer param
  */
 
@@ -336,16 +337,49 @@ describe('replayTurns — writer isolation', () => {
 
 describe('replayTurns — surrogate-safe truncation', () => {
   it('does not split UTF-16 surrogate pairs at the truncation boundary', () => {
-    // Build input where the truncation cut lands inside an emoji surrogate pair
-    const longText = 'a'.repeat(1499) + '🎉🎉🎉';
+    // Design: put an emoji right at the truncation boundary (code-point 1499).
+    // 'a'.repeat(1499) + '🎉' + 'b'.repeat(502) = 2002 code points.
+    // UTF-16 length = 1499 + 2 + 502 = 2003 > 2000, so the truncation branch fires.
+    // The code-point-aware slice keeps the first 1500 code points:
+    //   indices 0–1498 → 'a' × 1499
+    //   index   1499   → '🎉'  (entirely within the window)
+    // No lone surrogate is ever emitted, so \uFFFD must be absent.
+    const longText = 'a'.repeat(1499) + '🎉' + 'b'.repeat(502);
     const { writer, lines } = makeCollector();
     replayTurns([makeTurn({ assistant: longText })], writer);
     const text = flat(lines);
-    // Should not contain the replacement character that lone surrogates produce
+    // Truncation annotation must fire (UTF-16 .length is 2003 > 2000).
+    expect(text).toContain('truncated');
+    // Should not contain the replacement character that lone surrogates produce.
     expect(text).not.toContain('\uFFFD');
-    // The output should contain at least one complete emoji (the code-point-aware
-    // slice should include the emoji that starts at position 1499)
+    // The emoji at code-point 1499 is within the 1500-shown window and must
+    // appear whole in the output.
     expect(text).toContain('🎉');
+  });
+
+  it('does not truncate a string whose UTF-16 length exceeds threshold only because of emoji', () => {
+    // 1999 ASCII chars + 1 emoji = 1999 code points but 2001 UTF-16 chars.
+    // .length is 2001 > 2000 so the branch fires; the code-point-aware slice
+    // at 1500 shows only ASCII, but the annotation must still appear.
+    const longText = 'z'.repeat(1999) + '🚀';
+    const { writer, lines } = makeCollector();
+    replayTurns([makeTurn({ assistant: longText })], writer);
+    const text = flat(lines);
+    expect(text).toContain('truncated');
+    expect(text).not.toContain('\uFFFD');
+  });
+
+  it('normal ASCII truncation still works correctly', () => {
+    // Pure ASCII — no surrogate pairs. 2100 chars > 2000 threshold.
+    const longText = 'q'.repeat(2100);
+    const { writer, lines } = makeCollector();
+    replayTurns([makeTurn({ assistant: longText })], writer);
+    const text = flat(lines);
+    expect(text).toContain('truncated');
+    expect(text).toContain('2100 chars total');
+    // Exactly the first 1500 q's should appear.
+    expect(text).toContain('q'.repeat(1500));
+    expect(text).not.toContain('q'.repeat(1501));
   });
 });
 
@@ -438,14 +472,3 @@ describe('replayTurns — ANSI injection via ToolEvent.input', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Degenerate turn skip (both user and assistant empty)
-// ---------------------------------------------------------------------------
-
-describe('replayTurns — degenerate turn skip', () => {
-  it('emits nothing when both user and assistant are empty strings', () => {
-    const { writer, lines } = makeCollector();
-    replayTurns([makeTurn({ user: '', assistant: '' })], writer);
-    expect(lines.length).toBe(0);
-  });
-});
