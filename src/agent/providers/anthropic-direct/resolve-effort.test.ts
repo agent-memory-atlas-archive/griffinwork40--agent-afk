@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { resolveEffort, resolveMaxTokens, resolveThinkingParam, resolveAnthropicTemperature, resumeHistoryToMessages } from './resolve-params.js';
+import { resolveEffort, resolveMaxTokens, resolveThinkingParam, resolveAnthropicTemperature, resumeHistoryToMessages, filterContentBlocks } from './resolve-params.js';
 import { maxOutputTokensFor } from '../../model-limits.js';
 import type { AgentConfig, ResumeHistoryTurn } from '../../types/config-types.js';
 import type { ThinkingConfig } from '../../types/sdk-types.js';
@@ -308,6 +308,150 @@ describe('resolveThinkingParam', () => {
   });
 });
 
+describe('filterContentBlocks (#2003 — runtime type validation)', () => {
+  // ── Allowlisted types pass through ──────────────────────────────────────
+
+  it('passes through all valid ContentBlockParam types', () => {
+    const validBlocks: unknown[] = [
+      { type: 'text', text: 'hello' },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'abc' } },
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'abc' } },
+      { type: 'search_result', source: { type: 'url', url: 'https://example.com' }, title: 'Example', content: [] },
+      { type: 'thinking', thinking: 'my reasoning', signature: 'sig123' },
+      { type: 'redacted_thinking', data: 'opaque-data' },
+      { type: 'tool_use', id: 'tu_1', name: 'bash', input: { command: 'ls' } },
+      { type: 'tool_result', tool_use_id: 'tu_1', content: 'file.txt\n' },
+      { type: 'server_tool_use', id: 'stu_1', name: 'web_search', input: { query: 'foo' } },
+      { type: 'web_search_tool_result', tool_use_id: 'stu_1', content: [] },
+    ];
+    const result = filterContentBlocks(validBlocks);
+    expect(result).toHaveLength(validBlocks.length);
+    // Verify each block came through as-is (same reference)
+    for (let i = 0; i < validBlocks.length; i++) {
+      expect(result[i]).toBe(validBlocks[i]);
+    }
+  });
+
+  // ── Unknown / crafted types are rejected ──────────────────────────────
+
+  it('drops blocks with unknown type values', () => {
+    const mixed: unknown[] = [
+      { type: 'text', text: 'keep me' },
+      { type: 'injected_malicious_type', payload: 'evil' },
+      { type: 'custom_block', data: 'attacker-controlled' },
+      { type: 'text', text: 'also keep me' },
+    ];
+    const result = filterContentBlocks(mixed);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ type: 'text', text: 'keep me' });
+    expect(result[1]).toEqual({ type: 'text', text: 'also keep me' });
+  });
+
+  it('drops blocks where the type field is an empty string', () => {
+    const blocks: unknown[] = [
+      { type: '', text: 'no type' },
+      { type: 'text', text: 'valid' },
+    ];
+    const result = filterContentBlocks(blocks);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ type: 'text', text: 'valid' });
+  });
+
+  // ── Missing or non-string type field ─────────────────────────────────
+
+  it('drops blocks with no type field', () => {
+    const blocks: unknown[] = [
+      { text: 'orphan text, no type' },
+      { type: 'text', text: 'valid' },
+    ];
+    const result = filterContentBlocks(blocks);
+    expect(result).toHaveLength(1);
+  });
+
+  it('drops blocks where type is not a string (number, boolean, null, object)', () => {
+    const blocks: unknown[] = [
+      { type: 42, text: 'numeric type' },
+      { type: true, text: 'boolean type' },
+      { type: null, text: 'null type' },
+      { type: { nested: 'object' }, text: 'object type' },
+      { type: 'text', text: 'the only valid one' },
+    ];
+    const result = filterContentBlocks(blocks);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({ type: 'text', text: 'the only valid one' });
+  });
+
+  // ── Non-object entries ────────────────────────────────────────────────
+
+  it('drops null entries', () => {
+    const blocks: unknown[] = [null, { type: 'text', text: 'valid' }, null];
+    const result = filterContentBlocks(blocks);
+    expect(result).toHaveLength(1);
+  });
+
+  it('drops primitive entries (string, number, boolean)', () => {
+    const blocks: unknown[] = [
+      'raw string',
+      42,
+      true,
+      { type: 'text', text: 'valid' },
+    ];
+    const result = filterContentBlocks(blocks);
+    expect(result).toHaveLength(1);
+  });
+
+  it('drops nested array entries (arrays are not valid blocks)', () => {
+    const blocks: unknown[] = [
+      ['type', 'text'],
+      { type: 'text', text: 'valid' },
+    ];
+    const result = filterContentBlocks(blocks);
+    expect(result).toHaveLength(1);
+  });
+
+  // ── Edge cases ────────────────────────────────────────────────────────
+
+  it('returns an empty array for undefined input', () => {
+    expect(filterContentBlocks(undefined)).toEqual([]);
+  });
+
+  it('returns an empty array for an empty input array', () => {
+    expect(filterContentBlocks([])).toEqual([]);
+  });
+
+  it('returns an empty array when all blocks are invalid', () => {
+    const blocks: unknown[] = [
+      null,
+      'string',
+      { type: 'unknown_type', payload: 'x' },
+      { text: 'no type field' },
+    ];
+    expect(filterContentBlocks(blocks)).toEqual([]);
+  });
+
+  it('handles a mix of valid and every invalid shape in one array', () => {
+    // This is the realistic "corrupted sidecar" scenario — the attacker
+    // interleaves crafted blocks with legitimate ones. Only valid blocks should
+    // survive.
+    const blocks: unknown[] = [
+      { type: 'thinking', thinking: 'safe', signature: 's1' },
+      null,
+      { type: 'text', text: 'safe text' },
+      { type: 'INJECTION', name: 'bash', input: {} },        // attacker tool_use lookalike
+      { type: 'tool_use', id: 'tu_2', name: 'read_file', input: { path: '/etc/passwd' } },
+      42,
+      { type: 'tool_result', tool_use_id: 'tu_2', content: 'root:...' },
+      { payload: 'no type' },
+    ];
+    const result = filterContentBlocks(blocks);
+    expect(result).toHaveLength(4);
+    expect((result[0] as { type: string }).type).toBe('thinking');
+    expect((result[1] as { type: string }).type).toBe('text');
+    expect((result[2] as { type: string }).type).toBe('tool_use');
+    expect((result[3] as { type: string }).type).toBe('tool_result');
+  });
+});
+
 describe('resumeHistoryToMessages', () => {
   // ── Backward-compat: text-only path (pre-v5.226 sidecars) ─────────────
 
@@ -425,5 +569,73 @@ describe('resumeHistoryToMessages', () => {
     expect(msgs![1]).toEqual({ role: 'assistant', content: 'old a' });
     expect(msgs![2]).toEqual({ role: 'user', content: 'new q' });
     expect(msgs![3]).toEqual({ role: 'assistant', content: assistantBlocks });
+  });
+
+  // ── Security: invalid blocks from corrupted sidecars are filtered (#2003) ─
+
+  it('filters out blocks with unknown types from corrupted/crafted sidecars', () => {
+    // Simulates a sidecar tampered by an attacker: a valid text block is mixed
+    // with a block carrying an unrecognised type. Only the text block should reach
+    // the API; the crafted block must be dropped.
+    const history: ResumeHistoryTurn[] = [
+      {
+        user: 'user prompt',
+        assistant: 'fallback',
+        assistantContentBlocks: [
+          { type: 'text', text: 'legitimate reply' },
+          { type: 'injected_malicious' as 'text', text: 'attacker payload' },
+        ] as ContentBlockParam[],
+      },
+    ];
+    const msgs = resumeHistoryToMessages(history);
+    expect(msgs).toHaveLength(2);
+    const assistantContent = msgs![1].content;
+    expect(Array.isArray(assistantContent)).toBe(true);
+    expect(assistantContent).toHaveLength(1);
+    expect((assistantContent as ContentBlockParam[])[0]).toEqual({ type: 'text', text: 'legitimate reply' });
+  });
+
+  it('falls back to text when all structured blocks are filtered out due to invalid types', () => {
+    // If every block in userContentBlocks is invalid, the message should fall
+    // back to the text-only path rather than emitting an empty content array.
+    const history: ResumeHistoryTurn[] = [
+      {
+        user: 'fallback user text',
+        assistant: 'fallback assistant text',
+        userContentBlocks: [
+          { type: 'unknown_evil_type' as 'text', text: 'bad' },
+        ] as ContentBlockParam[],
+        assistantContentBlocks: [
+          { type: 'another_unknown' as 'text', text: 'also bad' },
+        ] as ContentBlockParam[],
+      },
+    ];
+    const msgs = resumeHistoryToMessages(history);
+    // Both block arrays fully filtered → text fallback path
+    expect(msgs).toEqual([
+      { role: 'user', content: 'fallback user text' },
+      { role: 'assistant', content: 'fallback assistant text' },
+    ]);
+  });
+
+  it('drops null and non-object entries mixed into sidecar block arrays', () => {
+    // Defensive: ensure null entries inside the raw array do not crash the
+    // filter and are silently removed.
+    const history: ResumeHistoryTurn[] = [
+      {
+        user: 'u',
+        assistant: 'a',
+        userContentBlocks: [
+          null as unknown as ContentBlockParam,
+          { type: 'text', text: 'valid' },
+          'stray string' as unknown as ContentBlockParam,
+        ],
+      },
+    ];
+    const msgs = resumeHistoryToMessages(history);
+    const userContent = msgs![0].content;
+    expect(Array.isArray(userContent)).toBe(true);
+    expect(userContent).toHaveLength(1);
+    expect((userContent as ContentBlockParam[])[0]).toEqual({ type: 'text', text: 'valid' });
   });
 });

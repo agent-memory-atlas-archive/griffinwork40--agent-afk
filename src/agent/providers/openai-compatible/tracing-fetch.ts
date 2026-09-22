@@ -14,12 +14,16 @@
  * All callbacks are fire-and-forget and guarded with try/catch so a throwing
  * observer can never disturb the request path or the SDK's own retry loop.
  *
+ * Delegates the shared gate/throttle/freeze state machine to
+ * {@link makeBaseTracingFetch} from `providers/shared/tracing-fetch.ts`.
+ * The OpenAI provider has no extra provider-specific arms (no `onQuota`, no
+ * witness-trace emit), so the shared base is the complete implementation and
+ * this module is a thin named re-export with OpenAI-flavoured docs.
+ *
  * @module agent/providers/openai-compatible/tracing-fetch
  */
 
-import { estimateInputTokens } from '../shared/rate-limit-bucket.js';
-import { parseRetryAfterMs } from '../shared/retry-after.js';
-import { THROTTLE_STATUSES } from '../shared/tracing-fetch-utils.js';
+import { makeBaseTracingFetch } from '../shared/tracing-fetch.js';
 import type { ThrottleInfo, RateLimitGate } from '../shared/tracing-fetch-utils.js';
 
 /**
@@ -48,56 +52,5 @@ export function makeOpenAITracingFetch(
   onRateLimit?: (headers: Headers) => void,
   gate?: RateLimitGate,
 ): typeof fetch {
-  if (!onThrottle && !onRateLimit && !gate) return baseFetch;
-
-  return async (
-    input: Parameters<typeof fetch>[0],
-    init?: Parameters<typeof fetch>[1],
-  ): Promise<Response> => {
-    // ADMISSION GATE: wait for a permit before the outbound request.
-    if (gate) {
-      const estimated = estimateInputTokens(init);
-      const signal = init?.signal instanceof AbortSignal ? init.signal : undefined;
-      await gate.acquirePermit(estimated, signal);
-    }
-
-    const res = await baseFetch(input, init);
-
-    // Per-minute header capture: runs unconditionally so the bucket is updated
-    // after every response, not just throttled ones.
-    if (onRateLimit) {
-      try {
-        onRateLimit(res.headers);
-      } catch {
-        // A broken observer must never disturb the SDK retry loop.
-      }
-    }
-
-    // Hard-freeze the bucket on 429 so concurrent waiters also back off.
-    // Uses the shared parseRetryAfterMs which checks retry-after-ms (ms) first,
-    // then retry-after (seconds), matching OpenAI's header convention.
-    if (gate && res.status === 429) {
-      try {
-        const retryMs = parseRetryAfterMs({ headers: res.headers });
-        gate.freeze(retryMs ?? 5_000);
-      } catch {
-        // ignore
-      }
-    }
-
-    // Live throttle signal for the progress banner.
-    if (onThrottle && THROTTLE_STATUSES.has(res.status)) {
-      try {
-        const retryAfterMs = parseRetryAfterMs({ headers: res.headers });
-        onThrottle({
-          status: res.status,
-          ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
-        });
-      } catch {
-        // A broken observer must never disturb the SDK retry loop.
-      }
-    }
-
-    return res;
-  };
+  return makeBaseTracingFetch({ baseFetch, onThrottle, onRateLimit, gate });
 }

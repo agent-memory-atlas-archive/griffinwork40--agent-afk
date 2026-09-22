@@ -64,6 +64,18 @@ export interface AtomicWriteOptions {
    * ancestors) before writing.  Defaults to `true`.
    */
   mkdirp?: boolean;
+  /**
+   * When true, open the temp file with `O_EXCL` (`flag: 'wx'`) so a
+   * pre-existing temp path (e.g. from a prior interrupted write) causes an
+   * immediate `EEXIST` error rather than silently overwriting it.
+   *
+   * The random temp-name already makes collisions vanishingly rare, but callers
+   * where a stale tmp surviving a crash represents a security concern (e.g. a
+   * service unit file that embeds credentials) can opt in explicitly.
+   *
+   * Defaults to `false`.
+   */
+  secure?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +119,7 @@ export function atomicWriteFile(
   const mode = resolvedOpts.mode ?? 0o600;
   const encoding = resolvedOpts.encoding ?? 'utf-8';
   const mkdirp = resolvedOpts.mkdirp ?? true;
+  const flag = resolvedOpts.secure ? 'wx' : 'w';
 
   if (mkdirp) {
     mkdirSync(dirname(dest), { recursive: true });
@@ -114,7 +127,7 @@ export function atomicWriteFile(
 
   const tmp = makeTmpPath(dest);
   try {
-    writeFileSync(tmp, content, { mode, encoding });
+    writeFileSync(tmp, content, { mode, encoding, flag });
     renameSync(tmp, dest);
   } catch (err) {
     // Best-effort cleanup — suppress unlink errors.
@@ -143,6 +156,7 @@ export async function atomicWriteFileAsync(
   const mode = opts.mode ?? 0o600;
   const encoding = opts.encoding ?? 'utf-8';
   const mkdirp = opts.mkdirp ?? true;
+  const flag = opts.secure ? 'wx' : 'w';
 
   if (mkdirp) {
     await mkdir(dirname(dest), { recursive: true });
@@ -150,7 +164,7 @@ export async function atomicWriteFileAsync(
 
   const tmp = makeTmpPath(dest);
   try {
-    await writeFile(tmp, content, { mode, encoding });
+    await writeFile(tmp, content, { mode, encoding, flag });
     await rename(tmp, dest);
   } catch (err) {
     // Best-effort cleanup — suppress unlink errors.

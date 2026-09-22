@@ -12,9 +12,10 @@
  */
 
 import { execFileSync, spawnSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import { dirname } from 'path';
+import { atomicWriteFile } from '../../utils/atomic-write.js';
 import type { ServiceInstallOptions, ServiceInstallOutcome, ServiceName, ServiceUninstallOutcome } from '../types.js';
 import { resolveProgramArguments, resolveServicePath, resolveWatchPaths } from '../launchd/plist.js';
 import {
@@ -99,29 +100,18 @@ function resolveSystemctlPath(existsCheck: (p: string) => boolean = existsSync):
 }
 
 /**
- * Atomic file write: tmp sibling with `O_EXCL` (`flag: 'wx'`) + explicit
- * `mode: 0o600` (unit files may embed API keys/tokens via Environment=),
- * then `renameSync` into place. Mirrors the launchd installer's threat
- * model — see `launchd/install.ts`. Returns an error string on failure.
+ * Atomic file write: delegates to {@link atomicWriteFile} with `secure: true`
+ * (O_EXCL on the temp file) and `mode: 0o600` (unit files may embed API
+ * keys/tokens via Environment=). Returns an error string on failure so callers
+ * can surface a human-readable message without throwing through commander.
  */
 function atomicWrite(path: string, content: string): string | undefined {
-  const tmpPath = `${path}.tmp`;
   try {
-    writeFileSync(tmpPath, content, { encoding: 'utf-8', flag: 'wx', mode: 0o600 });
+    atomicWriteFile(path, content, { encoding: 'utf-8', mode: 0o600, mkdirp: false, secure: true });
+    return undefined;
   } catch (err) {
-    return `Failed to write unit (tmp ${tmpPath}): ${errorMessage(err)}`;
+    return `Failed to write unit at ${path}: ${errorMessage(err)}`;
   }
-  try {
-    renameSync(tmpPath, path);
-  } catch (err) {
-    try {
-      unlinkSync(tmpPath);
-    } catch {
-      // Ignore — the rename error is the actionable one.
-    }
-    return `Failed to install unit (rename ${tmpPath} → ${path}): ${errorMessage(err)}`;
-  }
-  return undefined;
 }
 
 const LINGER_NOTE =

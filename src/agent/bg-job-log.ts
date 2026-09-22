@@ -26,8 +26,8 @@
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as readline from 'node:readline';
-import { randomBytes } from 'node:crypto';
 import { getBgJobsRoot, getBgJobDir, getBgJobLog, getBgJobMeta } from '../paths.js';
+import { atomicWriteFileAsync } from '../utils/atomic-write.js';
 import type { OutputEvent } from './types/session-types.js';
 
 // ---------------------------------------------------------------------------
@@ -199,14 +199,14 @@ export class BgJobLogWriter {
   }
 
   private async _writeMetaInner(meta: BgJobMeta): Promise<void> {
-    const tmpPath = `${this.metaPath}.${randomBytes(4).toString('hex')}.tmp`;
     try {
-      await fsp.writeFile(tmpPath, JSON.stringify(meta, null, 2), { encoding: 'utf8', mode: 0o600 });
-      await fsp.rename(tmpPath, this.metaPath);
+      await atomicWriteFileAsync(this.metaPath, JSON.stringify(meta, null, 2), {
+        encoding: 'utf8',
+        mode: 0o600,
+        mkdirp: false,
+      });
     } catch (e) {
       process.stderr.write(`[afk] bg-job-log: writeMeta failed for ${this.jobId}: ${String(e)}\n`);
-      // Best-effort cleanup of tmp file
-      try { await fsp.unlink(tmpPath); } catch { /* ignore */ }
     }
   }
 }

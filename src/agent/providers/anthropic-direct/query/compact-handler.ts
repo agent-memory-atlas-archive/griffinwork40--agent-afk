@@ -7,27 +7,28 @@
  *
  *   1. Bail with a typed reason if the session is closed or a turn is
  *      already in flight (the latter via `abort.isIdle()`).
- *   2. Locate the compaction boundary; bail if there's nothing older
- *      than the keep-last-N tail to summarize.
- *   3. Begin a fresh abort scope (so `interrupt()` cancels the
- *      summarization request cleanly), build a request via
- *      `compact.ts`'s helpers, stream it through the current SDK
- *      client (read via `retry.client` so we see the post-401-swap
- *      reference), and collect the assistant text.
- *   4. On a non-empty summary: splice `state.messages` in place,
+ *   2. Delegate boundary selection, transcript render, summarize, and
+ *      splice to {@link runCompactionCore} from `shared/compaction.ts`.
+ *   3. On a non-empty summary: splice `state.messages` in place,
  *      emit a witness-layer `compaction` event, and return the
  *      success result.
+ *   4. On any no-op result: run deterministic tool-result microcompaction
+ *      as a fallback to reclaim context in short-but-full sessions.
  *
  * Mutates `state.messages` in place on success. Leaves history
  * untouched on every failure path (closed, in-flight, too-short,
  * nothing-to-summarize, aborted, summarization-failed, empty-summary).
  *
- * # Why the helpers live here
+ * # Provider-specific elements
  *
- * `readKeepLastN`, `readCompactModel`, and `collectStreamText` are
- * file-private utilities that are only meaningful in the compaction
- * pipeline. They moved with the function so query.ts has no leftover
- * compaction surface.
+ * The shared {@link runCompactionCore} owns the generic algorithm; this
+ * file wires the Anthropic-specific collaborators:
+ *   - `anthropicCompactionOps` — message-representation primitives
+ *     (boundary walk, transcript render, preamble shape) from `compact.ts`.
+ *   - The `summarize` closure — builds the `messages.create` request from
+ *     the rendered transcript, streams it through the live SDK client
+ *     (read via `retry.client` for post-401-swap freshness), and collects
+ *     the text.
  *
  * @module agent/providers/anthropic-direct/query/compact-handler
  */
@@ -37,16 +38,16 @@ import { randomUUID } from 'node:crypto';
 import type { ProviderCompactResult } from '../../../provider.js';
 import { buildRequestHeaders } from '../auth.js';
 import {
-  applyCompaction,
-  buildSummarizationRequest,
-  estimateTokensSaved,
-  findCompactionBoundaryAdaptive,
+  anthropicCompactionOps,
   microcompactToolResults,
+  COMPACT_SYSTEM_PROMPT,
 } from '../compact.js';
 import {
   readKeepLastN,
   readShrinkFraction,
   resolveMicrocompactOptions,
+  runCompactionCore,
+  wrapTranscriptForSummary,
 } from '../../shared/compaction.js';
 import {
   contextFullnessFraction,
@@ -60,7 +61,6 @@ import type { SessionState } from './session-state.js';
 import type { AbortCoordinator } from '../../shared/abort-coordinator.js';
 import type { RetryLayer } from './retry-layer.js';
 import { env } from '../../../../config/env.js';
-import { errorMessage } from '../../../../utils/errors.js';
 
 const DEFAULT_COMPACT_MODEL = 'claude-haiku-4-5-20251001';
 const DEFAULT_COMPACT_MAX_TOKENS = 1024;
@@ -105,167 +105,80 @@ export async function compactHistory(
     };
   }
 
-  const keepLastN = readKeepLastN();
-  // Token-fullness fallback: the keep-window is counted in whole turns, so a
-  // short-but-full session (few turns, huge tool exchanges) would otherwise
-  // no-op regardless of how full the window is. Measure fullness against the
-  // same working budget the auto-compaction trigger uses (autoCompactLimitFor,
-  // via requestedModel so the *_1m alias is honored) and let the boundary
-  // relax the keep-window when we are near the limit.
+  const controller = abort.begin();
+
+  // Token-fullness fraction for adaptive keep-window: a short-but-full session
+  // (few turns, huge tool exchanges) would otherwise report history-too-short /
+  // nothing-to-summarize. Measuring against the same working budget as the
+  // auto-compaction trigger (autoCompactLimitFor) lets the boundary relax the
+  // keep-window when we are near the limit.
   const usedFraction = contextFullnessFraction(
     contextWindowTokensUsed(state.lastUsage ?? {}),
     autoCompactLimitFor(state.requestedModel),
   );
-  const boundary = findCompactionBoundaryAdaptive(
-    state.messages,
-    keepLastN,
-    usedFraction,
-    readShrinkFraction(),
-  );
-  if (boundary < 0) {
-    // Turn-granular summarization has nothing to do (fewer than keepLastN fresh
-    // user turns). Fall back to a deterministic tool-result microcompaction pass
-    // — a single-turn-but-full session has all its bytes inside the one kept
-    // turn, where summarization can't reach, but microcompaction can. See
-    // shared/compaction.ts:microcompactToolResults.
-    return runMicrocompactFallback(state, messagesBefore, 'history-too-short');
-  }
-  if (boundary === 0) {
-    // Kept tail starts at message 0 — nothing older to summarize.
-    // History is not too short; the entire history falls within the keep
-    // window. Try the deterministic microcompaction fallback before reporting
-    // the no-op so a short-but-full session still reclaims context.
-    return runMicrocompactFallback(state, messagesBefore, 'nothing-to-summarize');
-  }
 
-  const olderSlice = state.messages.slice(0, boundary);
-  const compactModel = readCompactModel();
-  const params = buildSummarizationRequest(
-    olderSlice,
-    compactModel,
-    DEFAULT_COMPACT_MAX_TOKENS,
-  );
-
-  const controller = abort.begin();
-
-  let summary: string;
+  let result: ProviderCompactResult;
   try {
-    if (controller.signal.aborted) {
-      return {
-        compacted: false,
-        reason: 'aborted',
-        messagesBefore,
-        messagesAfter: messagesBefore,
-      };
-    }
-
-    const headers = buildRequestHeaders(
-      retry.authMode,
-      initSessionId,
-      randomUUID(),
-    );
-    // Read `client` via the retry layer's getter so we always see the
-    // post-401-swap reference, never a stale snapshot.
-    const client = retry.client as unknown as AnthropicClientLike;
-    const stream = (await Promise.resolve(
-      client.messages.create(params, {
-        headers,
-        signal: controller.signal,
-      }),
-    )) as AsyncIterable<RawMessageStreamEvent>;
-
-    summary = await collectStreamText(stream);
-  } catch (err) {
-    if (controller.signal.aborted) {
-      return {
-        compacted: false,
-        reason: 'aborted',
-        messagesBefore,
-        messagesAfter: messagesBefore,
-      };
-    }
-    const msg = errorMessage(err);
-    return {
-      compacted: false,
-      reason: 'summarization-failed: ' + msg,
-      messagesBefore,
-      messagesAfter: messagesBefore,
-    };
+    result = await runCompactionCore<import('@anthropic-ai/sdk/resources').MessageParam>({
+      messages: state.messages,
+      ops: anthropicCompactionOps,
+      keepLastN: readKeepLastN(),
+      usedFraction,
+      shrinkAtFraction: readShrinkFraction(),
+      summarize: async (transcript: string) => {
+        if (controller.signal.aborted) {
+          throw new Error('aborted');
+        }
+        const compactModel = readCompactModel();
+        const headers = buildRequestHeaders(
+          retry.authMode,
+          initSessionId,
+          randomUUID(),
+        );
+        // Read `client` via the retry layer's getter so we always see the
+        // post-401-swap reference, never a stale snapshot.
+        const client = retry.client as unknown as AnthropicClientLike;
+        const stream = (await Promise.resolve(
+          client.messages.create(
+            {
+              model: compactModel,
+              max_tokens: DEFAULT_COMPACT_MAX_TOKENS,
+              system: COMPACT_SYSTEM_PROMPT,
+              messages: [{ role: 'user', content: wrapTranscriptForSummary(transcript) }],
+              stream: true,
+            },
+            { headers, signal: controller.signal },
+          ),
+        )) as AsyncIterable<RawMessageStreamEvent>;
+        return collectStreamText(stream);
+      },
+      isAborted: () => controller.signal.aborted,
+      abortInFlight: () => controller.abort(),
+      onSuccess: (info) => {
+        // Fire-and-forget; emitCompaction swallows writer errors internally.
+        void emitCompaction(traceWriter, {
+          trigger: 'manual',
+          preCompactionMessages: info.olderSlice,
+          summary: info.summary,
+          keptTailCount: info.keptTailCount,
+          keepLastNConfig: info.keepLastN,
+          messagesBefore: info.messagesBefore,
+          messagesAfter: info.messagesAfter,
+          tokensSavedEstimate: info.tokensSavedEstimate,
+        });
+      },
+    });
   } finally {
     abort.clear(controller);
   }
 
-  if (summary.trim().length === 0) {
-    return {
-      compacted: false,
-      reason: 'empty-summary',
-      messagesBefore,
-      messagesAfter: messagesBefore,
-    };
-  }
-
-  const tokensSavedEstimate = estimateTokensSaved(
-    state.messages,
-    boundary,
-    summary,
-  );
-  const newMessages = applyCompaction(state.messages, boundary, summary);
-  state.messages.splice(0, state.messages.length, ...newMessages);
-  const messagesAfter = state.messages.length;
-
-  // Witness layer: emit `compaction` AFTER the splice so messagesAfter
-  // reflects the post-mutation length, but `olderSlice` was captured
-  // pre-splice so it still carries the full pre-compaction transcript.
-  // The writer is responsible for sidecar-ing `preCompactionMessages`
-  // to a path-addressed file and rewriting the payload to its persisted
-  // form — see CompactionPayloadPersistedSchema. Fire-and-forget;
-  // emitCompaction swallows writer errors so a broken sink never
-  // blocks the compaction's return.
-  void emitCompaction(traceWriter, {
-    trigger: 'manual',
-    preCompactionMessages: olderSlice,
-    summary,
-    keptTailCount: messagesBefore - boundary,
-    keepLastNConfig: keepLastN,
-    messagesBefore,
-    messagesAfter,
-    tokensSavedEstimate,
-  });
-
-  // Deterministic microcompaction: run unconditionally after a successful
-  // compaction so large tool results in the kept tail are also cleared.
-  // The sentinel guard inside microcompactToolResults (`isMicrocompactPlaceholder`)
-  // prevents double-clearing any block that was already replaced in a prior pass.
-  microcompactToolResults(state.messages, readMicrocompactOptions());
-
-  return {
-    compacted: true,
-    messagesBefore,
-    messagesAfter,
-    tokensSavedEstimate,
-  };
-}
-
-/**
- * Deterministic no-LLM fallback: when turn-granular summarization is a no-op,
- * clear large/old `tool_result` block CONTENT in place to reclaim context. On a
- * short-but-full session (the window filled by huge tool payloads inside the one
- * kept turn) this reclaims exactly the bytes summarization cannot reach.
- *
- * Returns a `microcompacted` success-ish result carrying the reclaimed
- * block/byte counts when it cleared anything; otherwise returns the honest
- * no-op `fallbackReason` so surfaces still report accurately. `messagesBefore`
- * === `messagesAfter` always — microcompaction never removes a message, only
- * swaps a result's content for a placeholder.
- */
-function runMicrocompactFallback(
-  state: SessionState,
-  messagesBefore: number,
-  fallbackReason: 'history-too-short' | 'nothing-to-summarize',
-): ProviderCompactResult {
+  // Deterministic microcompaction: run unconditionally after any compaction
+  // attempt so large tool results in the kept tail are also cleared. The
+  // sentinel guard inside microcompactToolResults (`isMicrocompactPlaceholder`)
+  // prevents double-clearing any block already replaced in a prior pass.
   const opts = readMicrocompactOptions();
   const { blocksCleared, bytesReclaimed } = microcompactToolResults(state.messages, opts);
-  if (blocksCleared > 0) {
+  if (blocksCleared > 0 && !result.compacted) {
     return {
       compacted: false,
       reason: 'microcompacted',
@@ -274,12 +187,8 @@ function runMicrocompactFallback(
       microcompaction: { blocksCleared, bytesReclaimed },
     };
   }
-  return {
-    compacted: false,
-    reason: fallbackReason,
-    messagesBefore,
-    messagesAfter: messagesBefore,
-  };
+
+  return result;
 }
 
 /** Resolve the microcompaction threshold/keep-last from env (see shared resolver). */
