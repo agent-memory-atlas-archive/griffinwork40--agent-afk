@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.229.0] - 2026-09-22
+
+### Added
+- gate-shape telemetry + compose agent_type parse tests (22fd3fde)
+
 ## [5.228.0] - 2026-09-22
 
 ### Added
