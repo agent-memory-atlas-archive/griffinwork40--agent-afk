@@ -193,6 +193,13 @@ export const cancelScheduleHandler: ToolHandler = async (input, _signal) => {
   const permanent = obj['permanent'] === true;
   const enable = obj['enable'] === true;
 
+  // Invariant: pre-existing TOCTOU window — the store is checked for existence
+  // here via getSchedule and then mutated below via toggleScheduleEnabled / removeSchedule.
+  // A concurrent writer could delete the schedule between these two calls, which would
+  // make toggleScheduleEnabled return undefined (handled: updated! is safe because
+  // existing was confirmed) or removeSchedule silently no-op. This window is
+  // pre-existing and not a regression; the store is a local file accessed from a
+  // single-process daemon, so concurrent mutations are rare in practice.
   const existing = getSchedule(taskId);
   if (!existing) {
     return { content: JSON.stringify({ error: 'task not found' }) };
