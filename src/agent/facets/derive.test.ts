@@ -43,7 +43,7 @@ describe('deriveSessionFacet', () => {
   it('produces a schema-valid facet', () => {
     const facet = deriveSessionFacet(richSession());
     expect(SessionFacetSchema.safeParse(facet).success).toBe(true);
-    expect(facet.facet_version).toBe(3);
+    expect(facet.facet_version).toBe(4);
     expect(facet.derived_from).toBe('afk-session');
   });
 
@@ -346,5 +346,202 @@ describe('deriveSessionFacet', () => {
       turns: [],
     });
     expect(facet.token_breakdown).toBeUndefined();
+  });
+
+  // ---------------------------------------------------------------------------
+  // parallel_dispatch metric (#2015)
+  // ---------------------------------------------------------------------------
+
+  it('parallel_dispatch: ratio is null for a zero-tool-call session', () => {
+    const facet = deriveSessionFacet({
+      sessionId: 'no-tools',
+      model: 'opus',
+      startedAt: 0,
+      savedAt: 60_000,
+      totalTurns: 1,
+      turns: [{ user: 'hi', assistant: 'hello', timestamp: 1 }],
+    });
+    expect(facet.parallel_dispatch).toEqual({
+      total_tool_calls: 0,
+      parallel_tool_calls: 0,
+      parallel_turns: 0,
+      tool_turns: 0,
+      ratio: null,
+    });
+  });
+
+  it('parallel_dispatch: all sequential (one tool per turn) yields ratio 0', () => {
+    const facet = deriveSessionFacet({
+      sessionId: 'sequential',
+      model: 'opus',
+      startedAt: 0,
+      savedAt: 60_000,
+      totalTurns: 2,
+      turns: [
+        {
+          user: 'go',
+          assistant: 'ok',
+          timestamp: 1,
+          toolEvents: [{ toolName: 'bash', toolUseId: 'a', input: '{}' }],
+        },
+        {
+          user: '',
+          assistant: 'done',
+          timestamp: 2,
+          toolEvents: [{ toolName: 'read_file', toolUseId: 'b', input: '{}' }],
+        },
+      ],
+    });
+    expect(facet.parallel_dispatch.total_tool_calls).toBe(2);
+    expect(facet.parallel_dispatch.parallel_tool_calls).toBe(0);
+    expect(facet.parallel_dispatch.parallel_turns).toBe(0);
+    expect(facet.parallel_dispatch.tool_turns).toBe(2);
+    expect(facet.parallel_dispatch.ratio).toBe(0);
+  });
+
+  it('parallel_dispatch: all parallel (all tools in one turn) yields ratio 1', () => {
+    const facet = deriveSessionFacet({
+      sessionId: 'all-parallel',
+      model: 'opus',
+      startedAt: 0,
+      savedAt: 60_000,
+      totalTurns: 1,
+      turns: [
+        {
+          user: 'go',
+          assistant: 'done',
+          timestamp: 1,
+          toolEvents: [
+            { toolName: 'bash', toolUseId: 'a', input: '{}' },
+            { toolName: 'read_file', toolUseId: 'b', input: '{}' },
+            { toolName: 'grep', toolUseId: 'c', input: '{}' },
+          ],
+        },
+      ],
+    });
+    expect(facet.parallel_dispatch.total_tool_calls).toBe(3);
+    expect(facet.parallel_dispatch.parallel_tool_calls).toBe(3);
+    expect(facet.parallel_dispatch.parallel_turns).toBe(1);
+    expect(facet.parallel_dispatch.tool_turns).toBe(1);
+    expect(facet.parallel_dispatch.ratio).toBe(1);
+  });
+
+  it('parallel_dispatch: mixed turns correctly splits parallel vs sequential', () => {
+    // Turn 1: 3 tools (parallel) → contributes 3 parallel_tool_calls
+    // Turn 2: 1 tool (sequential) → contributes 0 parallel_tool_calls
+    // Turn 3: 2 tools (parallel) → contributes 2 parallel_tool_calls
+    // total_tool_calls = 6, parallel_tool_calls = 5, ratio = 5/6
+    const facet = deriveSessionFacet({
+      sessionId: 'mixed',
+      model: 'opus',
+      startedAt: 0,
+      savedAt: 60_000,
+      totalTurns: 3,
+      turns: [
+        {
+          user: 'step 1',
+          assistant: 'ok1',
+          timestamp: 1,
+          toolEvents: [
+            { toolName: 'bash', toolUseId: 'a', input: '{}' },
+            { toolName: 'read_file', toolUseId: 'b', input: '{}' },
+            { toolName: 'grep', toolUseId: 'c', input: '{}' },
+          ],
+        },
+        {
+          user: '',
+          assistant: 'ok2',
+          timestamp: 2,
+          toolEvents: [{ toolName: 'write_file', toolUseId: 'd', input: '{}' }],
+        },
+        {
+          user: '',
+          assistant: 'ok3',
+          timestamp: 3,
+          toolEvents: [
+            { toolName: 'bash', toolUseId: 'e', input: '{}' },
+            { toolName: 'glob', toolUseId: 'f', input: '{}' },
+          ],
+        },
+      ],
+    });
+    expect(facet.parallel_dispatch.total_tool_calls).toBe(6);
+    expect(facet.parallel_dispatch.parallel_tool_calls).toBe(5);
+    expect(facet.parallel_dispatch.parallel_turns).toBe(2);
+    expect(facet.parallel_dispatch.tool_turns).toBe(3);
+    expect(facet.parallel_dispatch.ratio).toBeCloseTo(5 / 6);
+  });
+
+  it('parallel_dispatch: deduplicates placeholder+real event pairs per turn', () => {
+    // Each toolUseId appears twice (placeholder + real) — dedup must count each once.
+    // 2 unique tools in one turn → parallel turn, ratio = 1.
+    const facet = deriveSessionFacet({
+      sessionId: 'parallel-dedup',
+      model: 'opus',
+      startedAt: 0,
+      savedAt: 60_000,
+      totalTurns: 1,
+      turns: [
+        {
+          user: 'go',
+          assistant: 'done',
+          timestamp: 1,
+          toolEvents: [
+            // placeholders
+            { toolName: 'bash', toolUseId: 'tu_1', input: ' …' },
+            { toolName: 'read_file', toolUseId: 'tu_2', input: ' …' },
+            // real entries
+            { toolName: 'bash', toolUseId: 'tu_1', input: ' ls', isError: false },
+            { toolName: 'read_file', toolUseId: 'tu_2', input: ' /a.ts', isError: false },
+          ],
+        },
+      ],
+    });
+    expect(facet.parallel_dispatch.total_tool_calls).toBe(2);
+    expect(facet.parallel_dispatch.parallel_tool_calls).toBe(2);
+    expect(facet.parallel_dispatch.parallel_turns).toBe(1);
+    expect(facet.parallel_dispatch.ratio).toBe(1);
+  });
+
+  it('parallel_dispatch: turns with no toolEvents are ignored', () => {
+    // Turns without any tools should not count as "tool turns".
+    const facet = deriveSessionFacet({
+      sessionId: 'no-tool-turns',
+      model: 'opus',
+      startedAt: 0,
+      savedAt: 60_000,
+      totalTurns: 2,
+      turns: [
+        { user: 'hello', assistant: 'hi', timestamp: 1 },
+        {
+          user: '',
+          assistant: 'done',
+          timestamp: 2,
+          toolEvents: [
+            { toolName: 'bash', toolUseId: 'x', input: '{}' },
+            { toolName: 'bash', toolUseId: 'y', input: '{}' },
+          ],
+        },
+      ],
+    });
+    expect(facet.parallel_dispatch.tool_turns).toBe(1);
+    expect(facet.parallel_dispatch.parallel_turns).toBe(1);
+    expect(facet.parallel_dispatch.total_tool_calls).toBe(2);
+    expect(facet.parallel_dispatch.parallel_tool_calls).toBe(2);
+    expect(facet.parallel_dispatch.ratio).toBe(1);
+  });
+
+  it('parallel_dispatch: schema-valid and present in the richSession facet', () => {
+    const facet = deriveSessionFacet(richSession());
+    // richSession has 2 turns:
+    //   turn 0: 8 tool events (7 unique toolUseIds a-h + one implicitly paired)
+    //   turn 1: 1 tool event (i)
+    // After dedup: turn 0 has 8 unique calls (parallel), turn 1 has 1 (sequential).
+    // parallel_tool_calls = 8, total_tool_calls = 9, ratio = 8/9
+    expect(facet.parallel_dispatch).toBeDefined();
+    expect(typeof facet.parallel_dispatch.ratio).toBe('number');
+    expect(facet.parallel_dispatch.ratio).toBeCloseTo(8 / 9);
+    expect(facet.parallel_dispatch.parallel_turns).toBe(1);
+    expect(facet.parallel_dispatch.tool_turns).toBe(2);
   });
 });
