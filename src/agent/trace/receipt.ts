@@ -27,6 +27,7 @@ import { getReceiptsDir } from '../../paths.js';
 import { env } from '../../config/env.js';
 import type { HookHandler } from '../hooks.js';
 import { parseJsonlLines } from '../../utils/jsonl.js';
+import { isSubagentContext } from '../hooks/hook-utils.js';
 import {
   BENIGN_FAILURE_CLASSES,
   type ClosureReason,
@@ -301,10 +302,7 @@ export function generateReceipt(events: TraceEvent[], meta: ReceiptMeta): RunRec
     );
   if (closureReason !== undefined && closureReason !== 'model_end_turn')
     reasons.push(`Closure reason "${closureReason}" is not a clean completion.`);
-  if (erroredNotable > 0)
-    reasons.push(
-      `${erroredNotable} tool call(s) returned an error (excluding benign outcomes).`,
-    );
+  if (erroredNotable > 0) reasons.push(`${erroredNotable} tool call(s) returned an error (excluding benign outcomes).`);
   if (circuitBreakerHits > 0)
     reasons.push(`Repeat-loop circuit breaker fired ${circuitBreakerHits} time(s).`);
   if (subagents.failed > 0) reasons.push(`${subagents.failed} subagent(s) failed.`);
@@ -512,7 +510,7 @@ export async function writeRunReceipt(
  */
 export const runReceiptSessionEndHook: HookHandler = async (context) => {
   if (context.event !== 'SessionEnd') return {};
-  if (context.parentSessionId !== undefined) return {}; // skip subagents
+  if (isSubagentContext(context)) return {}; // skip subagents
   if (env.AFK_RUN_RECEIPT_DISABLED === '1') return {};
   if (context.tracePath === undefined) return {};
   try {

@@ -39,6 +39,7 @@ import { EgressBlockedError } from '../../../http-client/egress-guard.js';
 import type { EgressGuardOptions } from '../../../http-client/egress-guard.js';
 import { redactSecrets } from '../../redact-secrets.js';
 import { errorMessage } from '../../../utils/errors.js';
+import { forwardAbortSignal } from '../../../utils/abort.js';
 
 type FetchFn = typeof fetch;
 
@@ -256,7 +257,7 @@ export function createWebRequestHandler(opts: WebRequestHandlerOptions = {}): To
 
     // -- Abort controller with timeout ---------------------------------------
     const ac = new AbortController();
-    const onParentAbort = (): void => ac.abort(signal.reason);
+    const cleanupAbort = forwardAbortSignal(signal, ac);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -266,7 +267,6 @@ export function createWebRequestHandler(opts: WebRequestHandlerOptions = {}): To
     };
 
     try {
-      signal.addEventListener('abort', onParentAbort, { once: true });
       timer = setTimeout(() => {
         ac.abort(new Error(`web_request timeout after ${parsed.timeoutMs}ms`));
       }, parsed.timeoutMs);
@@ -335,7 +335,7 @@ export function createWebRequestHandler(opts: WebRequestHandlerOptions = {}): To
       };
     } finally {
       if (timer !== undefined) clearTimeout(timer);
-      signal.removeEventListener('abort', onParentAbort);
+      cleanupAbort();
     }
   };
 }

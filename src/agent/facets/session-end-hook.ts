@@ -19,6 +19,7 @@
 
 import type { HookHandler } from '../hooks.js';
 import { getOrDeriveFacet } from './store.js';
+import { isSubagentContext } from '../hooks/hook-utils.js';
 
 export function createFacetSessionEndHook(): HookHandler {
   return (context) => {
@@ -26,7 +27,7 @@ export function createFacetSessionEndHook(): HookHandler {
     // Subagent guard: forked children inherit the parent's hook registry,
     // so their teardown fires this too. Skip — subagent sessions are worker
     // details, not standalone harvestable units.
-    if (context.parentSessionId) return {};
+    if (isSubagentContext(context)) return {};
 
     const sessionId = context.sessionId;
     if (!sessionId) return {};

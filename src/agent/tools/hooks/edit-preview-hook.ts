@@ -11,6 +11,7 @@
 import { computeLineDiff } from '../../../utils/diff.js';
 import type { HookContext, HookDecision, HookHandler } from '../../hooks.js';
 import type { DiffPayload } from '../../../utils/diff.js';
+import { isSubagentContext } from '../../hooks/hook-utils.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -49,7 +50,7 @@ export function createEditPreviewHook(opts: EditPreviewHookOptions): HookHandler
     // Guard: only edit_file
     if (context.toolName !== 'edit_file') return {};
     // Guard: subagents have no overlay — skip silently
-    if (context.parentSessionId !== undefined) return {};
+    if (isSubagentContext(context)) return {};
     // Guard: need a toolUseId to key the lane entry
     if (!context.toolUseId) return {};
 
