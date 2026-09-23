@@ -4,7 +4,8 @@
  *
  * `resolveEffort` auto-defaults to `'max'` on the production-verified
  * allowlist (`opus-4-6`, `opus-4-7`, `opus-4-8`, `opus-5`, `sonnet-4-6`,
- * `sonnet-4-7`, `sonnet-5`)
+ * `sonnet-4-7`, `sonnet-5`) and to `'high'` for `opus-5-5` (whose server
+ * default is `medium`, lower than the `high` default on all other models),
  * and passes explicit values through unchanged for all models. Older 4-x
  * variants and Haiku return HTTP 400 when `output_config.effort` is set, so
  * the auto-default is gated to known-good ids; explicit overrides still flow
@@ -63,6 +64,22 @@ describe('resolveEffort', () => {
     // there must not silently drop the new default model off the allowlist.
     expect(resolveEffort(undefined, 'claude-opus-5')).toBe('max');
     expect(resolveEffort(undefined, 'claude-opus-5-20260724')).toBe('max');
+  });
+
+  it('defaults to "high" for claude-opus-5-5 (server default is medium; high for agentic depth)', () => {
+    // Opus 5.5's server-side default effort is `medium` (the only model with a
+    // non-`high` default). We raise to `high` for agentic coding depth without
+    // the excessive thinking-token accumulation that `max` causes. The opus-5-5
+    // check must fire BEFORE the general `(opus|sonnet)-(4-[678]|5)` regex,
+    // which matches `opus-5` as a substring of `opus-5-5` and would return `max`.
+    expect(resolveEffort(undefined, 'claude-opus-5-5')).toBe('high');
+    expect(resolveEffort(undefined, 'claude-opus-5-5-20260922')).toBe('high');
+  });
+
+  it('allows explicit effort override on opus-5-5', () => {
+    expect(resolveEffort('max', 'claude-opus-5-5')).toBe('max');
+    expect(resolveEffort('medium', 'claude-opus-5-5')).toBe('medium');
+    expect(resolveEffort('low', 'claude-opus-5-5')).toBe('low');
   });
 
   // ── Explicit caller overrides always win ───────────────────────────────
@@ -258,7 +275,7 @@ describe('resolveThinkingParam', () => {
   it('does NOT throw for a tiny max_tokens on adaptive-promoted models (guard runs after promotion)', () => {
     // opus-5 / sonnet-5 promote enabled → adaptive before the budget math, so a
     // tiny cap never reaches the #951 guard — no throw, no budget leak.
-    for (const m of ['claude-sonnet-5', 'claude-opus-5']) {
+    for (const m of ['claude-sonnet-5', 'claude-opus-5', 'claude-opus-5-5']) {
       const p = resolveThinkingParam(enabled(), 512, m) as { type: string; budget_tokens?: number };
       expect(p.type, m).toBe('adaptive');
       expect(p.budget_tokens, m).toBeUndefined();
@@ -293,6 +310,17 @@ describe('resolveThinkingParam', () => {
     // so a manual {type:'enabled'} must never reach the wire — the API rejects
     // it. Guards requiresAdaptiveThinking's widened `(opus|sonnet)-5` branch.
     const p = resolveThinkingParam(enabled(60_000), 64_000, 'claude-opus-5') as {
+      type: string;
+      budget_tokens?: number;
+    };
+    expect(p.type).toBe('adaptive');
+    expect(p.budget_tokens).toBeUndefined();
+  });
+
+  it('promotes enabled to adaptive on claude-opus-5-5 (adaptive-only, always on)', () => {
+    // Opus 5.5's adaptive thinking is always on and cannot be disabled.
+    // {type:'enabled'} must promote to adaptive (same as opus-5).
+    const p = resolveThinkingParam(enabled(60_000), 64_000, 'claude-opus-5-5') as {
       type: string;
       budget_tokens?: number;
     };

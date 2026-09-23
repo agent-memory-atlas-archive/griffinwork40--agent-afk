@@ -11,6 +11,41 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.232.2] - 2026-09-23
+
+### Added
+- add branch prune command for stale remote worktree branches (0b6ad866)
+
+### Fixed
+- default Opus 5.5 to high effort, not max (cbbb5257)
+- harden expected_hash format validation and add cross-tool test (aefa285f)
+
+### Changed
+- Merge pull request #2069 from griffinwork40/feat/branch-prune-command (ebf2ade5)
+- Merge pull request #2077 from griffinwork40/fix/opus-55-effort-alias (89ff5f3f)
+- Quick Start with auth step, docs link, improved troubleshooting (#2061) (80ce5461)
+
+## [5.232.1] - 2026-09-23
+
+### Fixed
+- remove stale compose agent_type prohibition in fix-pr SKILL.md (#2072) (ec22fd9f)
+
+### Changed
+- add maxItems constraint to attachments fields (#2067) (2a263a94)
+
+## [5.232.0] - 2026-09-23
+
+### Added
+- add Claude Opus 5.5 support (#2066) (11f756ec)
+
+### Changed
+- Update guideline on dash usage (32ddaeda)
+
+## [5.231.2] - 2026-09-23
+
+### Fixed
+- skip auth prompt when user is already authenticated (#2063) (40cbb530)
+
 ## [5.231.1] - 2026-09-23
 
 ### Fixed
