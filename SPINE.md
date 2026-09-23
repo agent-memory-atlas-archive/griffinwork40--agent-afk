@@ -5,7 +5,7 @@
 
 ## Invariants
 
-- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:` (reinforced 2026-09-18)
+- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:` (reinforced 2026-09-23)
 - **INV-002** (2026-09-17, spine-init): Every DECSTBM emit must be bracketed by `\x1b[s`/`\x1b[u` save/restore or carry a comment explaining why cursor-home is 
 - **INV-003** (2026-09-17, spine-init): Before first `log-update.render()` of a session, cursor must be at the target row (typically `stdout.rows - 1`)
 - **INV-004** (2026-09-17, spine-init): Lifecycle flag must be set synchronously before any `await` that could trigger interval timer or resize handler re-entry
@@ -32,9 +32,9 @@
 - **INV-025** (2026-09-22, spine-audit): Abort signal is unconditional and terminal — if `signal.aborted` is true, callers must throw AbortError even if a hook would return `continue: true`. Abort takes precedence over every other decision surface (`src/agent/abort-graph.ts:9-12`)
 - **INV-026** (2026-09-22, spine-audit): In AbortGraph.abort(), the full descendant list must be materialized via BFS BEFORE any controller.abort() fires, and the emitAbort trace event must fire BEFORE the controllers — firing aborts inside the BFS races addEventListener listeners from linkChild (`src/agent/abort-graph.ts:203-236`)
 - **INV-027** (2026-09-22, spine-audit): AFK_MAX_NESTING_DEPTH is resolved ONCE at the root session and propagated down through child AgentConfig.maxDepth — children never re-read the environment (`src/agent/tools/nesting.ts:56-60`)
-- **INV-028** (2026-09-22, spine-audit): Compose nodes must not receive subagentExecutor or skillExecutor — they are task-worker leaves. buildComposeNodeProvider() is the ONLY approved provider; childProviderFactory (which bundles both executors) must never be used for compose nodes (`src/agent/tools/nesting.ts:343-355`)
-- **INV-029** (2026-09-22, spine-audit): AgentConfig.tools.allowedTools is telemetry-only — NOT the enforcement point. The dispatcher gates on permissions.allowedTools on the constructed provider. buildPhaseRestrictedProvider/buildSkillRestrictedProvider/buildReadOnlyReconProvider are the only approved paths (`src/agent/tools/nesting.ts:568-572`)
-- **INV-030** (2026-09-22, spine-audit): Compaction must NEVER mutate messages on any failure path (too-short, nothing-to-summarize, aborted, timeout, failed, empty-summary). Mutation happens only after applyCompaction succeeds via messages.splice. An empty/whitespace summary is refused rather than spliced (`src/agent/providers/shared/compaction.ts:598-679`)
+- **INV-028** (2026-09-22, spine-audit): Compose nodes must not receive subagentExecutor or skillExecutor — they are task-worker leaves. buildComposeNodeProvider
+- **INV-029** (2026-09-22, spine-audit): AgentConfig.tools.allowedTools is telemetry-only — NOT the enforcement point. The dispatcher gates on permissions.allowe
+- **INV-030** (2026-09-22, spine-audit): Compaction must NEVER mutate messages on any failure path (too-short, nothing-to-summarize, aborted, timeout, failed, em
 - **INV-031** (2026-09-22, spine-audit): microcompactToolResults must NEVER remove a tool_use or tool_result block — only swap a result's content for a placeholder. Every tool_use keeps its matching tool_result at the same position/id. MICROCOMPACT_PLACEHOLDER_SENTINEL prefix makes repeated passes idempotent (`src/agent/providers/shared/compaction.ts:280-305`)
 - **INV-032** (2026-09-22, spine-audit): Every child session gets readOnlyMemory: true — subagents may search but cannot persist new memory. The parent session is the only writer; subagent writes would cause uncoordinated fan-out into the shared store (`src/agent/tools/nesting.ts:276-284`)
 - **INV-033** (2026-09-22, spine-audit): MCP transport reconnect after a failed Client.connect() requires a FRESH Client instance — the SDK sets an internal transport reference on failure and calling connect() again always throws "Already connected" (`src/agent/mcp/client.ts:203-231`)
@@ -58,6 +58,8 @@
 - **INV-051** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Error status extraction must use getErrorStatus() from src/agent/providers/shared/error-status.ts; both Anthropic and Op
 - **INV-052** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): pinnedReadRoots suppresses parent inheritance; extraReadRoots composes additively. Field name signals semantics to calle
 - **INV-053** (2026-09-22, 4bfcc723-17a3-457b-8cfc-192ac9cccc71): Confined subagents must be granted read access to the skills directory to discover sibling skill definitions.
+- **INV-054** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Compose node agent-type resolution must fail the entire DAG eagerly before any subagent forks. (reinforced 2026-09-23)
+- **INV-055** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Compose node tool restriction must be mechanically enforced via canUseTool callback, not just telemetry labels. (reinfor
 
 
 ## Explicitly Rejected Patterns
@@ -71,6 +73,7 @@
 - **REJ-007** (2026-09-22, spine-audit): Do not use Date.now() or pid+Date.now() for atomic temp file naming — concurrent writes within the same ms share a name 
 - **REJ-008** (2026-09-22, spine-audit): Do not fork a new session on /model switch — doing so resets cost/token/turn accumulators and re-fires SessionStart/SessionEnd hooks. ProviderRouter swaps only the inner provider below the session level (`src/agent/providers/router/provider-router.ts:21-25`)
 - **REJ-009** (2026-09-22, spine-audit): Path-approval hook is NOT a security boundary against an adversarial model — it only intercepts typed file tools. Bash has known bypasses (interpreter scripts, variable assembly, /proc/self/fd, brace expansion). OS-level sandboxing required for adversarial containment (`src/agent/tools/hooks/path-approval-hook.ts:9-17`)
+- **REJ-010** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Do not apply named-agent tool restrictions via provider override; wire canUseTool callback into SubagentDAGNode instead.
 
 
 ## Taste Calls Made
@@ -86,3 +89,4 @@
 - **TST-009** (2026-09-22, spine-audit): execFile callers that produce large output MUST set maxBuffer — Node's default 1MB cap rejects the promise on overflow rather than truncating. In the sweep engine, every failure path fails safe by protecting the worktree (`src/agent/worktree/worktree-sweep.ts:40-47`)
 - **TST-010** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key format: `proj.<sanitized-basename>-<sha1_hex8>`; sanitizes special chars to `_`, caps at 128 chars
 - **TST-011** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): Compaction core algorithm factored to shared/compaction.ts; provider-specific ops passed as collaborators to runCompacti
+- **TST-012** (2026-09-23, 7adbce41-b73e-4dcf-9f9d-0f4b5999bbe0): Compose node agent resolution factored to resolveComposeNodeAgent() helper; named agents return structured canUseTool ca
