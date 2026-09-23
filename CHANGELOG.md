@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.232.2] - 2026-09-23
+
+### Added
+- add branch prune command for stale remote worktree branches (0b6ad866)
+
+### Fixed
+- default Opus 5.5 to high effort, not max (cbbb5257)
+- harden expected_hash format validation and add cross-tool test (aefa285f)
+
+### Changed
+- Merge pull request #2069 from griffinwork40/feat/branch-prune-command (ebf2ade5)
+- Merge pull request #2077 from griffinwork40/fix/opus-55-effort-alias (89ff5f3f)
+- Quick Start with auth step, docs link, improved troubleshooting (#2061) (80ce5461)
+
 ## [5.232.1] - 2026-09-23
 
 ### Fixed
