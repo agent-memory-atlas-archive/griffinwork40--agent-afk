@@ -23,7 +23,7 @@
 import { z } from 'zod';
 
 /** Bump when the facet shape or derivation changes — invalidates caches. */
-export const FACET_VERSION = 3;
+export const FACET_VERSION = 4;
 
 // ---------------------------------------------------------------------------
 // Input: the subset of StoredSession the deriver reads (local, layering-safe)
@@ -130,6 +130,45 @@ export const TokenBreakdownSchema = z.object({
 });
 export type TokenBreakdown = z.infer<typeof TokenBreakdownSchema>;
 
+/**
+ * Parallel dispatch ratio — measures how often the model chose to issue
+ * multiple tool calls in a single assistant turn ("parallel dispatch") vs.
+ * issuing them one at a time.
+ *
+ * Derivation: the session sidecar groups all tool calls emitted in one
+ * assistant turn under a single TurnRecord.toolEvents array. A turn is
+ * "parallel" when it contains more than one deduplicated tool call (i.e.
+ * the model returned multiple tool_use blocks at once). The ratio is:
+ *
+ *   parallel_tool_calls / total_tool_calls
+ *
+ * where `parallel_tool_calls` is the count of tool calls that belong to turns
+ * with >1 call, and `total_tool_calls` is the total deduplicated call count.
+ *
+ * `ratio` is null when there are no tool calls (avoids 0/0).
+ *
+ * This metric enables before/after comparison of parallel-first prompt changes
+ * (e.g. #1676): a higher ratio means the model more often batched tool calls.
+ * Historical sidecars can be retroactively scored because the per-turn grouping
+ * is already captured in the sidecar format.
+ */
+export const ParallelDispatchStatsSchema = z.object({
+  /** Total deduplicated tool calls across all turns. */
+  total_tool_calls: z.number().int(),
+  /** Tool calls that belong to turns with more than one call (parallel turns). */
+  parallel_tool_calls: z.number().int(),
+  /** Number of turns that had more than one tool call (parallel turns). */
+  parallel_turns: z.number().int(),
+  /** Total turns that had at least one tool call. */
+  tool_turns: z.number().int(),
+  /**
+   * Fraction of tool calls that occurred in a parallel turn.
+   * Null when total_tool_calls === 0 (no tool calls to measure).
+   */
+  ratio: z.number().nullable(),
+});
+export type ParallelDispatchStats = z.infer<typeof ParallelDispatchStatsSchema>;
+
 export const SessionFacetSchema = z
   .object({
     // provenance & identity
@@ -177,6 +216,9 @@ export const SessionFacetSchema = z
 
     // token / cost breakdown (optional; populated when session.totalCostUsd present)
     token_breakdown: TokenBreakdownSchema.optional(),
+
+    // parallel dispatch ratio — measures how often the model batched tool calls (#2015)
+    parallel_dispatch: ParallelDispatchStatsSchema,
 
     // decisions / evidence (v1-thin; semantic-enrichable)
     decisions: z.array(z.string()),

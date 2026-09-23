@@ -2,6 +2,7 @@ import type { AgentSession } from '../../../agent/session.js';
 import type { SessionStats, ToolEvent } from '../../slash/types.js';
 import type { ResponseMetadata } from '../../../agent/types/message-types.js';
 import type { OutputEvent, SubagentProgressMeta } from '../../../agent/types.js';
+import type { ContentBlockParam } from '@anthropic-ai/sdk/resources';
 import { describeForHistory, type ImageAttachment } from '../../input/attachments.js';
 import type { InputSurfaceRefs } from '../../input/input-surface.js';
 import { recordTurn } from '../../slash/session-stats.js';
@@ -33,6 +34,81 @@ import { tickContextProgress } from './turn-handler.context-progress.js';
 import { handlePausedEvent, type PausedPickerRef } from './turn-handler.paused.js';
 
 export { formatToolLine, formatToolResultLine, ToolLane } from './tool-lane.js';
+
+/**
+ * Build `ContentBlockParam[]` for the assistant message from the accumulated
+ * response text and tool events.
+ *
+ * Only emitted when meaningful — i.e. the turn has tool_use blocks (so the
+ * structured path carries semantic value beyond plain text). Text-only turns
+ * skip blocks entirely to keep sidecar size reasonable.
+ *
+ * Structure per the Anthropic Messages API:
+ *   - One `text` block (when responseText is non-empty)
+ *   - One `tool_use` block per completed tool event (no pending tools)
+ *
+ * The corresponding `tool_result` blocks belong in the NEXT user message, not
+ * here. `resumeHistoryToMessages` will read the next TurnRecord's
+ * `userContentBlocks` to satisfy that side of the pairing.
+ */
+export function buildAssistantContentBlocks(
+  responseText: string,
+  toolEvents: ToolEvent[],
+): ContentBlockParam[] | undefined {
+  const completedToolUses = toolEvents.filter((te) => te.result !== undefined);
+  // Only emit blocks when there are tool_use calls — preserves sidecar brevity
+  // for simple text turns while capturing the semantically rich mixed turns.
+  if (completedToolUses.length === 0) return undefined;
+
+  const blocks: ContentBlockParam[] = [];
+  if (responseText.trim().length > 0) {
+    blocks.push({ type: 'text', text: responseText });
+  }
+  for (const te of completedToolUses) {
+    let parsedInput: Record<string, unknown> = {};
+    if (te.inputRaw) {
+      try { parsedInput = JSON.parse(te.inputRaw) as Record<string, unknown>; } catch { /* leave empty */ }
+    } else if (te.input) {
+      try { parsedInput = JSON.parse(te.input) as Record<string, unknown>; } catch { /* leave empty */ }
+    }
+    blocks.push({ type: 'tool_use', id: te.toolUseId, name: te.toolName, input: parsedInput });
+  }
+  return blocks.length > 0 ? blocks : undefined;
+}
+
+/**
+ * Build `ContentBlockParam[]` for the user message when the turn included
+ * tool results from the previous assistant turn's tool_use blocks.
+ *
+ * In a tool-use turn, the *user* side of the exchange carries `tool_result`
+ * blocks corresponding to each tool_use the assistant emitted. These are
+ * stored on the TurnRecord that *follows* the tool_use turn, which is why
+ * callers must pass in the tool events from the preceding assistant turn.
+ *
+ * For turns with no tool results (plain text exchange), returns `undefined`
+ * so the text fallback path is used instead.
+ */
+export function buildUserContentBlocks(
+  userText: string,
+  toolEvents: ToolEvent[],
+): ContentBlockParam[] | undefined {
+  const completedToolUses = toolEvents.filter((te) => te.result !== undefined);
+  if (completedToolUses.length === 0) return undefined;
+
+  const blocks: ContentBlockParam[] = [];
+  if (userText.trim().length > 0) {
+    blocks.push({ type: 'text', text: userText });
+  }
+  for (const te of completedToolUses) {
+    blocks.push({
+      type: 'tool_result',
+      tool_use_id: te.toolUseId,
+      content: te.result ?? '',
+      ...(te.isError ? { is_error: true } : {}),
+    });
+  }
+  return blocks.length > 0 ? blocks : undefined;
+}
 
 // InputSurfaceRefs moved to `src/cli/input/input-surface.ts` alongside
 // the InputSurface class that owns these refs. Re-exported here so
@@ -680,7 +756,28 @@ export async function runTurn(
     }
 
     if (doneFired && !softStopRequested && !pauseInterruptRequested) {
-      recordTurn(stats, historyText, responseText, doneMeta, toolEvents);
+      // Build structured content blocks for the sidecar so the resume path
+      // can use the structured API path (preserving tool_use/tool_result
+      // semantics) instead of falling back to plain text.
+      const assistantBlocks = buildAssistantContentBlocks(responseText, toolEvents);
+      // User blocks for THIS turn represent the user's message that INITIATED
+      // this turn. When the payload was structured (attachments / @-file blocks),
+      // use it directly. Otherwise, the user turn's content-block array should
+      // include any tool_result blocks that PAIRED with the PREVIOUS turn's
+      // tool_use blocks: on resume, resumeHistoryToMessages emits one user
+      // message and one assistant message per TurnRecord, so:
+      //   - Turn[N].userContentBlocks   → messages[2N]   (user, initiating turn N)
+      //   - Turn[N].assistantContentBlocks → messages[2N+1] (assistant, including tool_use)
+      //   - Turn[N+1].userContentBlocks  → messages[2N+2] (user, with tool_result covering N's tool_use)
+      // Without this, Turn[N].assistantContentBlocks would carry tool_use blocks
+      // with no matching tool_result in Turn[N+1].userContentBlocks, triggering
+      // repairOrphanToolUses on resume and replacing all prior tool output with
+      // synthetic error placeholders.
+      const prevTurnToolEvents = stats.turns.at(-1)?.toolEvents ?? [];
+      const userBlocks = Array.isArray(payload)
+        ? (payload as ContentBlockParam[])
+        : buildUserContentBlocks(historyText, prevTurnToolEvents);
+      recordTurn(stats, historyText, responseText, doneMeta, toolEvents, userBlocks, assistantBlocks);
 
       await h.onTurnComplete?.(historyText, responseText).catch(() => { /* best-effort */ });
 

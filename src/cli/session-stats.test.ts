@@ -326,3 +326,47 @@ describe('resetStats', () => {
     expect(s.unpricedTurns).toBe(0);
   });
 });
+
+describe('recordTurn — structured content blocks', () => {
+  it('stores userContentBlocks and assistantContentBlocks when provided', () => {
+    const s = createSessionStats('sonnet');
+    const userBlocks = [{ type: 'text' as const, text: 'hello' }];
+    const assistantBlocks = [
+      { type: 'text' as const, text: 'hi' },
+      { type: 'tool_use' as const, id: 'tu_1', name: 'bash', input: { command: 'echo hi' } },
+    ];
+    const rec = recordTurn(
+      s,
+      'hello',
+      'hi',
+      { totalCostUsd: 0.01, durationMs: 100, usage: { input_tokens: 10, output_tokens: 5 } },
+      [],
+      userBlocks,
+      assistantBlocks,
+    );
+    expect(rec.userContentBlocks).toEqual(userBlocks);
+    expect(rec.assistantContentBlocks).toEqual(assistantBlocks);
+  });
+
+  it('omits userContentBlocks and assistantContentBlocks when not provided', () => {
+    const s = createSessionStats('sonnet');
+    const rec = recordTurn(s, 'hello', 'hi', undefined);
+    expect(rec.userContentBlocks).toBeUndefined();
+    expect(rec.assistantContentBlocks).toBeUndefined();
+  });
+
+  it('omits userContentBlocks when empty array is passed', () => {
+    const s = createSessionStats('sonnet');
+    const rec = recordTurn(s, 'hello', 'hi', undefined, undefined, [], []);
+    expect(rec.userContentBlocks).toBeUndefined();
+    expect(rec.assistantContentBlocks).toBeUndefined();
+  });
+
+  it('stores userContentBlocks independently of assistantContentBlocks', () => {
+    const s = createSessionStats('sonnet');
+    const userBlocks = [{ type: 'text' as const, text: 'query' }];
+    const rec = recordTurn(s, 'query', 'response', undefined, undefined, userBlocks, undefined);
+    expect(rec.userContentBlocks).toEqual(userBlocks);
+    expect(rec.assistantContentBlocks).toBeUndefined();
+  });
+});

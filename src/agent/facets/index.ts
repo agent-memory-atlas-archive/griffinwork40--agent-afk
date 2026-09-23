@@ -23,6 +23,7 @@ export {
   SubagentInvocationSchema,
   WorldChangesSchema,
   TokenBreakdownSchema,
+  ParallelDispatchStatsSchema,
   type SessionFacet,
   type StoredSessionInput,
   type ToolEventInput,
@@ -30,6 +31,7 @@ export {
   type SubagentInvocation,
   type WorldChanges,
   type TokenBreakdown,
+  type ParallelDispatchStats,
 } from './schema.js';
 
 export { deriveSessionFacet, type DeriveOptions } from './derive.js';
