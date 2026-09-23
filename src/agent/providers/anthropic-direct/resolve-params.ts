@@ -224,10 +224,9 @@ export function hasValidToolUsePairing(
  *     or `userContentBlocks` is present on the turn, the full typed block array
  *     is used as the message `content`. This preserves `tool_use`, `thinking`,
  *     `tool_result`, and `text` blocks so a resumed session can satisfy the
- *     Anthropic API's structural constraints (e.g. every `tool_use` block on an
- *     assistant turn must be paired with a `tool_result` in the following user
- *     turn). Blocks are used as-is — no `summarizeToolEvents` append is needed
- *     because the structured blocks already contain the tool information.
+ *     Anthropic API's structural constraints. Blocks are used as-is — no
+ *     `summarizeToolEvents` append is needed because the structured blocks already
+ *     contain the tool information.
  *   - **Text fallback** (pre-v5.226 sidecars): turns with no content-block
  *     fields fall back to the legacy `{ role, content: string }` path so
  *     backward compatibility is preserved across upgrades.
@@ -235,6 +234,15 @@ export function hasValidToolUsePairing(
  * Content blocks from sidecars are validated by {@link filterContentBlocks}
  * before being forwarded to the API. Blocks with unknown or missing `type`
  * fields are dropped to prevent replay of attacker-crafted blocks (#2003).
+ *
+ * **Pairing contract (issue #2007):** PR #1996 removed `hasValidToolUsePairing`
+ * from this function. Orphan `tool_use` blocks in `assistantContentBlocks` —
+ * i.e., blocks with no corresponding `tool_result` in the following user turn —
+ * are passed through **unchanged**. It is the caller's responsibility to detect
+ * and heal any such gaps before the history is forwarded to the Anthropic API.
+ * `repairOrphanToolUses` in `query-turn-driver.ts` fulfils that role; it now
+ * scans all assistant messages, not just the tail, to cover the multi-turn
+ * resume case (see `repair-orphan-tool-uses.ts` for details).
  */
 export function resumeHistoryToMessages(history: ResumeHistoryTurn[] | undefined): MessageParam[] | undefined {
   if (!history || history.length === 0) return undefined;
