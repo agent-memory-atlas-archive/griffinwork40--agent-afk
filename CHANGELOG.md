@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.11] - 2026-09-23
+
+### Fixed
+- preserve existing MCP config permissions (ef50bf50)
+- use standard 0o644 permissions for MCP config file writes (db182cd9)
+
+### Changed
+- Merge pull request #2054 from griffinwork40/afk/fix-2039 (b0c4ba54)
+
 ## [5.230.10] - 2026-09-23
 
 ### Fixed
