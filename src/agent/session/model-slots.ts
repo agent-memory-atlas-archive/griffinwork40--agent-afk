@@ -168,6 +168,7 @@ export const DIRECT_MODEL_ALIASES: Readonly<Record<string, string>> = {
   opus: CLAUDE_OPUS_ID,
   opus_1m: CLAUDE_OPUS_ID,
   'opus-5.5': CLAUDE_OPUS_55_ID,
+  'opus-5.5_1m': CLAUDE_OPUS_55_ID,
   sonnet: CLAUDE_SONNET_ID,
   sonnet_1m: CLAUDE_SONNET_ID,
   haiku: CLAUDE_HAIKU_ID,

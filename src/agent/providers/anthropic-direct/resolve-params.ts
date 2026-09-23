@@ -407,6 +407,13 @@ export function resolveEffort(
 ): EffortLevel | undefined {
   if (callerEffort !== undefined) return callerEffort;
   const m = model.toLowerCase();
+  // Opus 5.5 (released 2026-09-22): server default is `medium` (the only
+  // model where the default is not `high`). We raise to `high` for agentic
+  // coding depth without the excessive thinking-token accumulation that `max`
+  // causes on this model. Must be checked BEFORE the general opus/sonnet-5
+  // regex below, which would otherwise match `opus-5` as a substring of
+  // `opus-5-5` and return `max`.
+  if (/(claude-)?opus-5-5/.test(m)) return 'high';
   // Allowlist: `4-6`/`4-7`/`4-8` opus & sonnet variants plus Sonnet 5 and
   // Opus 5 accept `output_config.effort` (4.x variants probed via
   // scripts/probe-effort-{all-models,older}.mjs against the OAuth identity;
