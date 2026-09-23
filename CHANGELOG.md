@@ -11,6 +11,27 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.234.1] - 2026-09-23
+
+### Fixed
+- add commitInFlight/committing guards to banner-scroll block (12d90a2c)
+- scope disabled-thinking rejection to Opus 5.5 only (ebee93fa)
+- Opus 5.5 follow-up hygiene: comments, discoverability, golden tests (b8ecb67c)
+- throw before first request when disabled thinking is unsupported (d2e94837)
+- simplify partial_failure guard, update schema prose, add tests (538643c2)
+
+### Changed
+- Merge pull request #2085 from griffinwork40/afk/issue-1828-fix (7f76b367)
+- Merge pull request #2084 from griffinwork40/afk/fix-1906-concurrency-test-boundary (6e16fbc0)
+- Merge pull request #2082 from griffinwork40/afk/iso-agent-tool-2-2ozuic (8f86a699)
+- Merge pull request #2081 from griffinwork40/afk/iso-agent-tool-1-u5s78k (09c98502)
+- Merge pull request #2080 from griffinwork40/afk/iso-agent-tool-3-an5zuy (5cf8aca4)
+- Merge pull request #2079 from griffinwork40/afk/iso-agent-tool-5-naicb7 (8e7f41d9)
+- Merge pull request #2078 from griffinwork40/afk/iso-agent-tool-4-t2w52r (fada59e2)
+- enforce test-only boundary for resetConcurrencyWarnings (66bbb350)
+- update resumeHistoryToMessages JSDoc after pairing-guard removal (ccb17950)
+- consolidate duplicate sha256Hex (ca52ed00)
+
 ## [5.234.0] - 2026-09-23
 
 ### Added
