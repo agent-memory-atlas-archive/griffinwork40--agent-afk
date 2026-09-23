@@ -370,4 +370,156 @@ describe('structured content blocks round-trip', () => {
     const assistantContent = messages![1]!.content as Array<{ type: string }>;
     expect(assistantContent.some((b) => b.type === 'tool_use')).toBe(true);
   });
+
+  // ---------------------------------------------------------------------------
+  // Two-turn round-trip: buildUserContentBlocks produces tool_result blocks,
+  // and repairOrphanToolUses does NOT fire on a well-formed history.
+  //
+  // Data-model invariant (why tool_results belong on the NEXT turn):
+  //   resumeHistoryToMessages maps each TurnRecord to TWO API messages:
+  //     messages[2N]   = Turn[N].userContentBlocks  (user initial prompt)
+  //     messages[2N+1] = Turn[N].assistantContentBlocks (assistant incl. tool_use)
+  //
+  //   Therefore the tool_result blocks for Turn[N]'s tool_use blocks
+  //   must live in Turn[N+1].userContentBlocks so the ordering is:
+  //     messages[2N]   user (text)
+  //     messages[2N+1] assistant (tool_use)   ← tool_use issued HERE
+  //     messages[2N+2] user (tool_result)     ← paired tool_result HERE
+  //     messages[2N+3] assistant (text)
+  //   satisfying the Anthropic API contract.
+  //
+  // Regression guard: before the fix, the call site used a text-only fallback
+  // instead of buildUserContentBlocks. Turn[N].assistantContentBlocks carried
+  // tool_use blocks with no tool_result in Turn[N+1].userContentBlocks, so
+  // repairOrphanToolUses fired on resume and replaced all tool output with
+  // synthetic error placeholders.
+  // ---------------------------------------------------------------------------
+  it('two-turn tool-use round-trip: tool_result appears in SECOND turn user blocks and repairOrphanToolUses does not fire', async () => {
+    const { resumeHistoryToMessages } = await import('../agent/providers/anthropic-direct/resolve-params.js');
+    const { repairOrphanToolUses } = await import('../agent/providers/anthropic-direct/query/repair-orphan-tool-uses.js');
+
+    // --- Turn 0: tool-use turn ---
+    // The assistant calls bash and gets a result. userContentBlocks = user initial
+    // text only (no tool_results yet — those go in turn 1's user blocks).
+    const turn0ToolEvents = [
+      {
+        toolName: 'bash',
+        toolUseId: 'tu_two_turn_1',
+        input: '',
+        inputRaw: '{"command":"echo hello"}',
+        result: 'hello',
+        isError: false,
+      },
+    ];
+    const turn0AssistantBlocks = buildAssistantContentBlocks('I will run that command.', turn0ToolEvents)!;
+    expect(turn0AssistantBlocks.some((b) => b.type === 'tool_use')).toBe(true);
+
+    // Turn 0's userContentBlocks: NO previous tool events, so buildUserContentBlocks
+    // returns undefined → falls back to plain text field.
+    const turn0UserBlocks = buildUserContentBlocks('run it', []); // no prev tool events
+    expect(turn0UserBlocks).toBeUndefined();
+
+    const stats = createSessionStats('sonnet');
+    const t0 = recordTurn(
+      stats,
+      'run it',
+      'I will run that command.',
+      { sessionId: 'sdk-two-turn' },
+      turn0ToolEvents,
+      turn0UserBlocks,        // undefined → plain text stored
+      turn0AssistantBlocks,
+    );
+    expect(t0.userContentBlocks).toBeUndefined();
+    expect(t0.assistantContentBlocks?.some((b) => b.type === 'tool_use')).toBe(true);
+
+    // --- Turn 1: follow-up turn ---
+    // The fixed call site reads stats.turns.at(-1).toolEvents (= turn 0's events)
+    // and passes them to buildUserContentBlocks. Replicate that logic here.
+    const prevToolEvents = stats.turns.at(-1)?.toolEvents ?? [];
+    const turn1UserBlocks = buildUserContentBlocks('thanks', prevToolEvents);
+    expect(turn1UserBlocks).toBeDefined();
+
+    // Verify the tool_result block pairs with turn 0's tool_use.
+    const resultBlock = turn1UserBlocks!.find((b) => b.type === 'tool_result') as
+      | { type: 'tool_result'; tool_use_id: string; content: string }
+      | undefined;
+    expect(resultBlock).toBeDefined();
+    expect(resultBlock!.tool_use_id).toBe('tu_two_turn_1');
+    expect(resultBlock!.content).toBe('hello');
+
+    const t1 = recordTurn(
+      stats,
+      'thanks',
+      'You are welcome.',
+      { sessionId: 'sdk-two-turn' },
+      [],             // no tool events in this turn
+      turn1UserBlocks,
+      undefined,
+    );
+    expect(t1.userContentBlocks?.some((b) => b.type === 'tool_result')).toBe(true);
+
+    saveSession(stats, 'two-turn-session');
+
+    // --- Reload and verify persistence ---
+    const target = resolveResumeTarget({ resume: 'two-turn-session' });
+    const config = resumeConfigFor(target);
+    expect(config.resumeHistory).toHaveLength(2);
+
+    const rt0 = config.resumeHistory![0]!;
+    // Turn 0: assistant has tool_use; user falls back to plain text (no userContentBlocks).
+    expect(rt0.assistantContentBlocks?.some((b) => b.type === 'tool_use')).toBe(true);
+    expect(rt0.userContentBlocks).toBeUndefined();
+
+    const rt1 = config.resumeHistory![1]!;
+    // Turn 1: user has the tool_result that pairs with turn 0's tool_use.
+    expect(rt1.userContentBlocks).toBeDefined();
+    const pr = rt1.userContentBlocks!.find((b) => b.type === 'tool_result') as
+      | { type: 'tool_result'; tool_use_id: string }
+      | undefined;
+    expect(pr).toBeDefined();
+    expect(pr!.tool_use_id).toBe('tu_two_turn_1');
+
+    // --- Rebuild messages via resumeHistoryToMessages ---
+    const messages = resumeHistoryToMessages(config.resumeHistory);
+    expect(messages).toBeDefined();
+    // Turn 0 → 2 msgs (user text fallback + assistant with tool_use)
+    // Turn 1 → 2 msgs (user with tool_result + assistant text)
+    expect(messages!.length).toBe(4);
+
+    // messages[0] = turn 0 user (plain text)
+    expect(messages![0]!.role).toBe('user');
+
+    // messages[1] = turn 0 assistant (has tool_use)
+    const aContent = messages![1]!.content as Array<{ type: string }>;
+    expect(aContent.some((b) => b.type === 'tool_use')).toBe(true);
+
+    // messages[2] = turn 1 user (has tool_result — immediately follows messages[1])
+    const uContent = messages![2]!.content;
+    expect(Array.isArray(uContent)).toBe(true);
+    const toolResultInUser = (uContent as Array<{ type: string; tool_use_id?: string }>).find(
+      (b) => b.type === 'tool_result',
+    );
+    expect(toolResultInUser).toBeDefined();
+    expect(toolResultInUser!.tool_use_id).toBe('tu_two_turn_1');
+
+    // messages[3] = turn 1 assistant (plain text)
+    expect(messages![3]!.role).toBe('assistant');
+
+    // repairOrphanToolUses must NOT add any synthetic messages — every tool_use
+    // in messages[1] is covered by a tool_result in messages[2].
+    const countBefore = messages!.length;
+    repairOrphanToolUses(messages!);
+    expect(messages!.length).toBe(countBefore);
+
+    // Double-check: no is_error synthetic placeholders injected.
+    const syntheticErrors = messages!.filter(
+      (m) =>
+        m.role === 'user' &&
+        Array.isArray(m.content) &&
+        (m.content as Array<{ type: string; is_error?: boolean }>).some(
+          (b) => b.type === 'tool_result' && b.is_error === true,
+        ),
+    );
+    expect(syntheticErrors).toHaveLength(0);
+  });
 });

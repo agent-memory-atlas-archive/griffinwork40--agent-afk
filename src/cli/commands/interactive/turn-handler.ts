@@ -760,15 +760,23 @@ export async function runTurn(
       // can use the structured API path (preserving tool_use/tool_result
       // semantics) instead of falling back to plain text.
       const assistantBlocks = buildAssistantContentBlocks(responseText, toolEvents);
-      // User blocks: when the payload was structured (attachments/file blocks),
-      // use it directly. For plain-text turns, always use text-only user blocks
-      // (the structured path only adds value when tool_result is present or
-      // images/files were attached — we track via assistantBlocks presence).
+      // User blocks for THIS turn represent the user's message that INITIATED
+      // this turn. When the payload was structured (attachments / @-file blocks),
+      // use it directly. Otherwise, the user turn's content-block array should
+      // include any tool_result blocks that PAIRED with the PREVIOUS turn's
+      // tool_use blocks: on resume, resumeHistoryToMessages emits one user
+      // message and one assistant message per TurnRecord, so:
+      //   - Turn[N].userContentBlocks   → messages[2N]   (user, initiating turn N)
+      //   - Turn[N].assistantContentBlocks → messages[2N+1] (assistant, including tool_use)
+      //   - Turn[N+1].userContentBlocks  → messages[2N+2] (user, with tool_result covering N's tool_use)
+      // Without this, Turn[N].assistantContentBlocks would carry tool_use blocks
+      // with no matching tool_result in Turn[N+1].userContentBlocks, triggering
+      // repairOrphanToolUses on resume and replacing all prior tool output with
+      // synthetic error placeholders.
+      const prevTurnToolEvents = stats.turns.at(-1)?.toolEvents ?? [];
       const userBlocks = Array.isArray(payload)
         ? (payload as ContentBlockParam[])
-        : assistantBlocks !== undefined
-          ? [{ type: 'text' as const, text: historyText }]
-          : undefined;
+        : buildUserContentBlocks(historyText, prevTurnToolEvents);
       recordTurn(stats, historyText, responseText, doneMeta, toolEvents, userBlocks, assistantBlocks);
 
       await h.onTurnComplete?.(historyText, responseText).catch(() => { /* best-effort */ });
