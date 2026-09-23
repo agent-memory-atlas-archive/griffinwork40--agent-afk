@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.10] - 2026-09-23
+
+### Fixed
+- update filesize baseline ratchets post-rebase (23ddb8ea)
+- extend _reread_warning to partial_failure and document in schema (d45ce5df)
+
+### Changed
+- Merge pull request #2056 from griffinwork40/afk/fix-2042 (3e78c881)
+- Merge pull request #2057 from griffinwork40/refactor/interactive-lifecycle-1929 (fd990914)
+- extract lifecycle phases into sibling modules (1abb96a3)
+
 ## [5.230.9] - 2026-09-23
 
 ### Changed
