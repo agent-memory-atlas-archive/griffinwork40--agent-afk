@@ -278,6 +278,22 @@ export function resumeHistoryToMessages(history: ResumeHistoryTurn[] | undefined
   return messages.length > 0 ? messages : undefined;
 }
 
+/** Effort levels at which Opus 5 rejects `{type:'disabled'}` thinking. */
+const OPUS5_DISABLED_FORBIDDEN_EFFORTS = new Set<string>(['xhigh', 'max']);
+
+/**
+ * Models where `{type:'disabled'}` thinking is unconditionally forbidden
+ * (adaptive-only; the API returns HTTP 400 at every effort level when
+ * `thinking.type === 'disabled'`).
+ *
+ * Note: Claude Opus 5 is *not* in this set — it is adaptive-only at xhigh/max
+ * effort only. Opus 5.5 (and all `requiresAdaptiveThinking` non-opus-5 models)
+ * reject `disabled` unconditionally and are detected via `requiresAdaptiveThinking`
+ * minus the opus-5-only branch.
+ */
+const isAlwaysAdaptiveModel = (model: string): boolean =>
+  requiresAdaptiveThinking(model) && !/(claude-)?opus-5(?![-.]5)/.test(model);
+
 /**
  * Translate our internal {@link ThinkingConfig} into the Anthropic SDK wire
  * shape, applying model-specific fixups.
@@ -287,21 +303,33 @@ export function resumeHistoryToMessages(history: ResumeHistoryTurn[] | undefined
  *  - `{type: 'enabled'}` is rejected by the API; auto-route to `'adaptive'`.
  *    Callers that explicitly request `enabled` on these models get adaptive
  *    behaviour so the request still clears the API's validation.
+ *  - `{type: 'disabled'}` is rejected by the API on adaptive-only models
+ *    (HTTP 400 at every effort level). A legible agent-afk error is thrown
+ *    before the first request rather than forwarding an invalid wire shape.
+ *    For Claude Opus 5 specifically, `disabled` is only forbidden at
+ *    `xhigh`/`max` effort; lower efforts are allowed through (#2073).
  *  - `display: 'summarized'` is always injected on adaptive/enabled configs.
  *    On 4.7+ the default display mode is `'omitted'` (thinking blocks are
  *    produced server-side but stripped before delivery), so this field is
  *    *required* to surface visible reasoning.  On earlier models it is
  *    harmless — the server already defaults to visible delivery.
  *
+ * @param effort The effective effort level resolved for this request (used to
+ *   determine whether Opus 5 rejects `disabled` at this effort level).
+ *
  * @throws when thinking resolves to `enabled` (non-adaptive model) and
  *   `maxTokens <= 1024`: no `budget_tokens` can satisfy the API's
  *   `1024 <= budget < max_tokens`, so the request is unsatisfiable and we fail
  *   fast with a legible message rather than taking a per-turn HTTP 400 (#951).
+ * @throws when thinking is `disabled` on an adaptive-only model, or on
+ *   Claude Opus 5 at `xhigh`/`max` effort, where the API rejects the
+ *   combination with HTTP 400 (#2073).
  */
 export function resolveThinkingParam(
   tc: ThinkingConfig,
   maxTokens: number,
   model?: string,
+  effort?: string,
 ): ThinkingConfigParam {
   switch (tc.type) {
     case 'adaptive':
@@ -310,8 +338,31 @@ export function resolveThinkingParam(
       // pulling in a beta-SDK type across the module boundary.
       return { type: 'adaptive', display: 'summarized' } as ThinkingConfigParam;
 
-    case 'disabled':
+    case 'disabled': {
+      const m = typeof model === 'string' ? model : '';
+      // Unconditionally adaptive-only models (opus-5-5, sonnet-5, opus-4-7+):
+      // the API rejects {type:'disabled'} at every effort level.
+      if (m.length > 0 && isAlwaysAdaptiveModel(m)) {
+        throw new Error(
+          `[afk] ${m} uses adaptive thinking that cannot be disabled. ` +
+            `Remove --thinking disabled / AFK_THINKING=disabled, or use a model ` +
+            `that supports extended thinking control.`,
+        );
+      }
+      // Claude Opus 5: rejects {type:'disabled'} at xhigh/max effort only.
+      if (
+        m.length > 0 &&
+        /(claude-)?opus-5(?![-.]5)/.test(m) &&
+        effort !== undefined &&
+        OPUS5_DISABLED_FORBIDDEN_EFFORTS.has(effort)
+      ) {
+        throw new Error(
+          `[afk] ${m} rejects thinking: {type: 'disabled'} at effort '${effort}'. ` +
+            `Lower the effort (e.g. --effort high) or remove --thinking disabled.`,
+        );
+      }
       return { type: 'disabled' };
+    }
 
     case 'enabled': {
       if (typeof model === 'string' && requiresAdaptiveThinking(model)) {
