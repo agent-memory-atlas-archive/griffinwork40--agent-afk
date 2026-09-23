@@ -28,6 +28,7 @@ import { isOSeriesModel } from './model-capabilities.js';
 export const MODEL_MAX_OUTPUT_TOKENS: Record<string, number> = {
   opus: 128_000,
   opus_1m: 128_000,
+  'opus-5.5_1m': 128_000,
   sonnet: 128_000,
   sonnet_1m: 128_000,
   haiku: 64_000,
@@ -139,6 +140,7 @@ export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   // into the full window.
   opus: 1_000_000,
   opus_1m: 1_000_000,
+  'opus-5.5_1m': 1_000_000,
   // Sonnet 5 ships a 1M-token context window natively (like Fable 5) — no beta
   // header required: per Anthropic's docs 1M is both the default and the maximum,
   // with no smaller variant. The `sonnet` alias, the `sonnet_1m` alias, and the
@@ -307,8 +309,9 @@ const MODEL_AUTOCOMPACT_BUDGET: Record<string, number> = {
   // short-circuit in autoCompactLimitFor.
   'claude-opus-5': 200_000,
   // Opus 5.5 (released 2026-09-22): same cost/latency policy as Opus 5.
-  // The `opus-5.5` alias bypasses this via the `_1m`-style short-circuit if
-  // used with `_1m` suffix; raw wire id keeps the bounded working budget.
+  // `opus-5.5_1m` (alias in DIRECT_MODEL_ALIASES) bypasses this via the
+  // `_1m` short-circuit in autoCompactLimitFor; raw wire id keeps the
+  // bounded working budget.
   'claude-opus-5-5': 200_000,
   // Sonnet 4.6 also ships a native 1M window (see MODEL_CONTEXT_LIMITS), so it
   // takes the same 200k working budget as its Sonnet 5 sibling: a raw

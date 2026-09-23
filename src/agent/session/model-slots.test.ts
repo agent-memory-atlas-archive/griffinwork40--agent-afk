@@ -211,7 +211,7 @@ describe('MODEL_ALIASES_HINT (single source of truth for the /model picker)', ()
       // Capability tiers (SLOT_NAMES)
       'local', 'small', 'medium', 'large',
       // Fixed-identity Claude/xAI aliases (DIRECT_MODEL_ALIASES)
-      'opus', 'opus_1m', 'opus-5.5', 'sonnet', 'sonnet_1m', 'haiku', 'fable', 'grok',
+      'opus', 'opus_1m', 'opus-5.5', 'opus-5.5_1m', 'sonnet', 'sonnet_1m', 'haiku', 'fable', 'grok',
       // Curated OpenAI wire ids (OPENAI_MODEL_HINTS)
       'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
       'gpt-5.5',
