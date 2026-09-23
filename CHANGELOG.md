@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.4] - 2026-09-23
+
+### Changed
+- Merge pull request #2031 from griffinwork40/afk/iso-agent-tool-1-p7gsfu (d3738222)
+- isSubagentContext predicate + forwardAbortSignal utility (#1835) (0a60ae88)
+
 ## [5.230.3] - 2026-09-22
 
 ### Fixed
