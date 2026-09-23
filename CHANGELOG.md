@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.233.0] - 2026-09-23
+
+### Added
+- wire structured content blocks in recordTurn (af455a5a)
+- add parallel dispatch ratio metric to session facets (dc21f6c0)
+
+### Fixed
+- wire buildUserContentBlocks in production recordTurn path (76550d97)
+
+### Changed
+- Merge pull request #2071 from griffinwork40/afk/iso-agent-tool-1-wc6lpl (24d8dd5a)
+
 ## [5.232.2] - 2026-09-23
 
 ### Added
