@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.232.0] - 2026-09-23
+
+### Added
+- add Claude Opus 5.5 support (#2066) (11f756ec)
+
+### Changed
+- Update guideline on dash usage (32ddaeda)
+
 ## [5.231.2] - 2026-09-23
 
 ### Fixed
