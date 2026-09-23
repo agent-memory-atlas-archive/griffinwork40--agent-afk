@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.231.1] - 2026-09-23
+
+### Fixed
+- harden expected_hash format validation and add cross-tool test (#2068) (7764c96a)
+
 ## [5.231.0] - 2026-09-23
 
 ### Fixed
