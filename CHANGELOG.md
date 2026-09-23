@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.6] - 2026-09-23
+
+### Fixed
+- fix locked verdict color and acknowledge palette layer exception (#2055) (0fd874ea)
+
+### Changed
+- clarify hasValidToolUsePairing staging and fix misleading test comment (#2050) (97462ad4)
+- add SDK sync comment to ALLOWED_CONTENT_BLOCK_TYPES (#2051) (d813e782)
+
 ## [5.230.5] - 2026-09-23
 
 ### Fixed
