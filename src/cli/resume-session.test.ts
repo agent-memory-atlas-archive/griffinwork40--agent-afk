@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { saveSession } from './session-store.js';
 import { resolveResumeTarget, resumeConfigFor, type ResolvedResumeTarget } from './resume-session.js';
 import { createSessionStats, recordTurn } from './slash/session-stats.js';
+import { buildAssistantContentBlocks, buildUserContentBlocks } from './commands/interactive/turn-handler.js';
 import type { StoredSession } from './session-store.js';
 
 let tmpHome: string;
@@ -187,5 +188,186 @@ describe('resume-session', () => {
     // Should produce '\n[Tools used: ...]' rather than 'null\n[Tools used: ...]'
     expect(config.resumeHistory?.[0]?.assistant).toBe('\n[Tools used: bash(ls)✓]');
     expect(config.resumeHistory?.[0]?.assistant).not.toContain('null');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildAssistantContentBlocks / buildUserContentBlocks helpers
+// ---------------------------------------------------------------------------
+
+describe('buildAssistantContentBlocks', () => {
+  it('returns undefined for text-only turns (no tool_use)', () => {
+    expect(buildAssistantContentBlocks('Hello, world!', [])).toBeUndefined();
+  });
+
+  it('returns undefined when no tool events have results', () => {
+    // pending tool (result === undefined) should not trigger block emission
+    const pending = [{ toolName: 'bash', toolUseId: 'tu_1', input: 'ls' }];
+    expect(buildAssistantContentBlocks('', pending)).toBeUndefined();
+  });
+
+  it('builds text + tool_use blocks for a tool-use turn', () => {
+    const toolEvents = [
+      { toolName: 'bash', toolUseId: 'tu_1', input: '', inputRaw: '{"command":"ls"}', result: 'file.ts', isError: false },
+    ];
+    const blocks = buildAssistantContentBlocks('running…', toolEvents);
+    expect(blocks).toBeDefined();
+    expect(blocks).toHaveLength(2);
+    expect(blocks![0]).toEqual({ type: 'text', text: 'running…' });
+    expect(blocks![1]).toEqual({ type: 'tool_use', id: 'tu_1', name: 'bash', input: { command: 'ls' } });
+  });
+
+  it('omits the text block when responseText is blank', () => {
+    const toolEvents = [
+      { toolName: 'read_file', toolUseId: 'tu_2', input: '', inputRaw: '{"file_path":"/tmp/x.ts"}', result: 'content', isError: false },
+    ];
+    const blocks = buildAssistantContentBlocks('', toolEvents);
+    expect(blocks).toBeDefined();
+    expect(blocks).toHaveLength(1);
+    expect(blocks![0]!.type).toBe('tool_use');
+  });
+
+  it('falls back to parsing input when inputRaw is absent', () => {
+    const toolEvents = [
+      { toolName: 'bash', toolUseId: 'tu_3', input: '{"command":"pwd"}', result: '/tmp', isError: false },
+    ];
+    const blocks = buildAssistantContentBlocks('', toolEvents);
+    expect(blocks![0]).toEqual({ type: 'tool_use', id: 'tu_3', name: 'bash', input: { command: 'pwd' } });
+  });
+
+  it('uses empty object for input when JSON parse fails', () => {
+    const toolEvents = [
+      { toolName: 'bash', toolUseId: 'tu_4', input: 'not-json', result: 'ok', isError: false },
+    ];
+    const blocks = buildAssistantContentBlocks('', toolEvents);
+    expect(blocks![0]).toEqual({ type: 'tool_use', id: 'tu_4', name: 'bash', input: {} });
+  });
+
+  it('emits multiple tool_use blocks for multi-tool turns', () => {
+    const toolEvents = [
+      { toolName: 'bash', toolUseId: 'tu_1', input: '', inputRaw: '{"command":"ls"}', result: 'ok', isError: false },
+      { toolName: 'read_file', toolUseId: 'tu_2', input: '', inputRaw: '{"file_path":"/x"}', result: 'data', isError: false },
+    ];
+    const blocks = buildAssistantContentBlocks('checking…', toolEvents);
+    expect(blocks).toHaveLength(3); // text + 2 × tool_use
+    expect(blocks![1]!.type).toBe('tool_use');
+    expect(blocks![2]!.type).toBe('tool_use');
+  });
+});
+
+describe('buildUserContentBlocks', () => {
+  it('returns undefined when there are no tool results', () => {
+    expect(buildUserContentBlocks('hello', [])).toBeUndefined();
+  });
+
+  it('returns undefined when no tool events have results', () => {
+    const pending = [{ toolName: 'bash', toolUseId: 'tu_1', input: 'ls' }]; // no result
+    expect(buildUserContentBlocks('hello', pending)).toBeUndefined();
+  });
+
+  it('builds text + tool_result blocks', () => {
+    const toolEvents = [
+      { toolName: 'bash', toolUseId: 'tu_1', input: 'ls', result: 'file.ts', isError: false },
+    ];
+    const blocks = buildUserContentBlocks('run it', toolEvents);
+    expect(blocks).toBeDefined();
+    expect(blocks).toHaveLength(2);
+    expect(blocks![0]).toEqual({ type: 'text', text: 'run it' });
+    expect(blocks![1]).toEqual({ type: 'tool_result', tool_use_id: 'tu_1', content: 'file.ts' });
+  });
+
+  it('marks error tool results with is_error', () => {
+    const toolEvents = [
+      { toolName: 'bash', toolUseId: 'tu_err', input: 'bad', result: 'fail', isError: true },
+    ];
+    const blocks = buildUserContentBlocks('', toolEvents);
+    expect(blocks).toBeDefined();
+    const resultBlock = blocks!.find((b) => b.type === 'tool_result') as { is_error?: boolean } | undefined;
+    expect(resultBlock?.is_error).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round-trip: recordTurn with blocks → saveSession → resumeConfigFor
+// ---------------------------------------------------------------------------
+
+describe('structured content blocks round-trip', () => {
+  it('blocks written via recordTurn survive save+resume as resumeHistory entries', () => {
+    const stats = createSessionStats('sonnet');
+    const toolEvents = [
+      { toolName: 'bash', toolUseId: 'tu_rt1', input: '', inputRaw: '{"command":"echo hi"}', result: 'hi', isError: false },
+    ];
+    const assistantBlocks = buildAssistantContentBlocks('done', toolEvents)!;
+    const userBlocks = [{ type: 'text' as const, text: 'run command' }];
+
+    const rec = recordTurn(
+      stats,
+      'run command',
+      'done',
+      { sessionId: 'sdk-roundtrip' },
+      toolEvents,
+      userBlocks,
+      assistantBlocks,
+    );
+
+    // Verify the TurnRecord itself has blocks.
+    expect(rec.userContentBlocks).toEqual(userBlocks);
+    expect(rec.assistantContentBlocks).toBeDefined();
+    expect(rec.assistantContentBlocks!.some((b) => b.type === 'tool_use')).toBe(true);
+
+    // Save and reload via resumeConfigFor.
+    saveSession(stats, 'roundtrip-session');
+    const target = resolveResumeTarget({ resume: 'roundtrip-session' });
+    const config = resumeConfigFor(target);
+
+    const turn = config.resumeHistory?.[0];
+    expect(turn).toBeDefined();
+    expect(turn?.userContentBlocks).toEqual(userBlocks);
+    expect(turn?.assistantContentBlocks).toBeDefined();
+    expect(turn?.assistantContentBlocks?.some((b) => b.type === 'tool_use')).toBe(true);
+    // Text fallback paths still intact.
+    expect(turn?.user).toBe('run command');
+    expect(turn?.assistant).toMatch(/done/);
+  });
+
+  it('backward compat: old TurnRecords without blocks still work via text fallback', () => {
+    // Old sidecar: no userContentBlocks, no assistantContentBlocks.
+    const stats = createSessionStats('sonnet');
+    recordTurn(stats, 'old query', 'old reply', { sessionId: 'sdk-compat' });
+    saveSession(stats, 'compat-session');
+
+    const target = resolveResumeTarget({ resume: 'compat-session' });
+    const config = resumeConfigFor(target);
+    const turn = config.resumeHistory?.[0];
+
+    expect(turn?.userContentBlocks).toBeUndefined();
+    expect(turn?.assistantContentBlocks).toBeUndefined();
+    expect(turn?.user).toBe('old query');
+    expect(turn?.assistant).toBe('old reply');
+  });
+
+  it('structured path used in resumeHistoryToMessages when blocks present', async () => {
+    // Test that resumeHistoryToMessages uses the structured path.
+    const { resumeHistoryToMessages } = await import('../agent/providers/anthropic-direct/resolve-params.js');
+    const history = [
+      {
+        user: 'run command',
+        assistant: 'done',
+        userContentBlocks: [{ type: 'text' as const, text: 'run command' }],
+        assistantContentBlocks: [
+          { type: 'text' as const, text: 'done' },
+          { type: 'tool_use' as const, id: 'tu_1', name: 'bash', input: { command: 'ls' } },
+        ],
+      },
+    ];
+    const messages = resumeHistoryToMessages(history);
+    expect(messages).toBeDefined();
+    expect(messages).toHaveLength(2);
+    // User message uses structured blocks.
+    expect(Array.isArray(messages![0]!.content)).toBe(true);
+    // Assistant message uses structured blocks with tool_use.
+    expect(Array.isArray(messages![1]!.content)).toBe(true);
+    const assistantContent = messages![1]!.content as Array<{ type: string }>;
+    expect(assistantContent.some((b) => b.type === 'tool_use')).toBe(true);
   });
 });
