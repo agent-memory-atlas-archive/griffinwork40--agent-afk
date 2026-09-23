@@ -11,6 +11,22 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.234.0] - 2026-09-23
+
+### Added
+- add new invariants and rejected patterns for compose node behavior (8e733565)
+
+### Fixed
+- restore attachment resolution and [k/N] agentType suffix (26dbcfc5)
+- reinforce invariant on attachment resolution in compose nodes (ad87e477)
+- update invariant reinforcement dates for clarity (f71de171)
+
+### Changed
+- Merge pull request #2070 from griffinwork40/feat/2015-parallel-dispatch-ratio (816f1a29)
+- resolve SPINE.md conflict with main (post #2071 merge) (e213fa3a)
+- extract agent-type resolution to compose-agent-resolve.ts (e843aa7c)
+- Merge branch 'main' into feat/2015-parallel-dispatch-ratio (e3f47c89)
+
 ## [5.233.0] - 2026-09-23
 
 ### Added
