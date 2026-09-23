@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.5] - 2026-09-23
+
+### Fixed
+- extend repairOrphanToolUses to scan all messages, not just tail (669f74b4)
+- repair non-tail orphan tool_use blocks in resumed history (#2007) (dcbd8a49)
+- P1 — structured data, OG image, cache headers, meta improvements (70d62b22)
+
+### Changed
+- Merge pull request #2020 from griffinwork40/seo/docs-p1-fixes (20c0a8cb)
+- Merge pull request #2022 from griffinwork40/afk/iso-fix-2007-1-bsuenv (c4f728f8)
+
 ## [5.230.4] - 2026-09-23
 
 ### Changed
