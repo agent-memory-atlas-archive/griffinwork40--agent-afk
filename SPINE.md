@@ -58,6 +58,10 @@
 - **INV-051** (2026-09-22, fb1f3eac-8338-4736-b7b4-8f44ce7217d8): Error status extraction must use getErrorStatus() from src/agent/providers/shared/error-status.ts; both Anthropic and OpenAI-compatible providers must use the shared extractor (`src/agent/providers/shared/error-status.ts:25-29`)
 - **INV-052** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): pinnedReadRoots suppresses parent inheritance; extraReadRoots composes additively. Field name signals semantics to callers (`src/agent/dag-subagent.ts:57-82`)
 - **INV-053** (2026-09-22, 4bfcc723-17a3-457b-8cfc-192ac9cccc71): Confined subagents must be granted read access to the skills directory to discover sibling skill definitions.
+- **INV-054** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Compose node agent-type resolution must fail the entire DAG eagerly before any subagent forks. (reinforced 2026-09-23)
+- **INV-055** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Compose node tool restriction must be mechanically enforced via canUseTool callback, not just telemetry labels. (reinforced 2026-09-23)
+- **INV-056** (2026-09-23, 23cc6bb4-4b31-48ce-a66b-1b927d56037f): Compose node system prompt and model defaults must flow through resolveComposeNodeAgent() return object, not inline lookups. (`src/agent/tools/compose-agent-resolve.ts`)
+- **INV-057** (2026-09-23, 71ae57b4-d945-46ad-9edb-b437c9fd8008): Attachment resolution in compose nodes uses per-node async Promise.all with try/catch sentinels; pre-failed nodes are excluded from the DAG via edge filtering. (`src/agent/tools/compose-executor.ts`)
 
 
 ## Explicitly Rejected Patterns
@@ -71,6 +75,8 @@
 - **REJ-007** (2026-09-22, spine-audit): Do not use Date.now() or pid+Date.now() for atomic temp file naming — concurrent writes within the same ms share a name and silently overwrite. Use crypto.randomBytes(6) (`src/utils/atomic-write.ts:24-30`)
 - **REJ-008** (2026-09-22, spine-audit): Do not fork a new session on /model switch — doing so resets cost/token/turn accumulators and re-fires SessionStart/SessionEnd hooks. ProviderRouter swaps only the inner provider below the session level (`src/agent/providers/router/provider-router.ts:21-25`)
 - **REJ-009** (2026-09-22, spine-audit): Path-approval hook is NOT a security boundary against an adversarial model — it only intercepts typed file tools. Bash has known bypasses (interpreter scripts, variable assembly, /proc/self/fd, brace expansion). OS-level sandboxing required for adversarial containment (`src/agent/tools/hooks/path-approval-hook.ts:9-17`)
+- **REJ-010** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Do not apply named-agent tool restrictions via provider override; wire canUseTool callback into SubagentDAGNode instead.
+- **REJ-011** (2026-09-23, 71ae57b4-d945-46ad-9edb-b437c9fd8008): Do not apply named-agent model defaults via inline definition lookups in compose-executor; flow through resolveComposeNodeAgent() return object.
 
 
 ## Taste Calls Made
@@ -86,3 +92,4 @@
 - **TST-009** (2026-09-22, spine-audit): execFile callers that produce large output MUST set maxBuffer — Node's default 1MB cap rejects the promise on overflow rather than truncating. In the sweep engine, every failure path fails safe by protecting the worktree (`src/agent/worktree/worktree-sweep.ts:40-47`)
 - **TST-010** (2026-09-22, 8f778a31-6f10-4939-b681-24c4b5beb507): Project key format: `proj.<sanitized-basename>-<sha1_hex8>`; sanitizes special chars to `_`, caps at 128 chars
 - **TST-011** (2026-09-22, 40d6aa9a-531d-4970-9c68-38ea62305453): Compaction core algorithm factored to shared/compaction.ts; provider-specific ops passed as collaborators to runCompactionCore() (`src/agent/providers/shared/compaction.ts:556-612`)
+- **TST-012** (2026-09-23, 7adbce41-b73e-4dcf-9f9d-0f4b5999bbe0): Compose node agent resolution factored to resolveComposeNodeAgent() helper; named agents return structured canUseTool callback (`src/agent/tools/compose-agent-resolve.ts`)
