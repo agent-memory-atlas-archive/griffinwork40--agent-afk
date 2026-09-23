@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.9] - 2026-09-23
+
+### Changed
+- replace passthrough artifacts with real concern extraction (#2058) (db10731c)
+
 ## [5.230.8] - 2026-09-23
 
 ### Changed
