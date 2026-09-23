@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.232.1] - 2026-09-23
+
+### Fixed
+- remove stale compose agent_type prohibition in fix-pr SKILL.md (#2072) (ec22fd9f)
+
+### Changed
+- add maxItems constraint to attachments fields (#2067) (2a263a94)
+
 ## [5.232.0] - 2026-09-23
 
 ### Added
