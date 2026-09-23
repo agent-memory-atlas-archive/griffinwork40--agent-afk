@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.231.2] - 2026-09-23
+
+### Fixed
+- skip auth prompt when user is already authenticated (#2063) (40cbb530)
+
 ## [5.231.1] - 2026-09-23
 
 ### Fixed
