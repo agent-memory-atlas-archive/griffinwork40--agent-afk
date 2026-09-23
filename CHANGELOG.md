@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.235.0] - 2026-09-23
+
+### Added
+- implement replay infrastructure for repeated-tool-use pattern (#2091) (d8883477)
+
 ## [5.234.1] - 2026-09-23
 
 ### Fixed
