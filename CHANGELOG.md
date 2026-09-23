@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.230.8] - 2026-09-23
+
+### Changed
+- extract shared options from chat/interactive commands (#2060) (0ae0dc32)
+
 ## [5.230.7] - 2026-09-23
 
 ### Changed
