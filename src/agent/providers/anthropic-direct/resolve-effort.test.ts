@@ -307,16 +307,16 @@ describe('resolveThinkingParam', () => {
     ).toThrow(/cannot be disabled/);
   });
 
-  it('throws for disabled on claude-sonnet-5 (adaptive-only, always)', () => {
-    expect(() =>
-      resolveThinkingParam({ type: 'disabled' }, 64_000, 'claude-sonnet-5'),
-    ).toThrow(/cannot be disabled/);
+  // Rejecting `enabled` (requiresAdaptiveThinking) does not imply rejecting
+  // `disabled`: these models accept it, so it must pass through unchanged.
+  it('passes disabled through on claude-sonnet-5 (rejects enabled, accepts disabled)', () => {
+    expect(resolveThinkingParam({ type: 'disabled' }, 64_000, 'claude-sonnet-5')).toEqual({
+      type: 'disabled',
+    });
   });
 
-  it('throws for disabled on claude-opus-4-8 (adaptive-only, always)', () => {
-    expect(() =>
-      resolveThinkingParam({ type: 'disabled' }, 64_000, 'claude-opus-4-8'),
-    ).toThrow(/cannot be disabled/);
+  it.each(['claude-opus-4-7', 'claude-opus-4-8'])('passes disabled through on %s', (model) => {
+    expect(resolveThinkingParam({ type: 'disabled' }, 64_000, model)).toEqual({ type: 'disabled' });
   });
 
   it('throws for disabled on claude-opus-5 at max effort (#2073 Opus-5 case)', () => {

@@ -282,17 +282,14 @@ export function resumeHistoryToMessages(history: ResumeHistoryTurn[] | undefined
 const OPUS5_DISABLED_FORBIDDEN_EFFORTS = new Set<string>(['xhigh', 'max']);
 
 /**
- * Models where `{type:'disabled'}` thinking is unconditionally forbidden
- * (adaptive-only; the API returns HTTP 400 at every effort level when
- * `thinking.type === 'disabled'`).
- *
- * Note: Claude Opus 5 is *not* in this set — it is adaptive-only at xhigh/max
- * effort only. Opus 5.5 (and all `requiresAdaptiveThinking` non-opus-5 models)
- * reject `disabled` unconditionally and are detected via `requiresAdaptiveThinking`
- * minus the opus-5-only branch.
+ * Models where `{type:'disabled'}` thinking is unconditionally forbidden: the
+ * API returns HTTP 400 at every effort level. Only Claude Opus 5.5 is documented
+ * this way. This is deliberately NOT `requiresAdaptiveThinking`: that predicate
+ * means "rejects `enabled`", which does not imply "rejects `disabled`" (Opus
+ * 4.7/4.8 and Sonnet 5 accept `disabled`). Claude Opus 5 rejects `disabled` only
+ * at xhigh/max and is handled separately via OPUS5_DISABLED_FORBIDDEN_EFFORTS.
  */
-const isAlwaysAdaptiveModel = (model: string): boolean =>
-  requiresAdaptiveThinking(model) && !/(claude-)?opus-5(?![-.]5)/.test(model);
+const isAlwaysAdaptiveModel = (model: string): boolean => /(claude-)?opus-5[-.]5/.test(model);
 
 /**
  * Translate our internal {@link ThinkingConfig} into the Anthropic SDK wire
