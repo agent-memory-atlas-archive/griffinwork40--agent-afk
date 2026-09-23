@@ -61,7 +61,7 @@
 - **INV-054** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Compose node agent-type resolution must fail the entire DAG eagerly before any subagent forks. (reinforced 2026-09-23)
 - **INV-055** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Compose node tool restriction must be mechanically enforced via canUseTool callback, not just telemetry labels. (reinfor
 - **INV-056** (2026-09-23, 23cc6bb4-4b31-48ce-a66b-1b927d56037f): Compose node system prompt and model defaults must flow through resolveComposeNodeAgent() return object, not inline look
-- **INV-057** (2026-09-23, 71ae57b4-d945-46ad-9edb-b437c9fd8008): Attachment resolution removed from compose nodes; DAG subagents must self-resolve inline.
+- **INV-057** (2026-09-23, 71ae57b4-d945-46ad-9edb-b437c9fd8008): Attachment resolution removed from compose nodes; DAG subagents must self-resolve inline. (reinforced 2026-09-23)
 
 
 ## Explicitly Rejected Patterns
