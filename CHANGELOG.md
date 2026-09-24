@@ -11,6 +11,25 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.240.2] - 2026-09-24
+
+### Added
+- surface recentActivity on background job snapshots for parent steering (#2134) (031e2151)
+- enforce delegation budget in SubagentManager.forkSubagent (ff15f46f)
+
+### Fixed
+- move onAwaitingInput after compositor setup; gate to turn-boundary readLine only (21618188)
+- auto-wake REPL when background results settle mid-turn (878c1daa)
+- guard against silent user-message skip in resumeHistoryToMessages (15d8b0c6)
+- repair role-alternation violations in resumed/forked session history (0d24a7fd)
+
+### Changed
+- Merge pull request #2115 from griffinwork40/afk/issue-1899-budget (d1b0ef44)
+- Merge pull request #2114 from griffinwork40/fix/resume-history-skip-guard (cfc971ce)
+- Merge pull request #2112 from griffinwork40/afk/fix-resume-role-alternation (b4264dd3)
+- Merge pull request #2130 from griffinwork40/afk/wake-up-consistency-issue (66c0e226)
+- trigger CI run for PR #2130 (4ffb1d58)
+
 ## [5.240.1] - 2026-09-24
 
 ### Changed
