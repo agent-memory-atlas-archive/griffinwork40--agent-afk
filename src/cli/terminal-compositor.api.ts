@@ -176,7 +176,7 @@ export function applyEdit(self: ApiHost, next: InputCoreState): boolean {
 }
 
 export function prefillInput(self: ApiHost, text: string): void {
-  self.applyEdit(InputCore.seed(text));
+  InputDispatch.applyEdit(self, InputCore.seed(text));
 }
 
 export function applyDropdownSelection(self: ApiHost): boolean {
