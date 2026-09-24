@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.237.1] - 2026-09-24
+
+### Changed
+- extract thin-facade API methods to terminal-compositor.api.ts (#2119) (c093dd1e)
+
 ## [5.237.0] - 2026-09-24
 
 ### Added
