@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.240.1] - 2026-09-24
+
+### Changed
+- split cup-frame-renderer.ts (#2127) (73eaca36)
+
 ## [5.240.0] - 2026-09-24
 
 ### Added
