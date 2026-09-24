@@ -36,8 +36,8 @@ export interface SubagentsLite {
   }>;
 }
 
-/** Maximum bytes of transcript tail surfaced in the lite snapshot. */
-const MAX_ACTIVITY_SNAPSHOT_BYTES = 2048;
+/** Maximum chars (UTF-16 code units) of transcript tail surfaced in the lite snapshot. */
+const MAX_ACTIVITY_SNAPSHOT_CHARS = 2048;
 
 /**
  * Build a lite snapshot of active subagents and background jobs. Pulls fresh
@@ -70,16 +70,20 @@ export function buildSubagentsLite(
           (base as Record<string, unknown>)['lastActivityAt'] = new Date(j.lastActivityAt).toISOString();
           (base as Record<string, unknown>)['idleSinceMs'] = now - j.lastActivityAt;
         }
-        // Only surface transcript for the caller's own running jobs.
+        // Only surface transcript for the caller's own running model-dispatched jobs.
+        // User-promoted (Ctrl+B) jobs are excluded structurally via the provenance
+        // guard; their transcripts are also empty in practice (background-registry.ts:284)
+        // but relying on that is incidental.
         if (
           callerSessionId &&
           j.parentSessionId === callerSessionId &&
-          j.status === 'running'
+          j.status === 'running' &&
+          j.provenance === 'model'
         ) {
           const tail = backgroundRegistry.getTranscript(j.jobId);
           if (tail && tail.length > 0) {
-            const trimmed = tail.length > MAX_ACTIVITY_SNAPSHOT_BYTES
-              ? tail.slice(tail.length - MAX_ACTIVITY_SNAPSHOT_BYTES)
+            const trimmed = tail.length > MAX_ACTIVITY_SNAPSHOT_CHARS
+              ? tail.slice(tail.length - MAX_ACTIVITY_SNAPSHOT_CHARS)
               : tail;
             return { ...base, recentActivity: trimmed };
           }
