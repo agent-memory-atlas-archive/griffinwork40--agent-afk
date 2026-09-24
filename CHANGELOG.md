@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.237.2] - 2026-09-24
+
+### Fixed
+- make prefillInput delegation consistent with sibling functions (#2122) (7797f983)
+
 ## [5.237.1] - 2026-09-24
 
 ### Changed
