@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.235.1] - 2026-09-24
+
+### Fixed
+- unskip detectPathGap test from .mjs import guard (d8704fa2)
+
+### Changed
+- Merge pull request #2097 from griffinwork40/fix/issue-1940-unskip-detectpathgap (2c54ddc3)
+- Merge pull request #2099 from griffinwork40/fix/quit-teardown-latency (26365d73)
+- reduce /quit teardown latency from 10s+ to ~4s (71a4fcef)
+
 ## [5.235.0] - 2026-09-23
 
 ### Added
