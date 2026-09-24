@@ -97,8 +97,12 @@ const PINNED_HASHES = {
   // mutating-bash guard) AND `context: fork` (pins it to forking so the recon
   // wave keeps dispatching). The upstream ground-state has neither layer, so
   // both lines are permanent bundled-only divergence.
+  // Hash re-bumped: added eval-pipeline recency survey section (#2010) — surfaces
+  // a warning finding when eval-run hasn't executed in N days (default 7,
+  // configurable via AFK_EVAL_STALENESS_DAYS). Bundled-only; no upstream
+  // counterpart to back-port.
   'ground-state':
-    'b12e20fe6c6429eb43073f719c6e367de78efdadd51083adf28036da8966eb1a',
+    '619d00252cb2006184f4e0e3fcd3b00a1a01c2e8751c6165ad16c313cb716bc2',
 
   polish:
     '03c7d8d1f593d4aca3327247d5c226e957bae84982b8a438c5834ba74ee4184c',
@@ -143,7 +147,7 @@ const PINNED_HASHES = {
   // git/gh ran, failing the call or recording a mangled/truncated body. The
   // file-based form matches the safe convention already used in src/agent/gh.ts.
   // BACK-PORT GAP: the same fix should still land in the upstream /ship skill.
-  ship: 'c74ef9e83e115ac34e32b188b909f39f87abb41933abc7e5c88fa9a0a35af102',
+  ship: 'f45f24eefcc3f36e0276c6beceb97e139394b2019abd59b9099c41e13809ac66',
   // simplify is bundled-only (no upstream counterpart).
   simplify:
     'a984a507872949e17c87ab72979cb089524ba1da899f38af80fd0e725ebff667',

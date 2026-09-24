@@ -11,6 +11,35 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.236.0] - 2026-09-24
+
+### Added
+- add eval pipeline staleness guard (d9444d97)
+- add fix-of-fix cross-reference detector at merge time (e2fd4522)
+
+### Fixed
+- handle URL-form currentPrNumber in self-reference guard + update ship pin (8bd777e2)
+
+### Changed
+- Merge pull request #2102 from griffinwork40/afk/2012-fix-of-fix-detector (eb36c4cd)
+- Merge pull request #2103 from griffinwork40/afk/issue-2010-eval-staleness (a4fdea04)
+- regenerate env-registry docs for AFK_EVAL_STALENESS_DAYS (2fdfeefb)
+
+## [5.235.1] - 2026-09-24
+
+### Fixed
+- unskip detectPathGap test from .mjs import guard (d8704fa2)
+
+### Changed
+- Merge pull request #2097 from griffinwork40/fix/issue-1940-unskip-detectpathgap (2c54ddc3)
+- Merge pull request #2099 from griffinwork40/fix/quit-teardown-latency (26365d73)
+- reduce /quit teardown latency from 10s+ to ~4s (71a4fcef)
+
+## [5.235.0] - 2026-09-23
+
+### Added
+- implement replay infrastructure for repeated-tool-use pattern (#2091) (d8883477)
+
 ## [5.234.1] - 2026-09-23
 
 ### Fixed

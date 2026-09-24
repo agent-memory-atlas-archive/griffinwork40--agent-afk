@@ -205,6 +205,20 @@ export const ENV_REGISTRY = [
     category: 'model',
   },
   {
+    name: 'AFK_EVAL_STALENESS_DAYS',
+    description:
+      'Number of days without a completed eval-run before the ground-state pre-flight ' +
+      'surfaces a staleness warning. The guard reads the most recent timestamp from the ' +
+      'eval-runs index ($AFK_HOME/agent-framework/improve/eval-runs/.index.jsonl) and ' +
+      'emits a warning finding when the gap exceeds this threshold. Default: 7. ' +
+      'Set to 0 to disable the guard.',
+    type: 'number',
+    required: false,
+    default: '7',
+    example: '14',
+    category: 'misc',
+  },
+  {
     name: 'AFK_MAX_BUDGET_USD',
     description: 'Cumulative USD budget ceiling for the session. Aborts the turn when the running cost crosses this.',
     type: 'number',
