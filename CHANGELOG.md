@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.241.1] - 2026-09-24
+
+### Changed
+- Merge pull request #2151 from griffinwork40/perf/issue-2100-session-close-timeout (5f825cc6)
+- add timeout guard to session.current.close() in teardown (e3e10723)
+
 ## [5.241.0] - 2026-09-24
 
 ### Added
