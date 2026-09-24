@@ -174,6 +174,7 @@ export async function runInputLoop(
   let currentTerminalKind: 'done' | 'blocked' | 'asking' | 'interrupted' | undefined;
   let currentDoneHasEvidence: boolean | undefined;
   let currentDoneClassification: 'no-code-changes' | 'verified' | 'unverified' | undefined;
+  let currentAssistantText: string | undefined; // → StopContext.lastAssistantText
 
   // Auto-resume: wake an idle prompt when a background subagent result lands so
   // the session continues its work without waiting for a keystroke. Fires only
@@ -202,7 +203,6 @@ export async function runInputLoop(
     surface.abortPendingRead();
   };
 
-  try {
   while (true) {
       // Reset the auto-resume counter each iteration so the circuit breaker
       // bounds wakes *per turn*, not per session. The session-wide cap caused
@@ -610,7 +610,7 @@ export async function runInputLoop(
       // Reset the per-turn verdict capture so a turn that emits no terminal
       // state never carries the previous turn's kind into the Stop dispatch.
       // onTerminalState re-sets these during runTurn when a verdict parses.
-      currentTerminalKind = currentDoneHasEvidence = currentDoneClassification = undefined;
+      currentTerminalKind = currentDoneHasEvidence = currentDoneClassification = currentAssistantText = undefined;
       // Enable and clear the code-block register so `/copy N` indices match
       // the blocks rendered in THIS turn, not a prior one.  enableCodeBlockRegister()
       // is idempotent after the first turn; calling it here ensures it is set
@@ -643,6 +643,7 @@ export async function runInputLoop(
           await transcript.appendQueuedUser(userInput);
         },
         async onTurnComplete(userInput, assistantText) {
+          currentAssistantText = assistantText;
           await transcript.appendTurn(userInput, assistantText);
           // Per-turn session autosave → ~/.afk/state/sessions/<sessionId>.json.
           // recordTurn (turn-handler) already folded this turn into ctx.stats
@@ -816,6 +817,7 @@ export async function runInputLoop(
               ...(currentTerminalKind !== undefined ? { terminalState: currentTerminalKind } : {}),
               ...(currentDoneHasEvidence !== undefined ? { doneHasCorroboratingEvidence: currentDoneHasEvidence } : {}),
               ...(currentDoneClassification !== undefined ? { doneEvidenceClassification: currentDoneClassification } : {}),
+              ...(currentAssistantText !== undefined ? { lastAssistantText: currentAssistantText } : {}),
             },
             undefined,
             STOP_HOOK_HANDLER_TIMEOUT_MS,
@@ -842,7 +844,4 @@ export async function runInputLoop(
         }
       }
     }
-  } finally {
-    // no-op — placeholder for future cleanup if needed
   }
-}

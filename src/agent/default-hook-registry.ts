@@ -8,6 +8,7 @@
 
 import { createHookRegistry, type HookRegistry } from './hooks.js';
 import { createShadowVerifyNudge } from './shadow-verify-nudge.js';
+import { createPlaceholderDetectHook } from './placeholder-detect.js';
 import { createAskQuestionGate } from './ask-question-gate.js';
 import { createSafeDestructDetect } from './safe-destruct-detect.js';
 import { createReleaseBoundaryDetect } from './release-boundary-detect.js';
@@ -101,6 +102,13 @@ export function createDefaultHookRegistry(
   const shadowVerifyNudge = createShadowVerifyNudge();
   registry.register('SubagentStop', shadowVerifyNudge);
   registry.register('Stop', shadowVerifyNudge);
+  // Placeholder detection: scans the assistant's response text for unresolved
+  // placeholder tokens in code blocks (e.g. `your-user@mac-mini-ip`,
+  // `<YOUR_API_KEY>`) that the user would copy-paste and run literally. Injects
+  // a correction into the next turn asking the model to resolve or prominently
+  // mark them. Bounded per session (fails open after 2 corrections). No-op when
+  // StopContext.lastAssistantText is absent (non-REPL surfaces, subagents).
+  registry.register('Stop', createPlaceholderDetectHook());
   // Ask-question gate: on surfaces with no elicitation handler (daemon,
   // scheduler, one-shot chat) a question can never be answered — block it
   // pre-flight with proceed-on-assumption guidance instead of letting the
