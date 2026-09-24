@@ -174,6 +174,7 @@ const SCHEDULE_TOOLS = new Set([
   // agent-afk daemon lifecycle tools (src/agent/tools/schemas.ts).
   // Previously fell through to 'other' — now classified explicitly.
   'create_schedule',
+  'update_schedule',
   'list_schedules',
   'get_schedule_history',
   'cancel_schedule',
