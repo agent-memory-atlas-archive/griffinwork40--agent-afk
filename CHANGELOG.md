@@ -11,6 +11,22 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.239.0] - 2026-09-24
+
+### Added
+- detect unresolved placeholders in agent output (300027a5)
+- activate access tracking in memory fact archive (a11d9e5e)
+
+### Fixed
+- tighten screaming-snake prefix set to eliminate env-var false positives (a87d7d9d)
+- reclassify tool-failure-web-request as environment connectivity (ecf22b7e)
+
+### Changed
+- Merge pull request #2123 from griffinwork40/afk/agent-placeholder-validation (7b972b9c)
+- Merge pull request #2096 from griffinwork40/fix/1917-reclassify-web-request-card (75cd5cdb)
+- use code-block register instead of lastAssistantText (bb0ea456)
+- Merge branch 'main' into fix/1917-reclassify-web-request-card (3d087553)
+
 ## [5.238.0] - 2026-09-24
 
 ### Added
