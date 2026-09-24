@@ -442,10 +442,12 @@ export const imageGenerateTool: AnthropicToolDef = {
     'Uses AFK_IMAGE_API_KEY when set (keeps image billing separate from chat completions); ' +
     'falls back to the full OpenAI auth chain (OPENAI_API_KEY, Codex CLI, ChatGPT OAuth). ' +
     'Each generation costs real money via the OpenAI API.\n\n' +
-    'The image is NOT returned inline in the tool result to avoid consuming ~300K-500K context tokens per image. ' +
-    'To inspect the generated image, read the file at the returned path in a follow-up turn.\n\n' +
+    'By default the image is NOT returned inline in the tool result to avoid consuming ~300K-500K context tokens per image. ' +
+    'To inspect the generated image in the same turn, set inspect:true (see below). ' +
+    'Otherwise, read the file at the returned path in a follow-up turn.\n\n' +
     'Safety: blocked in daemon/cron sessions unless AFK_IMAGE_ALLOW_DAEMON=1. ' +
-    'Per-session generation cap controlled by AFK_IMAGE_SESSION_LIMIT (default 10). ' +
+    'Per-session generation cap controlled by AFK_IMAGE_SESSION_LIMIT (default 10); ' +
+    'with inspect:true each image is substantially more expensive so the cap matters more. ' +
     'Every call is recorded in the effect ledger for audit.',
   input_schema: {
     type: 'object',
@@ -477,6 +479,15 @@ export const imageGenerateTool: AnthropicToolDef = {
       output_path: {
         type: 'string',
         description: 'Optional file path to save the image to. When omitted, saves to <cwd>/.afk/generated-images/<id>.<format>.',
+      },
+      inspect: {
+        type: 'boolean',
+        description:
+          'When true, the generated image is returned inline in ToolResult.image so you can see it in the same turn. ' +
+          'WARNING: this consumes ~333K-484K context tokens per image (≈$1-3 extra per call at current rates). ' +
+          'Use only for generate→inspect→iterate workflows where same-turn vision feedback is required. ' +
+          'Images exceeding 8000px in either dimension or 2 MB base64 are saved to disk only (inspect:true is silently degraded). ' +
+          'Default: false.',
       },
     },
     required: ['prompt'],

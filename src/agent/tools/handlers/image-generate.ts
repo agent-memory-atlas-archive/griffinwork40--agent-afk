@@ -41,6 +41,15 @@ import { assertNotDenylisted } from './write-denylist.js';
 // Constants
 // ---------------------------------------------------------------------------
 
+// Anthropic's vision API hard-rejects any image whose width OR height exceeds
+// 8000px — mirroring the guard in browser-screenshot.ts.
+const MAX_IMAGE_DIMENSION = 8000;
+
+// Base64 byte cap: 2 MB of base64 ≈ 1.5 MB of binary, well within Anthropic's
+// 5 MB sidecar limit but bounded to prevent worst-case context bombs on
+// unexpectedly large API payloads.
+const MAX_BASE64_BYTES = 2 * 1024 * 1024; // 2 MiB
+
 /** Models available on the OpenAI Images API (Sept 2026). */
 const VALID_MODELS = new Set([
   'gpt-image-1',
@@ -98,6 +107,7 @@ interface ParsedInput {
   quality: string;
   output_format: string;
   output_path?: string;
+  inspect: boolean;
 }
 
 function parseInput(
@@ -145,7 +155,75 @@ function parseInput(
   const output_path =
     typeof obj['output_path'] === 'string' ? obj['output_path'] : undefined;
 
-  return { prompt, model, size, quality, output_format, output_path };
+  const inspect = obj['inspect'] === true;
+
+  return { prompt, model, size, quality, output_format, output_path, inspect };
+}
+
+// ---------------------------------------------------------------------------
+// Dimension reading (header-only, no external deps)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads width × height from a PNG, JPEG, or WebP buffer by inspecting the
+ * file header bytes. Returns null when the format is unrecognised or the
+ * buffer is too short. Used to enforce MAX_IMAGE_DIMENSION without a lib dep.
+ */
+function readImageDimensions(
+  buf: Buffer,
+  format: string,
+): { width: number; height: number } | null {
+  try {
+    if (format === 'png') {
+      // PNG: IHDR chunk starts at byte 16. Width (4 bytes) then height (4 bytes).
+      if (buf.length < 24) return null;
+      const width = buf.readUInt32BE(16);
+      const height = buf.readUInt32BE(20);
+      return { width, height };
+    }
+
+    if (format === 'jpeg') {
+      // JPEG: scan for SOF0/SOF2 marker (0xFF 0xC0 / 0xFF 0xC2).
+      let i = 2;
+      while (i < buf.length - 8) {
+        if (buf[i] !== 0xff) break;
+        const marker = buf[i + 1]!;
+        const segLen = buf.readUInt16BE(i + 2);
+        if (marker === 0xc0 || marker === 0xc2) {
+          // Precision (1), height (2), width (2)
+          const height = buf.readUInt16BE(i + 5);
+          const width = buf.readUInt16BE(i + 7);
+          return { width, height };
+        }
+        i += 2 + segLen;
+      }
+      return null;
+    }
+
+    if (format === 'webp') {
+      // WebP: 'RIFF' at 0, 'WEBP' at 8, VP8 chunk at 12.
+      if (buf.length < 30) return null;
+      const vp8Tag = buf.toString('ascii', 12, 16);
+      if (vp8Tag === 'VP8 ') {
+        // Lossy: skip 6 bytes after VP8 chunk header → 10 bytes payload header
+        // Width and height are 14-bit values at bytes 26-27 and 28-29.
+        const width = (buf.readUInt16LE(26) & 0x3fff) + 1;
+        const height = (buf.readUInt16LE(28) & 0x3fff) + 1;
+        return { width, height };
+      }
+      if (vp8Tag === 'VP8L') {
+        // Lossless: 4-byte signature, then packed width-1 (14 bits) + height-1 (14 bits)
+        const bits = buf.readUInt32LE(21);
+        const width = (bits & 0x3fff) + 1;
+        const height = ((bits >> 14) & 0x3fff) + 1;
+        return { width, height };
+      }
+      return null;
+    }
+  } catch {
+    // Ignore parse errors — guard degrades gracefully to no-attach.
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,8 +404,8 @@ export function createImageGenerateHandler(
     // 8. Session counter was incremented optimistically before the API call (F-4).
     const newCount = getSessionCount(sessionId);
 
-    // 9. Return metadata (no ToolResult.image to avoid context bomb)
-    const meta = {
+    // 9. Build metadata (always returned in content regardless of inspect flag)
+    const meta: Record<string, unknown> = {
       path: savePath,
       model: parsed.model,
       size: parsed.size,
@@ -339,6 +417,38 @@ export function createImageGenerateHandler(
       session_images_used: newCount,
       session_images_limit: limit,
     };
+
+    // 10. Optionally attach image for same-turn vision feedback.
+    if (parsed.inspect) {
+      const formatToMediaType: Record<string, 'image/png' | 'image/jpeg' | 'image/webp'> = {
+        png: 'image/png',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+      };
+      const mediaType = formatToMediaType[parsed.output_format] ?? 'image/png';
+
+      // Byte cap guard — 2 MiB base64 to bound worst-case context consumption.
+      if (imageData.length > MAX_BASE64_BYTES) {
+        meta['imageOmitted'] =
+          `inspect:true requested but base64 payload (${imageData.length} bytes) exceeds the ` +
+          `${MAX_BASE64_BYTES}-byte cap; image saved to disk only. Use a smaller size or lower quality.`;
+        return { content: JSON.stringify(meta, null, 2) };
+      }
+
+      // Dimension guard — mirrors browser-screenshot.ts MAX_IMAGE_DIMENSION check.
+      const dims = readImageDimensions(imageBuffer, parsed.output_format);
+      if (dims !== null && (dims.width > MAX_IMAGE_DIMENSION || dims.height > MAX_IMAGE_DIMENSION)) {
+        meta['imageOmitted'] =
+          `inspect:true requested but image dimensions ${dims.width}x${dims.height}px exceed ` +
+          `the ${MAX_IMAGE_DIMENSION}px model-vision limit; image saved to disk only.`;
+        return { content: JSON.stringify(meta, null, 2) };
+      }
+
+      return {
+        content: JSON.stringify(meta, null, 2),
+        image: { mediaType, data: imageData },
+      };
+    }
 
     return {
       content: JSON.stringify(meta, null, 2),
