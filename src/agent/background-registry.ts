@@ -118,7 +118,7 @@ const TERMINAL_EVICT_TTL_MS = 5 * 60 * 1000; // 5 minutes
  * otherwise hang session teardown indefinitely. On timeout, the job is
  * treated as settled (teardown proceeds) and a warning is logged.
  */
-const CANCEL_DRAIN_TIMEOUT_MS = 5000; // 5 seconds
+const CANCEL_DRAIN_TIMEOUT_MS = 1500; // 1.5 seconds — reduced from 5 s; a job that won't settle in 1.5 s won't settle in 5 s
 
 export interface BackgroundRegistryOptions {
   /** Optional trace writer. Witness events become no-ops when undefined. */
