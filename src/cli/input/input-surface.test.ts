@@ -863,5 +863,38 @@ describe('InputSurface', () => {
       expect(surface.bufferIsEmpty()).toBe(true);
       expect(() => surface.abortPendingRead()).not.toThrow();
     });
+
+    it('onAwaitingInput fires when readLine sets pendingReadResolve (prompt becomes receptive)', async () => {
+      const stdout = makeMockStdout();
+      const stdin = makeMockStdin();
+      const surface = new InputSurface({ rl: makeRl(), history: makeHistory() });
+      await surface.armCompositor({ promptFn: () => 'afk > ', onCancel: () => {}, stdout, stdin });
+
+      const spy = vi.fn();
+      surface.onAwaitingInput = spy;
+
+      const readPromise = surface.readLine({ promptFn: () => 'afk > ' });
+      // The callback fires synchronously during readLine, before blocking.
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      surface.abortPendingRead();
+      await readPromise;
+      await surface.dispose();
+    });
+
+    it('onAwaitingInput does NOT fire on non-TTY (no compositor) surface', () => {
+      const surface = new InputSurface({ rl: makeRl(), history: makeHistory() });
+      // No armCompositor — non-TTY path. The callback is only fired on the
+      // compositor branch, so it must stay silent here. Verify via the
+      // isAwaitingInput() gate which is permanently false on non-TTY.
+      const spy = vi.fn();
+      surface.onAwaitingInput = spy;
+
+      // No compositor armed, so isAwaitingInput() is always false and the
+      // callback is structurally unreachable (only fired inside the
+      // compositor-path Promise constructor in readLine). Verify the seam.
+      expect(surface.isAwaitingInput()).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 });

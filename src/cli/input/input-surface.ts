@@ -276,6 +276,17 @@ export class InputSurface {
   private pauseInterruptHandler: (() => void) | null = null;
 
   /**
+   * Optional callback fired when the compositor-path `readLine()` sets
+   * `pendingReadResolve` — the moment the prompt becomes receptive to an
+   * external wake via {@link abortPendingRead}. The REPL loop wires this
+   * to re-check the `BgResultNotifier` injection buffer, closing the
+   * timing gap where a background result settled mid-turn (when
+   * `isAwaitingInput()` was false) and the `onInjectable` hook was a
+   * no-op. Null when nothing is wired (no behavior change).
+   */
+  onAwaitingInput: (() => void) | null = null;
+
+  /**
    * Reject callback for the currently-pending readLine Promise (if any).
    * Set inside `readLine()` before the compositor path blocks, and
    * cleared once the Promise settles. Used by `dispose()` to abort any
@@ -521,6 +532,11 @@ export class InputSurface {
         // (auto-resume) without a keypress.
         this.pendingReadReject = reject;
         this.pendingReadResolve = resolve;
+        // Notify the REPL loop that the prompt is now receptive so it can
+        // re-check for background results that settled mid-turn. Fired
+        // synchronously here (before blocking on Enter) so the wake path
+        // can abort this very read if injections are pending.
+        this.onAwaitingInput?.();
         compositor.setOnIdleEscape(opts.onEscape ?? null);
 
         // Per-turn prompt handoff: ask for an empty-prompt suggestion now that

@@ -186,9 +186,15 @@ export async function runInputLoop(
   const maxTurnsNum = (() => { const mt = parseInt(ctx.options.maxTurns, 10); return mt > 0 ? mt : undefined; })();
 
   let autoResumeCount = 0;
-  bgResultNotifier.onInjectable = () => {
+  // Extracted wake logic so both the settled-event path (onInjectable) and
+  // the prompt-became-receptive path (onAwaitingInput) share the same gate
+  // check and wake sequence. Without this, a result that settles mid-turn
+  // fires onInjectable into a closed gate (isAwaitingInput=false), buffers
+  // silently, and the user must type to drain it.
+  const tryAutoResume = (): void => {
     if (autoResumeCount >= MAX_AUTO_RESUMES_PER_TURN) return;
     if (!surface.isAwaitingInput() || !surface.bufferIsEmpty()) return;
+    if (!bgResultNotifier.hasPendingInjections()) return;
 
     autoResumeCount++;
     // Audible cue (no-op unless AFK_BELL=1 + TTY) before the seeded turn takes
@@ -201,6 +207,14 @@ export async function runInputLoop(
     seedBuffer = { text: AUTO_RESUME_DIRECTIVE, attachments: [] };
     surface.abortPendingRead();
   };
+
+  // Settled-event path: a background result just landed — try to wake.
+  bgResultNotifier.onInjectable = tryAutoResume;
+
+  // Prompt-became-receptive path: the REPL just returned to its idle
+  // readline after a turn completed. Re-check for results that settled
+  // mid-turn (when isAwaitingInput was false and onInjectable was a no-op).
+  surface.onAwaitingInput = tryAutoResume;
 
   while (true) {
       // Reset the auto-resume counter each iteration so the circuit breaker
