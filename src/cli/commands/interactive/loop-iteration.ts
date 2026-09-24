@@ -202,7 +202,6 @@ export async function runInputLoop(
     surface.abortPendingRead();
   };
 
-  try {
   while (true) {
       // Reset the auto-resume counter each iteration so the circuit breaker
       // bounds wakes *per turn*, not per session. The session-wide cap caused
@@ -842,7 +841,4 @@ export async function runInputLoop(
         }
       }
     }
-  } finally {
-    // no-op — placeholder for future cleanup if needed
   }
-}
