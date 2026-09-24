@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.239.1] - 2026-09-24
+
+### Changed
+- Merge pull request #2133 from griffinwork40/afk/iso-agent-tool-3-1locyd (9837b072)
+- Merge pull request #2131 from griffinwork40/afk/iso-agent-tool-4-7bm6ck (07bdf860)
+- Merge pull request #2129 from griffinwork40/afk/iso-agent-tool-2-s07lrt (002d5fdc)
+- split markdown-stream.ts into concern-based siblings (ed20a3b0)
+- split terminal-compositor.lifecycle.ts into concern-based siblings (421657d7)
+- split terminal-compositor.frame.ts into concern-based siblings (1503edb6)
+
 ## [5.239.0] - 2026-09-24
 
 ### Added
