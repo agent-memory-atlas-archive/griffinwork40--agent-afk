@@ -281,4 +281,40 @@ describe('detectAndLabelFixOfFix', () => {
     });
     expect(result.isFixOfFix).toBe(true);
   });
+
+  it('self-reference guard works when currentPrNumber is a full GitHub URL', async () => {
+    // `gh pr create --json url` returns a full URL like https://github.com/owner/repo/pull/200.
+    // parseInt('https://…', 10) returns NaN, so the guard would fail to filter the self-ref.
+    // Verify that a body containing only the URL-format PR number is correctly excluded.
+    const exec = vi.fn();
+    const result = await detectAndLabelFixOfFix(
+      'https://github.com/owner/repo/pull/200',
+      'Closes #200',
+      { execFn: exec, now: NOW },
+    );
+    // The body references only #200, which is the current PR — should be excluded, no gh calls.
+    expect(exec).not.toHaveBeenCalled();
+    expect(result.isFixOfFix).toBe(false);
+  });
+
+  it('detects a fix-of-fix correctly when currentPrNumber is a URL and body refs another PR', async () => {
+    const exec = vi
+      .fn()
+      // gh pr view 1670 --json mergedAt → recently merged
+      .mockResolvedValueOnce({ stdout: `${RECENT_MERGED_AT}\n`, stderr: '' })
+      // ensureFixOfFixLabel — gh label list
+      .mockResolvedValueOnce({ stdout: '[]', stderr: '' })
+      // ensureFixOfFixLabel — gh label create
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      // applyFixOfFixLabel — gh pr edit
+      .mockResolvedValueOnce({ stdout: '', stderr: '' });
+
+    const result = await detectAndLabelFixOfFix(
+      'https://github.com/owner/repo/pull/200',
+      'Regression from #1670',
+      { execFn: exec, now: NOW },
+    );
+    expect(result.isFixOfFix).toBe(true);
+    expect(result.recentlyMergedRefs).toContain(1670);
+  });
 });

@@ -258,9 +258,17 @@ export async function detectAndLabelFixOfFix(
   }
 
   // Exclude the current PR itself from the check (self-references are common).
-  const currentNum = typeof currentPrNumber === 'string'
-    ? parseInt(currentPrNumber, 10)
-    : currentPrNumber;
+  // `currentPrNumber` may be a full GitHub URL (e.g. `https://github.com/owner/repo/pull/200`)
+  // because `gh pr create` outputs a URL string, not a bare number, when the caller does not
+  // post-process its stdout.  `parseInt('https://…', 10)` returns NaN, so the guard would never
+  // fire for URL-form input.  Extract the trailing numeric segment first.
+  function parsePrNumber(raw: number | string): number {
+    if (typeof raw === 'number') return raw;
+    const urlMatch = raw.match(/\/pull\/(\d+)(?:[/?#].*)?$/);
+    if (urlMatch?.[1] !== undefined) return parseInt(urlMatch[1], 10);
+    return parseInt(raw, 10);
+  }
+  const currentNum = parsePrNumber(currentPrNumber);
   const candidateRefs = allRefs.filter((n) => n !== currentNum);
 
   if (candidateRefs.length === 0) {
