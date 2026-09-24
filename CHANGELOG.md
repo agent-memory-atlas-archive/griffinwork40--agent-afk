@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.241.0] - 2026-09-24
+
+### Added
+- add session yield rate tracking via facet enrichment (046ef91d)
+
+### Fixed
+- address review feedback — cwd threading, branch injection guard, patchYieldFields test, gh error distinction (18af1717)
+- update AGENTS_STUB to match AgentInfo shape (13025ffa)
+
+### Changed
+- Merge pull request #2113 from griffinwork40/afk/issue-2016-yield (64587f68)
+- Merge pull request #2128 from griffinwork40/afk/iso-agent-tool-5-fc02dr (3d895ced)
+- remove type-assertion casts in AgentSession provider delegations (aac92372)
+
 ## [5.240.2] - 2026-09-24
 
 ### Added
