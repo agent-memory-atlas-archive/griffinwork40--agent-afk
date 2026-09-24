@@ -48,9 +48,21 @@ describe('createFacetSessionEndHook', () => {
 
     hook(endCtx({ sessionId: 'top-probe' }));
 
-    // writeFacetYield is called (fire-and-forget)
+    // writeFacetYield is called (fire-and-forget) with sessionId, execFileAsync, and cwd
+    // (undefined here because the test context has no cwd field).
     expect(mockYield).toHaveBeenCalledTimes(1);
-    expect(mockYield).toHaveBeenCalledWith('top-probe', expect.any(Function));
+    expect(mockYield).toHaveBeenCalledWith('top-probe', expect.any(Function), undefined);
+  });
+
+  it('threads cwd from context into writeFacetYield', () => {
+    mockDerive.mockClear();
+    mockYield.mockClear();
+    mockDerive.mockReturnValue({ session_id: 'cwd-probe' } as ReturnType<typeof getOrDeriveFacet>);
+    const hook = createFacetSessionEndHook();
+
+    hook(endCtx({ sessionId: 'cwd-probe', cwd: '/some/repo' }));
+
+    expect(mockYield).toHaveBeenCalledWith('cwd-probe', expect.any(Function), '/some/repo');
   });
 
   it('skips the yield probe when the facet cannot be derived', () => {

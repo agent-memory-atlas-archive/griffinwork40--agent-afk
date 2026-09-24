@@ -66,7 +66,10 @@ export async function queryPrState(
   execFn: ExecFnYield,
   branch: string,
   cwd?: string,
-): Promise<'merged' | 'open' | 'closed' | 'none'> {
+): Promise<'merged' | 'open' | 'closed' | 'none' | 'error'> {
+  // Guard: branch names starting with '--' would be mis-parsed as gh flags.
+  if (branch.startsWith('--')) return 'none';
+
   try {
     const { stdout } = await execFn(
       'gh',
@@ -88,7 +91,10 @@ export async function queryPrState(
     if (state === 'open') return 'open';
     return 'none';
   } catch {
-    return 'none';
+    // gh exec failure (not found, auth error, timeout) — distinct from an
+    // empty PR list. Return 'error' so the caller can leave yield fields null
+    // rather than recording produced_pr=false (which implies gh ran cleanly).
+    return 'error';
   }
 }
 
@@ -164,6 +170,10 @@ export async function writeFacetYield(
   if (!branch) return;
 
   const prState = await queryPrState(execFn, branch, cwd);
+  if (prState === 'error') {
+    // gh exec failure — leave yield_tracking fields null (probe inconclusive).
+    return;
+  }
   if (prState === 'none') {
     patchYieldFields(sessionId, false, null);
     return;

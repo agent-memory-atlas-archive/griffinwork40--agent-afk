@@ -62,7 +62,10 @@ export function createFacetSessionEndHook(): HookHandler {
     // Scheduled sessions have is_scheduled_session=true already (set by derive);
     // we still probe them so the facet records produced_pr/pr_merged for
     // audit purposes, even though they are excluded from the yield denominator.
-    void writeFacetYield(sessionId, execFileAsync).catch(() => {
+    // Read cwd from context so git/gh run against the session's repo, not
+    // process.cwd() (which is the daemon launch dir in unattended runs).
+    const cwd = context.cwd;
+    void writeFacetYield(sessionId, execFileAsync, cwd).catch(() => {
       // Swallow: gh/git failures are normal in offline or non-repo contexts.
     });
 

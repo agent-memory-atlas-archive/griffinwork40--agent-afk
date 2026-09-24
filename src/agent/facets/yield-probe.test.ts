@@ -4,6 +4,9 @@
  * Tests the pure helpers (getCurrentBranch, queryPrState) and the top-level
  * writeFacetYield integration. No real git/gh processes are spawned.
  */
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { getCurrentBranch, queryPrState, writeFacetYield, patchYieldFields } from './yield-probe.js';
 import type { ExecFnYield } from './yield-probe.js';
@@ -63,9 +66,15 @@ describe('queryPrState', () => {
     expect(await queryPrState(exec, 'afk/no-pr')).toBe('none');
   });
 
-  it('returns "none" on gh failure', async () => {
+  it('returns "error" on gh failure', async () => {
     const exec: ExecFnYield = vi.fn().mockRejectedValue(new Error('gh not found'));
-    expect(await queryPrState(exec, 'afk/my-feature')).toBe('none');
+    expect(await queryPrState(exec, 'afk/my-feature')).toBe('error');
+  });
+
+  it('returns "none" for a branch name starting with "--"', async () => {
+    const exec: ExecFnYield = vi.fn();
+    expect(await queryPrState(exec, '--inject')).toBe('none');
+    expect(exec).not.toHaveBeenCalled();
   });
 
   it('returns "none" on malformed JSON', async () => {
@@ -134,5 +143,59 @@ describe('patchYieldFields', () => {
   it('is a no-op when the cache file does not exist', () => {
     // Pass a cacheDir that has no file for this session — should not throw.
     expect(() => patchYieldFields('sess-noop', true, true, '/tmp/nonexistent-cache-dir-xyz')).not.toThrow();
+  });
+
+  it('atomically writes produced_pr and pr_merged into a valid cached facet', () => {
+    const sessionId = 'sess-atomic-write-test';
+    const cacheDir = mkdtempSync(join(tmpdir(), 'yield-probe-test-'));
+
+    // Minimal valid v5 facet JSON — satisfies SessionFacetSchema.
+    const facet = {
+      facet_version: 5,
+      session_id: sessionId,
+      source: 'cli',
+      model: 'claude-opus-4-5',
+      derived_at: new Date().toISOString(),
+      derived_from: 'afk-session',
+      source_session_path: `/fake/path/${sessionId}.json`,
+      source_session_mtime_ms: Date.now(),
+      subagent_persistence: 'not_persisted',
+      start_time: new Date().toISOString(),
+      end_time: new Date().toISOString(),
+      duration_minutes: 1,
+      underlying_goal: 'test goal',
+      first_prompt: 'test prompt',
+      goal_categories: {},
+      session_type: 'implementation',
+      brief_summary: 'test summary',
+      total_turns: 1,
+      user_message_count: 1,
+      assistant_message_count: 1,
+      tool_counts: {},
+      commands: [],
+      skills: [],
+      subagents: [],
+      tool_errors: 0,
+      tool_error_categories: {},
+      friction_counts: {},
+      friction_detail: '',
+      outcome: 'fully_achieved',
+      primary_success: 'test',
+      world_changes: { files_written: 0, files_edited: 0, bash_commands: 0, commits: 0, mutated: false },
+      parallel_dispatch: { total_tool_calls: 0, parallel_tool_calls: 0, parallel_turns: 0, tool_turns: 0, ratio: null },
+      yield_tracking: { is_scheduled_session: false, produced_pr: null, pr_merged: null },
+      decisions: [],
+      evidence_pointers: [],
+    };
+
+    writeFileSync(join(cacheDir, `${sessionId}.json`), JSON.stringify(facet, null, 2) + '\n', 'utf8');
+
+    patchYieldFields(sessionId, true, true, cacheDir);
+
+    const written = JSON.parse(
+      require('node:fs').readFileSync(join(cacheDir, `${sessionId}.json`), 'utf8'),
+    ) as { yield_tracking: { produced_pr: unknown; pr_merged: unknown } };
+    expect(written.yield_tracking.produced_pr).toBe(true);
+    expect(written.yield_tracking.pr_merged).toBe(true);
   });
 });
