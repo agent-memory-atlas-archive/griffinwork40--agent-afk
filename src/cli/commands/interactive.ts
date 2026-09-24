@@ -301,7 +301,13 @@ export function registerInteractiveCommand(program: Command): void {
         const runningJobs = ctx.backgroundRegistry.list().filter((j) => j.status === 'running');
         if (runningJobs.length > 0) await snapshotGitStateForCancelAll(ctx.stats.cwd ?? process.cwd());
         await ctx.backgroundRegistry.cancelAll().catch(() => { /* best-effort */ });
-        await ctx.session.current.close();
+        await Promise.race([
+          ctx.session.current.close(),
+          new Promise<void>(resolve => {
+            const t = setTimeout(resolve, 2000);
+            t.unref();
+          }),
+        ]);
         if (ctx.mcpManager) await ctx.mcpManager.disconnectAll();
         ctx.memoryStore.close();
         if (worktreeHandle !== undefined) {
