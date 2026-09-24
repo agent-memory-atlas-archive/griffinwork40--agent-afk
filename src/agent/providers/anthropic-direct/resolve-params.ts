@@ -255,20 +255,43 @@ export function hasValidToolUsePairing(
  * `query-turn-driver.ts` fulfils that role; it scans all assistant messages,
  * not just the tail, to cover the multi-turn resume case (see
  * `repair-orphan-tool-uses.ts` for details).
+ *
+ * **Skip-guard (#2112):** When both `filterContentBlocks(turn.userContentBlocks)`
+ * and `turn.user` are empty, the user turn would silently be skipped. If the
+ * assistant turn for the same `ResumeHistoryTurn` would produce content, this
+ * creates consecutive assistant messages that violate the Anthropic API's
+ * role-alternation contract. The `else` fallback below emits a minimal
+ * `{ role: 'user', content: '[resumed]' }` placeholder in that case, preventing
+ * the violation from being constructed here. `repairOrphanToolUses` /
+ * `repairRoleAlternation` (PR #2112) remain the downstream safety net for any
+ * violations that reach the API layer.
  */
 export function resumeHistoryToMessages(history: ResumeHistoryTurn[] | undefined): MessageParam[] | undefined {
   if (!history || history.length === 0) return undefined;
   const messages: MessageParam[] = [];
   for (const turn of history) {
+    // Compute assistant content first so the skip-guard below can inspect it
+    // before deciding whether to emit a placeholder user message.
+    const assistantBlocks = filterContentBlocks(turn.assistantContentBlocks);
+
     // User turn —— prefer structured blocks when present, else text fallback.
     const userBlocks = filterContentBlocks(turn.userContentBlocks);
     if (userBlocks.length > 0) {
       messages.push({ role: 'user', content: userBlocks });
     } else if (turn.user.length > 0) {
       messages.push({ role: 'user', content: turn.user });
+    } else {
+      // Defense-in-depth: never skip a user message when the assistant turn
+      // would produce content, which would create consecutive assistant messages
+      // violating the Anthropic API's role-alternation contract. The downstream
+      // repairRoleAlternation pass in repairOrphanToolUses is the primary guard;
+      // this prevents the violation from being constructed in the first place.
+      if (assistantBlocks.length > 0 || turn.assistant.length > 0) {
+        messages.push({ role: 'user', content: '[resumed]' });
+      }
     }
+
     // Assistant turn —— prefer structured blocks when present, else text fallback.
-    const assistantBlocks = filterContentBlocks(turn.assistantContentBlocks);
     if (assistantBlocks.length > 0) {
       messages.push({ role: 'assistant', content: assistantBlocks });
     } else if (turn.assistant.length > 0) {
