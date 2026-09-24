@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.237.0] - 2026-09-24
+
+### Added
+- add per-node worktree isolation to compose DAG executor (a2b82b11)
+
+### Changed
+- Merge pull request #2104 from griffinwork40/feat/1939-compose-worktree-isolation (6f32cb66)
+
 ## [5.236.1] - 2026-09-24
 
 ### Fixed
