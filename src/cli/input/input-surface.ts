@@ -532,11 +532,6 @@ export class InputSurface {
         // (auto-resume) without a keypress.
         this.pendingReadReject = reject;
         this.pendingReadResolve = resolve;
-        // Notify the REPL loop that the prompt is now receptive so it can
-        // re-check for background results that settled mid-turn. Fired
-        // synchronously here (before blocking on Enter) so the wake path
-        // can abort this very read if injections are pending.
-        this.onAwaitingInput?.();
         compositor.setOnIdleEscape(opts.onEscape ?? null);
 
         // Per-turn prompt handoff: ask for an empty-prompt suggestion now that
@@ -636,6 +631,21 @@ export class InputSurface {
         // than only after the first keypress. Idle repaint is one cheap
         // frame; redundant if the prompt was already correctly drawn.
         compositor.repaint();
+        // Notify the REPL loop that the prompt is now receptive so it can
+        // re-check for background results that settled mid-turn. Fired
+        // after all compositor state is fully installed (setOnIdleEscape,
+        // setOnSubmit handler, idle mode, repaint) so that a synchronous
+        // abortPendingRead() inside the callback does not leave stale
+        // handlers installed on an already-resolved Promise.
+        //
+        // Opt-in via primePromptSuggestion: the turn-boundary readLine in
+        // loop-iteration.ts sets this flag. Sub-prompts (elicitation, form
+        // fields) deliberately omit it so tryAutoResume cannot abort a
+        // sub-prompt with an empty answer — only the main REPL prompt can
+        // trigger an auto-resume wake.
+        if (opts.primePromptSuggestion === true) {
+          this.onAwaitingInput?.();
+        }
       });
     }
     // Non-TTY fallback: delegate to the existing reader.

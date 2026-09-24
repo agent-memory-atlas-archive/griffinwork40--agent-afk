@@ -864,7 +864,35 @@ describe('InputSurface', () => {
       expect(() => surface.abortPendingRead()).not.toThrow();
     });
 
-    it('onAwaitingInput fires when readLine sets pendingReadResolve (prompt becomes receptive)', async () => {
+    it('onAwaitingInput fires for turn-boundary readLine (primePromptSuggestion=true), after compositor setup', async () => {
+      const stdout = makeMockStdout();
+      const stdin = makeMockStdin();
+      const surface = new InputSurface({ rl: makeRl(), history: makeHistory() });
+      await surface.armCompositor({ promptFn: () => 'afk > ', onCancel: () => {}, stdout, stdin });
+      const compositor = surface.getCompositor()!;
+
+      const callOrder: string[] = [];
+      // Spy on setOnSubmit to confirm the handler is installed before the callback fires.
+      const origSetOnSubmit = compositor.setOnSubmit.bind(compositor);
+      vi.spyOn(compositor, 'setOnSubmit').mockImplementation((h) => {
+        if (h !== null) callOrder.push('setOnSubmit');
+        origSetOnSubmit(h);
+      });
+      surface.onAwaitingInput = () => { callOrder.push('onAwaitingInput'); };
+
+      const readPromise = surface.readLine({ promptFn: () => 'afk > ', primePromptSuggestion: true });
+      // onAwaitingInput must fire AFTER setOnSubmit so that if the callback
+      // calls abortPendingRead(), it does not leave a stale submit handler
+      // installed on an already-resolved Promise (the F1 constructor-sequencing fix).
+      expect(callOrder[0]).toBe('setOnSubmit');
+      expect(callOrder[1]).toBe('onAwaitingInput');
+
+      surface.abortPendingRead();
+      await readPromise;
+      await surface.dispose();
+    });
+
+    it('onAwaitingInput does NOT fire for sub-prompt readLine (primePromptSuggestion omitted)', async () => {
       const stdout = makeMockStdout();
       const stdin = makeMockStdin();
       const surface = new InputSurface({ rl: makeRl(), history: makeHistory() });
@@ -873,9 +901,9 @@ describe('InputSurface', () => {
       const spy = vi.fn();
       surface.onAwaitingInput = spy;
 
-      const readPromise = surface.readLine({ promptFn: () => 'afk > ' });
-      // The callback fires synchronously during readLine, before blocking.
-      expect(spy).toHaveBeenCalledTimes(1);
+      // Sub-prompt: primePromptSuggestion omitted — callback must stay silent.
+      const readPromise = surface.readLine({ promptFn: () => 'Continue? [y/N] ' });
+      expect(spy).not.toHaveBeenCalled();
 
       surface.abortPendingRead();
       await readPromise;

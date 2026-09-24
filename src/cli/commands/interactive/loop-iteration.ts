@@ -214,6 +214,9 @@ export async function runInputLoop(
   // Prompt-became-receptive path: the REPL just returned to its idle
   // readline after a turn completed. Re-check for results that settled
   // mid-turn (when isAwaitingInput was false and onInjectable was a no-op).
+  // input-surface.ts only invokes this when primePromptSuggestion=true, so
+  // sub-prompts (elicitation, form fields) never trigger tryAutoResume —
+  // preventing an auto-resume from aborting a sub-prompt with an empty answer.
   surface.onAwaitingInput = tryAutoResume;
 
   while (true) {
