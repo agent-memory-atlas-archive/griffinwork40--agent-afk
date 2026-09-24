@@ -652,6 +652,7 @@ export const composeTool: AnthropicToolDef = {
             max_turns: { type: 'number', description: 'Per-node turn budget. Positive integer.' },
             agent_type: { type: 'string', description: 'Named agent type for this node (e.g. "research-agent"). The compose executor resolves the agent definition from the registry and applies its system prompt, tool allowlist, and model defaults — identical to the `agent` tool\'s agent_type resolution. Fails with a clear error naming available types when the type is unknown.' },
             attachments: { type: 'array', items: { type: 'string' }, maxItems: 8, description: 'Optional inbound image ids shown as [image img_xxxxxx · …] or absolute image paths. Bytes are resolved by the runtime — NEVER paste base64 into the tool call.' },
+            isolation: { type: 'string', enum: ['none', 'worktree'], description: 'Filesystem isolation for this node. "none" (default) runs the node in the shared parent tree. "worktree" creates a fresh managed git worktree for this node so its writes/tests never collide with sibling nodes. Mutually exclusive with cwd — a node cannot pin a cwd and also request an isolated worktree (the worktree path IS the cwd).' },
           }, required: ['id', 'prompt'], additionalProperties: false,
         },
         description: 'Subagent tasks to execute.',
