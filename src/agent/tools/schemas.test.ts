@@ -6,11 +6,11 @@ import {
   clipboardWriteTool,
   clipboardReadTool,
 } from './schemas.js';
-import { cancelBackgroundJobTool, sendMessageToAgentTool } from './schemas.orchestration.js';
+import { cancelBackgroundJobTool, sendMessageToAgentTool, getBackgroundJobHealthTool } from './schemas.orchestration.js';
 
 describe('builtinToolSchemas', () => {
-  it('contains exactly 37 tools', () => {
-    expect(builtinToolSchemas).toHaveLength(37);
+  it('contains exactly 38 tools', () => {
+    expect(builtinToolSchemas).toHaveLength(38);
   });
 
   it('exports the expected tool names', () => {
@@ -33,6 +33,7 @@ describe('builtinToolSchemas', () => {
       'cancel_schedule',
       'cancel_background_job',
       'send_message_to_agent',
+      'get_background_job_health',
       'read_witness',
       'search_witness',
       'worktree',
@@ -207,5 +208,28 @@ describe('sendMessageToAgentTool', () => {
 
   it('is included in BUILTIN_TOOL_NAMES', () => {
     expect(BUILTIN_TOOL_NAMES).toContain('send_message_to_agent');
+  });
+});
+
+describe('getBackgroundJobHealthTool', () => {
+  it('requires only jobId', () => {
+    expect(getBackgroundJobHealthTool.input_schema.required).toEqual(['jobId']);
+  });
+
+  it('describes health / activity signals', () => {
+    expect(getBackgroundJobHealthTool.description).toMatch(/health/i);
+    expect(getBackgroundJobHealthTool.description).toMatch(/activity/i);
+  });
+
+  it('has category "subagent"', () => {
+    expect(getBackgroundJobHealthTool.category).toBe('subagent');
+  });
+
+  it('is marked concurrencySafe', () => {
+    expect(getBackgroundJobHealthTool.concurrencySafe).toBe(true);
+  });
+
+  it('is included in BUILTIN_TOOL_NAMES', () => {
+    expect(BUILTIN_TOOL_NAMES).toContain('get_background_job_health');
   });
 });

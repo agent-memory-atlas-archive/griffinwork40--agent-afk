@@ -10,7 +10,7 @@ describe('createBuiltinHandlers', () => {
 
   it('has an entry for every tool in BUILTIN_TOOL_NAMES', () => {
     const handlers = createBuiltinHandlers();
-    for (const name of BUILTIN_TOOL_NAMES.filter((tool) => tool !== 'cancel_background_job' && tool !== 'send_message_to_agent')) {
+    for (const name of BUILTIN_TOOL_NAMES.filter((tool) => tool !== 'cancel_background_job' && tool !== 'send_message_to_agent' && tool !== 'get_background_job_health')) {
       expect(handlers.has(name), `missing handler for "${name}"`).toBe(true);
       expect(typeof handlers.get(name)).toBe('function');
     }
