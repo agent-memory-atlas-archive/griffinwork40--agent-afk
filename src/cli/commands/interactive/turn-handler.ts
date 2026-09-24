@@ -18,7 +18,7 @@ import { runWithSink } from '../../../agent/_lib/skill-sink-channel.js';
 import { createTaskViewHandler } from './task-view-mid-turn.js';
 import { buildUserPayload } from '../../slash/_lib/user-payload.js';
 import { expandAtFileTokens } from './at-file-inject.js';
-import { makeHandleBackgroundKey, installSubagentPromotion } from './turn-handler.subagent-promotion.js';
+import { makeHandleBackgroundKey, installSubagentPromotion } from './turn-handler.bg-promotion.js';
 import { createTurnTtfbState, emitPlainTtfbWaiting, ttfbRendererOptions } from './turn-handler.ttfb.js';
 import { type PausedPickerRef } from './turn-handler.paused.js';
 import { processStreamEvent, type StreamEventState, type StreamEventContext } from './turn-handler.stream-events.js';
