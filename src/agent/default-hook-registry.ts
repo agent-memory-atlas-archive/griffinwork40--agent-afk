@@ -102,12 +102,15 @@ export function createDefaultHookRegistry(
   const shadowVerifyNudge = createShadowVerifyNudge();
   registry.register('SubagentStop', shadowVerifyNudge);
   registry.register('Stop', shadowVerifyNudge);
-  // Placeholder detection: scans the assistant's response text for unresolved
-  // placeholder tokens in code blocks (e.g. `your-user@mac-mini-ip`,
-  // `<YOUR_API_KEY>`) that the user would copy-paste and run literally. Injects
-  // a correction into the next turn asking the model to resolve or prominently
-  // mark them. Bounded per session (fails open after 2 corrections). No-op when
-  // StopContext.lastAssistantText is absent (non-REPL surfaces, subagents).
+  // Placeholder detection: scans shellable code blocks in the turn's
+  // code-block register for unresolved placeholder tokens (e.g.
+  // `your-user@mac-mini-ip`, `<YOUR_API_KEY>`) that the user would
+  // copy-paste and run literally. Injects a correction into the next turn
+  // asking the model to resolve or prominently mark them. Bounded per
+  // session (fails open after 2 corrections). Reads from the code-block
+  // register (src/cli/code-block-register.ts) which is only populated in
+  // the REPL loop, so the hook is automatically a no-op on non-REPL
+  // surfaces and subagents without any guard code.
   registry.register('Stop', createPlaceholderDetectHook());
   // Ask-question gate: on surfaces with no elicitation handler (daemon,
   // scheduler, one-shot chat) a question can never be answered — block it

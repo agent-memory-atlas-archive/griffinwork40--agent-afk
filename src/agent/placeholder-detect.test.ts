@@ -87,6 +87,48 @@ describe('detectPlaceholdersInBlocks — screaming-snake', () => {
     ]);
     expect(matches.filter((m) => m.pattern === 'screaming-snake')).toHaveLength(0);
   });
+
+  it('does not flag SET_HOME — real env var starting with SET', () => {
+    const matches = detectPlaceholdersInBlocks(['export SET_HOME=/usr/local']);
+    expect(matches.filter((m) => m.pattern === 'screaming-snake')).toHaveLength(0);
+  });
+
+  it('does not flag ADD_USER — real env var starting with ADD', () => {
+    const matches = detectPlaceholdersInBlocks(['ADD_USER=admin ./setup.sh']);
+    expect(matches.filter((m) => m.pattern === 'screaming-snake')).toHaveLength(0);
+  });
+
+  it('does not flag UPDATE_DB — real env var starting with UPDATE', () => {
+    const matches = detectPlaceholdersInBlocks(['UPDATE_DB=true pnpm migrate']);
+    expect(matches.filter((m) => m.pattern === 'screaming-snake')).toHaveLength(0);
+  });
+
+  it('does not flag CHANGE_LOG, INSERT_ID, THE_SERVER, ENTER_KEY, PUT_OBJECT', () => {
+    const input = [
+      'CHANGE_LOG=verbose INSERT_ID=42 THE_SERVER=prod ENTER_KEY=n PUT_OBJECT=1',
+    ];
+    const matches = detectPlaceholdersInBlocks(input);
+    const snakeMatches = matches.filter((m) => m.pattern === 'screaming-snake');
+    expect(snakeMatches).toHaveLength(0);
+  });
+
+  it('still detects YOUR_API_KEY after prefix tightening', () => {
+    const matches = detectPlaceholdersInBlocks(['export TOKEN=YOUR_API_KEY']);
+    expect(matches.some((m) => m.match === 'YOUR_API_KEY')).toBe(true);
+  });
+
+  it('still detects REPLACE_WITH_TOKEN after prefix tightening', () => {
+    const matches = detectPlaceholdersInBlocks(['TOKEN=REPLACE_WITH_TOKEN']);
+    expect(matches.some((m) => m.match === 'REPLACE_WITH_TOKEN')).toBe(true);
+  });
+
+  it('still detects EXAMPLE_API_KEY and SAMPLE_TOKEN', () => {
+    const matches = detectPlaceholdersInBlocks([
+      'export KEY=EXAMPLE_API_KEY SECRET=SAMPLE_TOKEN',
+    ]);
+    expect(matches.some((m) => m.match === 'EXAMPLE_API_KEY')).toBe(true);
+    expect(matches.some((m) => m.match === 'SAMPLE_TOKEN')).toBe(true);
+  });
 });
 
 describe('detectPlaceholdersInBlocks — your-prefix', () => {

@@ -60,6 +60,13 @@ interface PlaceholderPattern {
 // Contract: every regex uses the global flag so matchAll works. Patterns are
 // ordered most-specific-first; the dedup in detectPlaceholdersInBlocks
 // collapses overlapping matches by span.
+//
+// Invariant: PLACEHOLDER_PATTERNS is module-scope and every regex carries /g.
+// Global regexes are stateful (lastIndex). This is safe because the module is
+// single-threaded (Node.js event loop) AND detectPlaceholdersInBlocks resets
+// pattern.regex.lastIndex = 0 before every matchAll call — so concurrent
+// reentrant calls are not possible and stale lastIndex cannot leak between
+// invocations.
 
 const PLACEHOLDER_PATTERNS: PlaceholderPattern[] = [
   // ── Angle-bracket placeholders ──────────────────────────────────────────
@@ -77,10 +84,18 @@ const PLACEHOLDER_PATTERNS: PlaceholderPattern[] = [
   },
 
   // ── SCREAMING_SNAKE placeholders ────────────────────────────────────────
-  // YOUR_API_KEY, REPLACE_WITH_TOKEN, INSERT_PASSWORD_HERE
+  // YOUR_API_KEY, REPLACE_WITH_TOKEN, MY_PLACEHOLDER_TOKEN
+  //
+  // Invariant: the prefix set MUST contain only words that are NEVER valid
+  // env-var name fragments. Words like SET, ADD, UPDATE, CHANGE, ENTER,
+  // INSERT, PUT, THE, EDIT were removed because they produce false positives
+  // on real env vars: SET_HOME, ADD_USER, UPDATE_DB, CHANGE_LOG, INSERT_ID,
+  // THE_SERVER, ENTER_KEY, PUT_OBJECT. Only keep words whose sole idiomatic
+  // use is as a placeholder signal: YOUR, MY, REPLACE, PLACEHOLDER, TODO,
+  // FIXME, XXX, EXAMPLE, SAMPLE.
   {
     name: 'screaming-snake',
-    regex: /\b(?:YOUR|MY|THE|REPLACE|INSERT|ENTER|ADD|PUT|SET|CHANGE|UPDATE|EDIT|EXAMPLE|SAMPLE|PLACEHOLDER|TODO|FIXME|XXX)[_A-Z0-9]{2,}\b/g,
+    regex: /\b(?:YOUR|MY|REPLACE|PLACEHOLDER|TODO|FIXME|XXX|EXAMPLE|SAMPLE)[_A-Z0-9]{2,}\b/g,
     validate: (match) => {
       if (!match.includes('_')) return false;
       if (/^(?:TODO|FIXME)$/.test(match)) return false;
