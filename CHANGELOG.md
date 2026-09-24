@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.237.3] - 2026-09-24
+
+### Fixed
+- rename turn-handler.subagent-promotion to bg-promotion to satisfy boundary test (7ead56e8)
+
+### Changed
+- Merge pull request #2121 from griffinwork40/afk/20260924-115004-572602 (4185f5a1)
+- Merge remote-tracking branch 'origin/main' into afk/20260924-115004-572602 (8672193e)
+- split runTurn god-function into concern modules (issue #2107) (7cf5e522)
+
 ## [5.237.2] - 2026-09-24
 
 ### Fixed
