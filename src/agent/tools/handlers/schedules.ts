@@ -126,6 +126,11 @@ export const updateScheduleHandler: ToolHandler = async (input, _signal) => {
   }
   const taskId = obj['taskId'] as string;
 
+  // Validate taskId is a slug-safe identifier before using it in daemon sync URLs
+  if (!/^[a-z0-9-]+$/.test(taskId)) {
+    return { content: 'Invalid input: taskId must be a valid slug (lowercase alphanumeric and hyphens)', isError: true };
+  }
+
   // Validate optional fields when present
   const cron = obj['cron'];
   if (cron !== undefined) {

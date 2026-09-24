@@ -214,13 +214,7 @@ export function toggleScheduleEnabled(
   enabled: boolean,
   path?: string,
 ): ScheduledTaskConfig | undefined {
-  const schedules = loadSchedules(path);
-  const idx = schedules.findIndex((s) => s.id === id);
-  if (idx === -1) return undefined;
-  const updated = { ...schedules[idx]!, enabled, updatedAt: new Date().toISOString() };
-  schedules[idx] = updated;
-  saveSchedules(schedules, path);
-  return updated;
+  return updateSchedule(id, { enabled }, path);
 }
 
 /**
