@@ -1,23 +1,48 @@
 /**
  * Placeholder detection for agent output.
  *
- * Scans assistant text for unresolved placeholder tokens inside code blocks
- * and inline code — the failure class where the agent hands the user a command
- * like `ssh your-user@mac-mini-ip` and the user runs it literally.
+ * Scans the turn's code-block register for unresolved placeholder tokens
+ * in shellable code blocks — the failure class where the agent hands the
+ * user a command like `ssh your-user@mac-mini-ip` and the user runs it
+ * literally.
  *
  * Two layers:
- *   1. {@link detectPlaceholders} — pure detection, returns every match.
- *   2. {@link createPlaceholderDetectHook} — Stop hook that injects a
- *      correction when placeholders are found, following the same
- *      `injectContext` pattern as the terminal-state gate.
+ *   1. {@link detectPlaceholdersInBlocks} — pure detection against provided
+ *      code block text, returns every match.
+ *   2. {@link createPlaceholderDetectHook} — Stop hook that reads the
+ *      code-block register, filters to shellable languages, runs detection,
+ *      and injects a correction into the next turn via `injectContext`.
  *
- * Intentionally pure — no I/O, no SDK imports — so any layer may depend on it.
+ * The hook reads from the existing code-block register
+ * (`src/cli/code-block-register.ts`) which already captures every fenced
+ * block at render time, is reset per turn, and is enabled exclusively in
+ * the REPL loop — so the hook is automatically a no-op on non-REPL
+ * surfaces without any guard code.
  *
  * @module agent/placeholder-detect
  */
 
 import type { HookContext, HookDecision, HookHandler } from './hooks.js';
 import { debugLog } from '../utils/debug.js';
+
+// ─── Shellable language filter ───────────────────────────────────────────────
+
+/**
+ * Language tags that indicate a code block contains runnable shell commands.
+ * Scoping detection to these languages eliminates TypeScript generics,
+ * Java constants, and other programming-language false positives at the
+ * source rather than via regex counter-patterns.
+ */
+const SHELLABLE_LANGS = new Set([
+  'bash', 'sh', 'zsh', 'shell', 'powershell', 'ps1',
+  'console', 'terminal', 'command', 'cmd',
+  '', // unlabeled fenced blocks are often shell commands
+]);
+
+/** True when a code block's language tag indicates shellable content. */
+export function isShellableBlock(lang: string): boolean {
+  return SHELLABLE_LANGS.has(lang.toLowerCase());
+}
 
 // ─── Placeholder patterns ────────────────────────────────────────────────────
 
@@ -33,25 +58,18 @@ interface PlaceholderPattern {
 }
 
 // Contract: every regex uses the global flag so matchAll works. Patterns are
-// ordered most-specific-first; the dedup in detectPlaceholders collapses
-// overlapping matches by span.
+// ordered most-specific-first; the dedup in detectPlaceholdersInBlocks
+// collapses overlapping matches by span.
 
 const PLACEHOLDER_PATTERNS: PlaceholderPattern[] = [
   // ── Angle-bracket placeholders ──────────────────────────────────────────
   // <your-api-key>, <YOUR_TOKEN>, <hostname>, <port>, <user>, etc.
-  // Excludes HTML tags (<div>, <br/>, <a href=...>), XML self-closing,
-  // and common code patterns (<T>, <string>, <number>, generic type params).
   {
     name: 'angle-bracket',
     regex: /<([a-zA-Z][a-zA-Z0-9_-]*(?:\s+[a-zA-Z_-]+)*)>/g,
     validate: (match) => {
       const inner = match.slice(1, -1).toLowerCase();
-      // HTML/XML tags
       if (/^\//.test(inner)) return false; // closing tags
-      if (/^(?:div|span|p|a|br|hr|img|ul|ol|li|h[1-6]|table|tr|td|th|thead|tbody|form|input|button|label|select|option|textarea|pre|code|em|strong|b|i|u|s|head|body|html|script|style|link|meta|title|nav|header|footer|main|section|article|aside|summary|details|blockquote|figure|figcaption|iframe|video|audio|source|canvas|svg|path|circle|rect|line|polygon|polyline|ellipse|text|g|defs|use|symbol|marker|pattern|image|foreignobject|switch|desc)$/.test(inner)) return false;
-      // Generic type parameters
-      if (/^[A-Z]$/.test(inner)) return false; // <T>, <K>, <V>
-      if (/^(?:string|number|boolean|object|any|void|never|unknown|null|undefined|bigint|symbol)$/.test(inner)) return false;
       // Must look like a placeholder — contains a separator or known prefix
       return /[-_\s]/.test(inner) ||
         /^(?:your|my|the|this|replace|insert|enter|add|put|set|specify|provide|fill|change|update|edit|example|sample|placeholder|todo|fixme|xxx|host|user|pass|token|key|secret|name|email|domain|server|port|path|url|uri|ip|address|database|db|api|app|project|org|repo|bucket|region|account|id|value|file|dir|folder|endpoint)/.test(inner);
@@ -64,9 +82,7 @@ const PLACEHOLDER_PATTERNS: PlaceholderPattern[] = [
     name: 'screaming-snake',
     regex: /\b(?:YOUR|MY|THE|REPLACE|INSERT|ENTER|ADD|PUT|SET|CHANGE|UPDATE|EDIT|EXAMPLE|SAMPLE|PLACEHOLDER|TODO|FIXME|XXX)[_A-Z0-9]{2,}\b/g,
     validate: (match) => {
-      // Must contain at least one underscore to be a multi-word placeholder
       if (!match.includes('_')) return false;
-      // Exclude common env var patterns that are real values, not placeholders
       if (/^(?:TODO|FIXME)$/.test(match)) return false;
       return true;
     },
@@ -91,18 +107,7 @@ const PLACEHOLDER_PATTERNS: PlaceholderPattern[] = [
   {
     name: 'xxx-run',
     regex: /\bx{3,}(?:[-._]x{2,})*\b/gi,
-    validate: (match) => {
-      // At least 3 x's in a row somewhere
-      return /x{3}/i.test(match);
-    },
-  },
-
-  // ── Ellipsis placeholders in code ──────────────────────────────────────
-  // ... used as a placeholder value (not prose trailing)
-  // Only match when ... is the entire value in an assignment or argument
-  {
-    name: 'ellipsis-value',
-    regex: /(?:=\s*['"]?\.\.\.\s*['"]?|:\s*['"]?\.\.\.\s*['"]?(?:,|$|\}))/gm,
+    validate: (match) => /x{3}/i.test(match),
   },
 
   // ── REPLACE_ME / CHANGEME / PLACEHOLDER family ─────────────────────────
@@ -112,51 +117,22 @@ const PLACEHOLDER_PATTERNS: PlaceholderPattern[] = [
   },
 ];
 
-// ─── Code block extraction ───────────────────────────────────────────────────
-
-/**
- * Extract fenced code blocks and inline code spans from markdown text.
- * Returns the code content only — surrounding prose is excluded so we
- * don't flag prose like "replace <your-token> with..." which is
- * instructional, not a runnable command.
- */
-export function extractCodeBlocks(text: string): string[] {
-  const blocks: string[] = [];
-
-  // Fenced code blocks: ```...``` or ~~~...~~~
-  const fencedRe = /^(?:```|~~~)[^\n]*\n([\s\S]*?)^(?:```|~~~)\s*$/gm;
-  for (const m of text.matchAll(fencedRe)) {
-    if (m[1]) blocks.push(m[1]);
-  }
-
-  // Inline code: `...` (but not inside fenced blocks — already extracted)
-  // Strip fenced blocks first, then extract inline
-  const withoutFenced = text.replace(fencedRe, '');
-  const inlineRe = /`([^`\n]+)`/g;
-  for (const m of withoutFenced.matchAll(inlineRe)) {
-    if (m[1]) blocks.push(m[1]);
-  }
-
-  return blocks;
-}
-
 // ─── Detection ───────────────────────────────────────────────────────────────
 
 export interface PlaceholderMatch {
   pattern: string;
   match: string;
-  /** The code block the match was found in. */
+  /** The code block text the match was found in. */
   block: string;
 }
 
 /**
- * Scan text for unresolved placeholder tokens inside code blocks and
- * inline code. Returns all matches, deduplicated by the matched string.
+ * Scan code block texts for unresolved placeholder tokens. Returns all
+ * matches, deduplicated by the matched string.
  *
- * Pure function — no I/O.
+ * Pure function — no I/O, no module-state reads.
  */
-export function detectPlaceholders(text: string): PlaceholderMatch[] {
-  const codeBlocks = extractCodeBlocks(text);
+export function detectPlaceholdersInBlocks(codeBlocks: string[]): PlaceholderMatch[] {
   if (codeBlocks.length === 0) return [];
 
   const seen = new Set<string>();
@@ -164,7 +140,6 @@ export function detectPlaceholders(text: string): PlaceholderMatch[] {
 
   for (const block of codeBlocks) {
     for (const pattern of PLACEHOLDER_PATTERNS) {
-      // Reset lastIndex for global regexes
       pattern.regex.lastIndex = 0;
       for (const m of block.matchAll(pattern.regex)) {
         const matched = m[0];
@@ -189,13 +164,13 @@ const MAX_INJECTIONS_PER_SESSION = 2;
 
 /**
  * The correction injected into the next turn when placeholders are detected
- * in the assistant's output code blocks. Names the specific placeholders found
- * and instructs the model to resolve them or explicitly mark them.
+ * in the assistant's output code blocks. Names the specific placeholders
+ * found and instructs the model to resolve them or explicitly mark them.
  */
 function buildCorrection(matches: PlaceholderMatch[]): string {
   const placeholders = matches.map((m) => `\`${m.match}\``).join(', ');
   return (
-    '[placeholder-detect] The previous turn contained code blocks with ' +
+    '[placeholder-detect] The previous turn contained shell code blocks with ' +
     `unresolved placeholder values: ${placeholders}. ` +
     'Before presenting commands to the user, do ONE of:\n' +
     '  (a) resolve the actual values (run a discovery command, read config, ' +
@@ -209,33 +184,60 @@ function buildCorrection(matches: PlaceholderMatch[]): string {
 
 /**
  * Build a `Stop` hook handler that detects unresolved placeholders in the
- * assistant's last message and injects a correction into the next turn.
+ * turn's shellable code blocks and injects a correction into the next turn.
  *
- * Requires `StopContext.lastAssistantText` to be populated by the REPL loop.
- * When the field is absent (non-REPL surfaces, subagents) the hook is a no-op.
+ * Reads from the code-block register (`src/cli/code-block-register.ts`)
+ * which is enabled exclusively in the REPL loop — the hook is automatically
+ * a no-op on non-REPL surfaces without any guard code.
+ *
+ * Accepts a `getCodeBlocks` getter to decouple from the module-scope
+ * register (testable without module state).
  *
  * Same lifecycle contract as the terminal-state gate: never blocks, never
  * throws, bounded injections per session, fails open.
  */
-export function createPlaceholderDetectHook(): HookHandler {
+export function createPlaceholderDetectHook(deps?: {
+  getCodeBlocks?: () => readonly { type: string; lang: string; text: string }[];
+}): HookHandler {
   let injections = 0;
+  // Lazy-import to avoid a circular dep at module load time (agent/ → cli/).
+  // The register is module-scope singleton state, so the import is deferred
+  // to first invocation. In tests, deps.getCodeBlocks bypasses this entirely.
+  let resolvedGetter: (() => readonly { type: string; lang: string; text: string }[]) | undefined =
+    deps?.getCodeBlocks;
 
   return (context: HookContext): HookDecision => {
     if (context.event !== 'Stop') return {};
-    // Skip subagent turns — placeholder detection is for user-facing output.
     if (context.parentSessionId) return {};
-    // Require the assistant text to be threaded through (REPL-only).
-    const text = (context as { lastAssistantText?: string }).lastAssistantText;
-    if (!text) return {};
-    // Loop guard: bounded corrections per session.
     if (injections >= MAX_INJECTIONS_PER_SESSION) return {};
 
-    const matches = detectPlaceholders(text);
+    // Resolve the getter on first call (lazy import avoids load-time dep).
+    if (!resolvedGetter) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const mod = require('../../cli/code-block-register.js') as
+          { getCodeBlocks: () => readonly { type: string; lang: string; text: string }[] };
+        resolvedGetter = mod.getCodeBlocks;
+      } catch {
+        return {}; // register not available (non-REPL surface)
+      }
+    }
+
+    const allBlocks = resolvedGetter();
+    if (allBlocks.length === 0) return {};
+
+    // Filter to shellable code blocks only — eliminates TS generics,
+    // Java constants, and other programming-language false positives.
+    const shellTexts = allBlocks
+      .filter((b) => b.type === 'code_block' && isShellableBlock(b.lang))
+      .map((b) => b.text);
+
+    const matches = detectPlaceholdersInBlocks(shellTexts);
     if (matches.length === 0) return {};
 
     injections += 1;
     debugLog(
-      `[placeholder-detect] found ${matches.length} placeholder(s) in assistant output ` +
+      `[placeholder-detect] found ${matches.length} placeholder(s) in shell code blocks ` +
         `(${injections}/${MAX_INJECTIONS_PER_SESSION})`,
       { sessionId: context.sessionId, placeholders: matches.map((m) => m.match) },
     );

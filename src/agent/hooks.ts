@@ -315,15 +315,6 @@ export interface StopContext {
    */
   parentSessionId?: string;
   /**
-   * The full assistant response text from the turn that just completed.
-   * Populated by the REPL loop from `onTurnComplete`'s `assistantText`
-   * parameter. Absent on surfaces that do not capture it and on turns
-   * that did not complete (soft-stop, error). Used by post-turn content
-   * validators (placeholder detection) that need the actual prose, not
-   * just terminal-state metadata.
-   */
-  lastAssistantText?: string;
-  /**
    * The parsed terminal-state kind of the turn that just completed, when the
    * surface parses one (REPL only — see `terminal-state.ts`). Absent when the
    * turn emitted no recognizable verdict, or on surfaces that do not parse
