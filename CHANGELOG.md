@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.240.0] - 2026-09-24
+
+### Added
+- add update_schedule tool for editing daemon schedules (54a46c5c)
+
+### Fixed
+- address review feedback — slug validation, mock update, handler count, toggleScheduleEnabled delegation (3be6498e)
+
+### Changed
+- Merge pull request #2132 from griffinwork40/afk/20260924-143115-1c8cba (a7b9a200)
+
 ## [5.239.1] - 2026-09-24
 
 ### Changed
