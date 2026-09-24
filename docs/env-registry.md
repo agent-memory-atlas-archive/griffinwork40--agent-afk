@@ -2,7 +2,7 @@
 
 Generated from `src/config/env.ts`. Do not edit by hand — run `pnpm scan:env` after changing the registry source.
 
-**188 vars** across 13 categories. Every `process.env[...]` read in `src/` outside `src/config/env.ts` is a CI failure (enforced by `pnpm audit:env:check`).
+**189 vars** across 13 categories. Every `process.env[...]` read in `src/` outside `src/config/env.ts` is a CI failure (enforced by `pnpm audit:env:check`).
 
 To add a var: edit `src/config/env.ts` (add a getter on `env` + an entry in `ENV_REGISTRY`), then run `pnpm scan:env`.
 
@@ -235,6 +235,7 @@ To add a var: edit `src/config/env.ts` (add a getter on `env` + an entry in `ENV
 | `AFK_DEMO_CLEAN` | boolean |  |  | `1` | Explicit opt-in to capture-mode. When set to 1, suppresses high-frequency repaint drivers (spinner ticker, live thinking-preview) so recorded artifacts contain each state once instead of once per timer tick. |
 | `AFK_DIFF_LINES` | number |  |  | `50` | Maximum number of diff lines shown in the inline diff render during write_file tool calls. Set to 0 for no cap. Non-integer values are silently ignored and the default applies. |
 | `AFK_DISABLE_SPINE_UPDATE` | boolean |  | `0` | `1` | Disable the SPINE.md SessionEnd hook when set to 1. The hook runs a single LLM call at the end of each top-level session to classify architectural signals in the git diff against SPINE.md. Set to 1 to opt out globally (useful in CI or when the LLM call is unwanted). |
+| `AFK_EVAL_STALENESS_DAYS` | number |  | `7` | `14` | Number of days without a completed eval-run before the ground-state pre-flight surfaces a staleness warning. The guard reads the most recent timestamp from the eval-runs index ($AFK_HOME/agent-framework/improve/eval-runs/.index.jsonl) and emits a warning finding when the gap exceeds this threshold. Default: 7. Set to 0 to disable the guard. |
 | `AFK_GOBLIN_MASCOT` | boolean |  |  | `1` | Reacting goblin mini-sprite in the reserved footer band while the agent runs tools (3 rows, animated). 1 = on, unset/0 = off (default). Claims terminal rows, so it is opt-in. |
 | `AFK_GOBLIN_SPINNER` | boolean |  |  | `0` | Goblin-themed working spinner (olive frames + goblin verbs) while the agent runs tools. 1 = on (default), 0 = classic dim spinner. |
 | `AFK_LEASE_TTL_MS` | number |  |  | `600000` | Lease TTL in milliseconds for durable task execution (issue #1411). A leased task whose lease expires before it completes is recovered and re-enqueued (or dead-lettered if maxAttempts is exhausted). Default: 600000 (10 minutes). |

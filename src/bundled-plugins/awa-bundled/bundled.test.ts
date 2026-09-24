@@ -97,8 +97,12 @@ const PINNED_HASHES = {
   // mutating-bash guard) AND `context: fork` (pins it to forking so the recon
   // wave keeps dispatching). The upstream ground-state has neither layer, so
   // both lines are permanent bundled-only divergence.
+  // Hash re-bumped: added eval-pipeline recency survey section (#2010) — surfaces
+  // a warning finding when eval-run hasn't executed in N days (default 7,
+  // configurable via AFK_EVAL_STALENESS_DAYS). Bundled-only; no upstream
+  // counterpart to back-port.
   'ground-state':
-    'b12e20fe6c6429eb43073f719c6e367de78efdadd51083adf28036da8966eb1a',
+    '619d00252cb2006184f4e0e3fcd3b00a1a01c2e8751c6165ad16c313cb716bc2',
 
   polish:
     '03c7d8d1f593d4aca3327247d5c226e957bae84982b8a438c5834ba74ee4184c',
