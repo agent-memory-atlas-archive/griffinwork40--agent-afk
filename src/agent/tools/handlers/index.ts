@@ -21,6 +21,7 @@ import { webScrapeHandler } from './web-scrape.js';
 import { webRequestHandler } from './web-request.js';
 import {
   createScheduleHandler,
+  updateScheduleHandler,
   listSchedulesHandler,
   getScheduleHistoryHandler,
   cancelScheduleHandler,
@@ -103,6 +104,7 @@ export function createBuiltinHandlers(
     ['web_scrape', webScrapeHandler],
     ['web_request', webRequestHandler],
     ['create_schedule', createScheduleHandler],
+    ['update_schedule', updateScheduleHandler],
     ['list_schedules', listSchedulesHandler],
     ['get_schedule_history', getScheduleHistoryHandler],
     ['cancel_schedule', cancelScheduleHandler],
@@ -141,6 +143,7 @@ export {
   webScrapeHandler,
   webRequestHandler,
   createScheduleHandler,
+  updateScheduleHandler,
   listSchedulesHandler,
   getScheduleHistoryHandler,
   cancelScheduleHandler,
