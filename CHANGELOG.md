@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.236.1] - 2026-09-24
+
+### Fixed
+- add 2s timeout guard to session.close() in REPL teardown (17c19ad7)
+
 ## [5.236.0] - 2026-09-24
 
 ### Added
