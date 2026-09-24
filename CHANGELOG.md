@@ -11,6 +11,21 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.238.0] - 2026-09-24
+
+### Added
+- activate access tracking in memory fact archive (b8197def)
+- per-node delegation budget tracking in compose DAG executor (63c68c26)
+
+### Fixed
+- restore suspected-loop telemetry and add gate-shape tracing (411709aa)
+
+### Changed
+- Merge pull request #2095 from griffinwork40/afk/issue-1924-fix (435beb47)
+- Merge pull request #2088 from griffinwork40/feat/1896-per-node-delegation-budget (795f3955)
+- Merge pull request #2087 from griffinwork40/chore/1820-mcp-failed-servers-warnings (f5d3a87e)
+- surface MCP failedServers warnings on Telegram and web-server (75e72cb8)
+
 ## [5.237.3] - 2026-09-24
 
 ### Fixed
