@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.236.0] - 2026-09-24
+
+### Added
+- add eval pipeline staleness guard (d9444d97)
+- add fix-of-fix cross-reference detector at merge time (e2fd4522)
+
+### Fixed
+- handle URL-form currentPrNumber in self-reference guard + update ship pin (8bd777e2)
+
+### Changed
+- Merge pull request #2102 from griffinwork40/afk/2012-fix-of-fix-detector (eb36c4cd)
+- Merge pull request #2103 from griffinwork40/afk/issue-2010-eval-staleness (a4fdea04)
+- regenerate env-registry docs for AFK_EVAL_STALENESS_DAYS (2fdfeefb)
+
 ## [5.235.1] - 2026-09-24
 
 ### Fixed
