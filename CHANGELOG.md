@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.245.0] - 2026-09-25
+
+### Added
+- add view_image tool for inline local image inspection (#2169) (7ec3dd1a)
+
 ## [5.244.1] - 2026-09-25
 
 ### Added
