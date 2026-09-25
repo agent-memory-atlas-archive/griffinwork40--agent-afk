@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.249.3] - 2026-09-25
+
+### Fixed
+- clean up non-blocking review findings from #2176 (#2201) (d1cecd53)
+- isMain fails on URL-encoded install paths; use fileURLToPath; comment cleanups (#2205) (fac6d59c)
+
 ## [5.249.2] - 2026-09-25
 
 ### Fixed
