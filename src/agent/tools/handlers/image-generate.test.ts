@@ -77,7 +77,7 @@ describe('image_generate handler', () => {
     mockResolveAuth.mockReturnValue({ apiKey: 'sk-resolved', source: 'env', envVar: 'OPENAI_API_KEY' });
     const handler = createImageGenerateHandler();
     // Should NOT error on missing key — proceeds to input validation.
-    const result = await handler({}, signal);
+    const result = await handler({}, signal, { cwd: tmpDir, sessionId: 'fallback-auth-test' });
     expect(result.isError).toBe(true);
     expect(result.content).toContain('prompt');
     expect(result.content).not.toContain('auth');
@@ -162,7 +162,7 @@ describe('image_generate handler', () => {
   it('rejects missing prompt', async () => {
     vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
     const handler = createImageGenerateHandler();
-    const result = await handler({}, signal);
+    const result = await handler({}, signal, { cwd: tmpDir, sessionId: 'val-prompt-test' });
     expect(result.isError).toBe(true);
     expect(result.content).toContain('prompt');
     vi.unstubAllEnvs();
@@ -171,7 +171,7 @@ describe('image_generate handler', () => {
   it('rejects invalid model', async () => {
     vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
     const handler = createImageGenerateHandler();
-    const result = await handler({ prompt: 'test', model: 'dall-e-3' }, signal);
+    const result = await handler({ prompt: 'test', model: 'dall-e-3' }, signal, { cwd: tmpDir, sessionId: 'val-model-test' });
     expect(result.isError).toBe(true);
     expect(result.content).toContain('Invalid model');
     vi.unstubAllEnvs();
@@ -180,7 +180,7 @@ describe('image_generate handler', () => {
   it('rejects invalid size', async () => {
     vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
     const handler = createImageGenerateHandler();
-    const result = await handler({ prompt: 'test', size: '512x512' }, signal);
+    const result = await handler({ prompt: 'test', size: '512x512' }, signal, { cwd: tmpDir, sessionId: 'val-size-test' });
     expect(result.isError).toBe(true);
     expect(result.content).toContain('Invalid size');
     vi.unstubAllEnvs();
@@ -204,7 +204,7 @@ describe('image_generate handler', () => {
     vi.stubEnv('AFK_IMAGE_ALLOW_DAEMON', '1');
     const fetchFn = vi.fn().mockResolvedValue(makeOkResponse(TINY_PNG_B64));
     const handler = createImageGenerateHandler(fetchFn);
-    const result = await handler({ prompt: 'test' }, signal, { cwd: tmpDir });
+    const result = await handler({ prompt: 'test' }, signal, { cwd: tmpDir, sessionId: 'daemon-allow-test' });
     expect(result.isError).toBeUndefined();
     vi.unstubAllEnvs();
   });
