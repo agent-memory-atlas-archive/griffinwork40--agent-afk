@@ -74,7 +74,7 @@ To add a var: edit `src/config/env.ts` (add a getter on `env` + an entry in `ENV
 
 | Name | Type | Required | Default | Example | Description |
 |------|------|----------|---------|---------|-------------|
-| `AFK_IMAGE_API_KEY` | string |  |  |  | OpenAI API key for the image_generate tool. Intentionally separate from OPENAI_API_KEY (which funds chat completions) to prevent accidental cross-billing. Get a key from https://platform.openai.com/api-keys. |
+| `AFK_IMAGE_API_KEY` | string |  |  |  | Dedicated OpenAI API key for the image_generate tool. Checked before OPENAI_API_KEY to keep image billing separate from chat completions. When unset, OPENAI_API_KEY is used as a fallback. Get a key from https://platform.openai.com/api-keys. |
 | `AFK_LOCAL_API_KEY` | string |  | `local` | `local` | Placeholder API key for local Anthropic-compatible servers (vllm-mlx, etc.). Set when AFK_LOCAL_BASE_URL is configured. |
 | `ANTHROPIC_API_KEY` | string |  |  |  | Anthropic API key. Tier-1 credential — overrides keychain OAuth and CLAUDE_CODE_OAUTH_TOKEN. |
 | `CLAUDE_CODE_OAUTH_TOKEN` | string |  |  |  | Claude Code OAuth token. Tier-2 credential — used when ANTHROPIC_API_KEY is unset; falls back to keychain. |

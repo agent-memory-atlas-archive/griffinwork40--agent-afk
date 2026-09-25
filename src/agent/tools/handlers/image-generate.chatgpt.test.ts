@@ -152,6 +152,78 @@ describe('generateImageViaChatGpt', () => {
     }
   });
 
+  it('extracts image from response.output_item.done with bare-string result', async () => {
+    // This is the primary path for newer ChatGPT backend models (gpt-6-sol etc.)
+    // where item.result is a bare base64 string, not { b64_json: ... }.
+    const fetchFn = vi.fn().mockResolvedValue(makeSseResponse([
+      { type: 'response.created' },
+      { type: 'response.image_generation_call.completed', item_id: 'ig_1', output_index: 0 },
+      {
+        type: 'response.output_item.done',
+        item: {
+          id: 'ig_1',
+          type: 'image_generation_call',
+          status: 'completed',
+          result: TINY_PNG_B64,
+          revised_prompt: 'from output_item.done bare string',
+        },
+      },
+      { type: 'response.completed', response: { output: [] } },
+    ]));
+
+    const result = await generateImageViaChatGpt({ ...baseReq, fetchFn });
+    expect('error' in result).toBe(false);
+    if (!('error' in result)) {
+      expect(result.b64_json).toBe(TINY_PNG_B64);
+      expect(result.revised_prompt).toBe('from output_item.done bare string');
+    }
+  });
+
+  it('extracts image from response.output_item.done with object result', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(makeSseResponse([
+      {
+        type: 'response.output_item.done',
+        item: {
+          id: 'ig_2',
+          type: 'image_generation_call',
+          status: 'completed',
+          result: { b64_json: TINY_PNG_B64, revised_prompt: 'from object result' },
+        },
+      },
+      { type: 'response.completed', response: { output: [] } },
+    ]));
+
+    const result = await generateImageViaChatGpt({ ...baseReq, fetchFn });
+    expect('error' in result).toBe(false);
+    if (!('error' in result)) {
+      expect(result.b64_json).toBe(TINY_PNG_B64);
+      expect(result.revised_prompt).toBe('from object result');
+    }
+  });
+
+  it('extracts bare-string result from response.completed output array', async () => {
+    // Some backends put the bare string in response.output[] too.
+    const fetchFn = vi.fn().mockResolvedValue(makeSseResponse([
+      {
+        type: 'response.completed',
+        response: {
+          output: [{
+            type: 'image_generation_call',
+            result: TINY_PNG_B64,
+            revised_prompt: 'bare string in completed',
+          }],
+        },
+      },
+    ]));
+
+    const result = await generateImageViaChatGpt({ ...baseReq, fetchFn });
+    expect('error' in result).toBe(false);
+    if (!('error' in result)) {
+      expect(result.b64_json).toBe(TINY_PNG_B64);
+      expect(result.revised_prompt).toBe('bare string in completed');
+    }
+  });
+
   it('maps quality "auto" to "medium" for the subscription backend', async () => {
     const fetchFn = vi.fn().mockResolvedValue(makeSseResponse([
       {

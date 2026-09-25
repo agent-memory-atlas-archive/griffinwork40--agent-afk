@@ -439,7 +439,8 @@ export const imageGenerateTool: AnthropicToolDef = {
   description:
     'Generate an image from a text prompt using the OpenAI Images API (GPT Image models). ' +
     'The generated image is saved to disk and the file path is returned. ' +
-    'Requires AFK_IMAGE_API_KEY to be set (intentionally separate from OPENAI_API_KEY to prevent cross-billing). ' +
+    'Uses AFK_IMAGE_API_KEY when set (keeps image billing separate from chat completions); ' +
+    'falls back to the full OpenAI auth chain (OPENAI_API_KEY, Codex CLI, ChatGPT OAuth). ' +
     'Each generation costs real money via the OpenAI API.\n\n' +
     'The image is NOT returned inline in the tool result to avoid consuming ~300K-500K context tokens per image. ' +
     'To inspect the generated image, read the file at the returned path in a follow-up turn.\n\n' +

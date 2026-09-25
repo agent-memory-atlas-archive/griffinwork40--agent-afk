@@ -36,10 +36,12 @@ const RESPONSES_URL = `${CHATGPT_BACKEND_BASE_URL}/responses`;
 
 /**
  * Chat model that hosts the `image_generation` tool on the ChatGPT backend.
- * The backend only serves OpenAI chat models (gpt-5.x family); image-specific
- * models (gpt-image-1, dall-e-3) are rejected with a 400.
+ * The backend only serves chat models that have the image_generation tool
+ * wired; image-specific models (gpt-image-1, dall-e-3) are rejected with a
+ * 400, and older chat models (gpt-4o) lack the tool entirely. gpt-4.1 is the
+ * lightest model confirmed to support it.
  */
-const CHATGPT_IMAGE_HOST_MODEL = 'gpt-4o';
+const CHATGPT_IMAGE_HOST_MODEL = 'gpt-6-sol';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,7 +54,8 @@ export interface ChatGptImageResult {
 
 interface ImageGenCallOutput {
   type: string;
-  result?: { b64_json?: string; revised_prompt?: string };
+  /** Bare base64 string on newer backends, or object with b64_json on older. */
+  result?: string | { b64_json?: string; revised_prompt?: string };
   b64_json?: string;
   revised_prompt?: string;
 }
@@ -98,8 +101,34 @@ async function parseSseForImage(response: Response): Promise<ChatGptImageResult 
         continue;
       }
 
-      // Extract from completed event (some models emit this)
       const eventType = event['type'] as string | undefined;
+
+      // Extract from response.output_item.done — the primary path for ChatGPT
+      // backend models (gpt-6-sol, gpt-4.1, etc.). The image data arrives as:
+      //   item.result: string (bare base64) | { b64_json: string }
+      //   item.revised_prompt: string
+      if (eventType === 'response.output_item.done') {
+        const item = event['item'] as Record<string, unknown> | undefined;
+        if (item?.['type'] === 'image_generation_call') {
+          const result = item['result'];
+          // result is a bare base64 string on newer backends, or an object
+          // with a b64_json field on older ones.
+          if (typeof result === 'string' && result.length > 0) {
+            imageB64 = result;
+          } else if (result && typeof result === 'object') {
+            const resultObj = result as Record<string, unknown>;
+            const nested = resultObj['b64_json'];
+            if (typeof nested === 'string') imageB64 = nested;
+            const nestedRp = resultObj['revised_prompt'];
+            if (typeof nestedRp === 'string') revisedPrompt = nestedRp;
+          }
+          // revised_prompt at item level takes precedence (production format)
+          const rp = item['revised_prompt'];
+          if (typeof rp === 'string') revisedPrompt = rp;
+        }
+      }
+
+      // Extract from completed event (some models emit this with inline data)
       if (eventType === 'response.image_generation_call.completed') {
         const b64 = (event['b64_json'] as string) ??
           ((event['result'] as Record<string, unknown> | undefined)?.['b64_json'] as string | undefined);
@@ -109,17 +138,25 @@ async function parseSseForImage(response: Response): Promise<ChatGptImageResult 
         if (rp) revisedPrompt = rp;
       }
 
-      // Extract from response.completed output array (always present)
+      // Extract from response.completed output array (fallback — some backends
+      // populate response.output[] with the full item data)
       if (eventType === 'response.completed') {
         const resp = event['response'] as Record<string, unknown> | undefined;
         const output = (resp?.['output'] ?? event['output']) as ImageGenCallOutput[] | undefined;
         if (Array.isArray(output)) {
           for (const item of output) {
             if (item.type !== 'image_generation_call') continue;
-            const b64 = item.result?.b64_json ?? item.b64_json;
-            if (b64) imageB64 = b64;
-            const rp = item.result?.revised_prompt ?? item.revised_prompt;
-            if (rp) revisedPrompt = rp;
+            const r = item.result;
+            if (typeof r === 'string' && r.length > 0) {
+              imageB64 = r;
+            } else if (r && typeof r === 'object') {
+              const b64 = r.b64_json ?? item.b64_json;
+              if (b64) imageB64 = b64;
+              if (r.revised_prompt) revisedPrompt = r.revised_prompt;
+            }
+            if (typeof item.revised_prompt === 'string') {
+              revisedPrompt = item.revised_prompt;
+            }
           }
         }
       }

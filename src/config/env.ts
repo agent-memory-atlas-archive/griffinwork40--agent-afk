@@ -851,7 +851,7 @@ export const ENV_REGISTRY = [
   // ── Image generation ─────────────────────────────────────────────────────
   {
     name: 'AFK_IMAGE_API_KEY',
-    description: 'OpenAI API key for the image_generate tool. Intentionally separate from OPENAI_API_KEY (which funds chat completions) to prevent accidental cross-billing. Get a key from https://platform.openai.com/api-keys.',
+    description: 'Dedicated OpenAI API key for the image_generate tool. Checked before OPENAI_API_KEY to keep image billing separate from chat completions. When unset, OPENAI_API_KEY is used as a fallback. Get a key from https://platform.openai.com/api-keys.',
     type: 'string',
     required: false,
     category: 'auth',
