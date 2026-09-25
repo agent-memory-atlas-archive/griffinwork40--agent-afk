@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.249.0] - 2026-09-25
+
+### Added
+- split active vs. completed dimming for readable agent rows (dc2bf885)
+
+### Fixed
+- address review feedback (061847bc)
+
+### Changed
+- add .afk/generated-images/ to ignore list (70a75347)
+- Merge pull request #2172 from griffinwork40/afk/tui-contrast-split (6ef88a6f)
+- sync funcsize baseline after rebase (681dace0)
+
 ## [5.248.1] - 2026-09-25
 
 ### Fixed
