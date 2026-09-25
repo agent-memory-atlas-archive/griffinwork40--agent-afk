@@ -124,7 +124,7 @@ async function viewImageImpl(
     return { content: `Cannot stat file: ${msg}`, isError: true };
   }
 
-  if (stat.size > MAX_BASE64_BYTES) {
+  if (stat.size > Math.floor(MAX_BASE64_BYTES * 3 / 4)) {
     const meta = {
       path: filePath,
       bytes: stat.size,
