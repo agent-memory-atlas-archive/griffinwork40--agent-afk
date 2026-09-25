@@ -11,6 +11,28 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.244.0] - 2026-09-25
+
+### Added
+- add opt-in vision context for image_generate (1c6bb0fb)
+- add system prompt instruction to prevent placeholder generation (bb278a77)
+
+### Fixed
+- add writeRoots + isolation mutual exclusion guard to compose parser (d4d0ac7d)
+- raise daemon shell executor timeout to 45min, surface timeout source (ea59c3d3)
+
+### Changed
+- Merge pull request #2153 from griffinwork40/afk/iso-agent-tool-4-p7d75e (66db8f72)
+- Merge pull request #2156 from griffinwork40/afk/iso-agent-tool-2-0sp802 (e8f8f8c3)
+- Merge pull request #2159 from griffinwork40/afk/iso-agent-tool-1-9dym94 (3d8facb3)
+- Merge pull request #2155 from griffinwork40/afk/iso-agent-tool-5-gghkjn (de537c9d)
+- Merge pull request #2158 from griffinwork40/afk/iso-agent-tool-6-qt40zz (08f15829)
+- Merge pull request #2163 from griffinwork40/afk/iso-agent-tool-2-zd7h0w (5aa5e36c)
+- Merge pull request #2162 from griffinwork40/afk/iso-agent-tool-4-gonjmv (71753331)
+- follow-up cleanup from recentActivity review (f09dfe38)
+- add isolation test coverage for compose DAG executor (394c8b87)
+- compose isolation minor follow-ups (88cff1ec)
+
 ## [5.243.0] - 2026-09-25
 
 ### Added
