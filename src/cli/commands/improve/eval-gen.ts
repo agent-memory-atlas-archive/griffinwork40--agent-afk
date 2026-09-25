@@ -224,11 +224,14 @@ export function registerEvalCasesSubcommand(improve: Command): void {
             );
             process.exit(2);
           }
-          if (!opts.triage && opts.status && !VALID_EVAL_STATUSES.includes(opts.status as EvalCaseStatus)) {
+          if (opts.status && !VALID_EVAL_STATUSES.includes(opts.status as EvalCaseStatus)) {
             console.error(
               `Invalid --status: '${opts.status}'. Must be one of: ${VALID_EVAL_STATUSES.join(', ')}`,
             );
             process.exit(2);
+          }
+          if (opts.triage && opts.status) {
+            console.warn(`Warning: --status is ignored when --triage is set (--triage always filters to 'draft').`);
           }
 
           let entries = listEvalCases();

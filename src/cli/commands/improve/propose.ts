@@ -11,6 +11,14 @@ import {
   writeProposal,
 } from '../../../improve/propose/writer.js';
 import { formatAgeDays } from './triage-helpers.js';
+import type { ProposalStatus } from '../../../improve/schemas.js';
+
+const VALID_PROPOSAL_STATUSES: readonly ProposalStatus[] = [
+  'draft',
+  'approved',
+  'rejected',
+  'superseded',
+];
 
 // ---------------------------------------------------------------------------
 // propose (template mode only)
@@ -121,6 +129,15 @@ export function registerProposalsSubcommand(improve: Command): void {
     .option('--json', 'Emit JSON instead of a table', false)
     .action((opts: { card?: string; risk?: string; status?: string; triage: boolean; json: boolean }) => {
       try {
+        if (opts.status && !VALID_PROPOSAL_STATUSES.includes(opts.status as ProposalStatus)) {
+          console.error(
+            `Invalid --status: '${opts.status}'. Must be one of: ${VALID_PROPOSAL_STATUSES.join(', ')}`,
+          );
+          process.exit(2);
+        }
+        if (opts.triage && opts.status) {
+          console.warn(`Warning: --status is ignored when --triage is set (--triage always filters to 'draft').`);
+        }
         let entries = listProposals();
         if (opts.card) entries = entries.filter((e) => e.cardSlug === opts.card);
         if (opts.risk) entries = entries.filter((e) => e.riskLevel === opts.risk);

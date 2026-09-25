@@ -53,6 +53,7 @@ import { renderProposalMarkdown } from './propose/writer.js';
 import { getEvalCase, renderEvalCaseMarkdown } from './eval-gen/writer.js';
 import { atomicWriteFile } from '../utils/envFile.js';
 import { appendJsonlIndex } from './_lib/writer-utils.js';
+import { env } from '../config/env.js';
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -102,7 +103,7 @@ export interface ApproveOutcome {
 export interface ApproveOptions {
   /**
    * Free-form identity of the approver. Defaults to the OS user (via
-   * `process.env.USER`) or `'unknown'` when the env var is absent.
+   * `env.USER` / `env.USERNAME`) or `'unknown'` when the env var is absent.
    */
   approvedBy?: string;
   /**
@@ -137,7 +138,7 @@ export interface ApproveOptions {
  */
 export function approveArtifact(slug: string, options: ApproveOptions = {}): ApproveOutcome {
   const approvedBy =
-    options.approvedBy ?? process.env['USER'] ?? process.env['USERNAME'] ?? 'unknown';
+    options.approvedBy ?? env.USER ?? env.USERNAME ?? 'unknown';
   const approvedAt = (options.now ?? (() => new Date()))().toISOString();
 
   // Try proposal first, then eval-case.
