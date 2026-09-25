@@ -11,6 +11,21 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.243.0] - 2026-09-25
+
+### Added
+- route ChatGPT subscription through Codex Responses endpoint (3f3a2911)
+- add image_generate tool with gated opt-in safety (#1421) (33643935)
+
+### Fixed
+- remove dag-subagent.isolation.test.ts (belongs to PR #2156, not this branch) (6c2b373a)
+- update test expectations + categorizer for post-rebase tool count (75fc197b)
+- address 4 blocking security/correctness findings from code review (8670fc00)
+- parse response.output_item.done SSE event for ChatGPT backend (04681585)
+
+### Changed
+- Merge pull request #2140 from griffinwork40/feat/image-generate (d69105a1)
+
 ## [5.242.1] - 2026-09-25
 
 ### Added
