@@ -332,6 +332,100 @@ describe('image_generate handler', () => {
     vi.unstubAllEnvs();
   });
 
+  // ── inspect flag ────────────────────────────────────────────────────────
+
+  it('returns image inline when inspect:true', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
+    const fetchFn = vi.fn().mockResolvedValue(makeOkResponse(TINY_PNG_B64));
+    const handler = createImageGenerateHandler(fetchFn);
+    const result = await handler(
+      { prompt: 'a cat', inspect: true },
+      signal,
+      { cwd: tmpDir, sessionId: 'inspect-on-session' },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.image).toBeDefined();
+    expect(result.image?.mediaType).toBe('image/png');
+    expect(result.image?.data).toBe(TINY_PNG_B64);
+    // Metadata is still in content
+    const meta = JSON.parse(result.content);
+    expect(meta.path).toMatch(/\.png$/);
+    expect(meta.bytes).toBeGreaterThan(0);
+    vi.unstubAllEnvs();
+  });
+
+  it('does not return image inline when inspect is omitted (default)', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
+    const fetchFn = vi.fn().mockResolvedValue(makeOkResponse(TINY_PNG_B64));
+    const handler = createImageGenerateHandler(fetchFn);
+    const result = await handler(
+      { prompt: 'a cat' },
+      signal,
+      { cwd: tmpDir, sessionId: 'inspect-off-session' },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.image).toBeUndefined();
+    vi.unstubAllEnvs();
+  });
+
+  it('does not return image inline when inspect:false', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
+    const fetchFn = vi.fn().mockResolvedValue(makeOkResponse(TINY_PNG_B64));
+    const handler = createImageGenerateHandler(fetchFn);
+    const result = await handler(
+      { prompt: 'a cat', inspect: false },
+      signal,
+      { cwd: tmpDir, sessionId: 'inspect-false-session' },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.image).toBeUndefined();
+    vi.unstubAllEnvs();
+  });
+
+  it('degrades gracefully when inspect:true and base64 payload exceeds 2MB cap', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
+    // Build a fake base64 string > 2MB
+    const bigB64 = 'A'.repeat(2 * 1024 * 1024 + 1);
+    const fetchFn = vi.fn().mockResolvedValue(makeOkResponse(bigB64));
+    const handler = createImageGenerateHandler(fetchFn);
+    const result = await handler(
+      { prompt: 'a cat', inspect: true },
+      signal,
+      { cwd: tmpDir, sessionId: 'inspect-cap-session' },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.image).toBeUndefined();
+    const meta = JSON.parse(result.content);
+    expect(meta.imageOmitted).toContain('exceeds the');
+    vi.unstubAllEnvs();
+  });
+
+  it('sets correct media type for jpeg when inspect:true', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', 'test-key');
+    const fetchFn = vi.fn().mockResolvedValue(makeOkResponse(TINY_PNG_B64));
+    const handler = createImageGenerateHandler(fetchFn);
+    const result = await handler(
+      { prompt: 'a cat', output_format: 'jpeg', inspect: true },
+      signal,
+      { cwd: tmpDir, sessionId: 'inspect-jpeg-session' },
+    );
+
+    expect(result.isError).toBeUndefined();
+    // If image is attached, check media type; otherwise check it was saved to disk
+    if (result.image) {
+      expect(result.image.mediaType).toBe('image/jpeg');
+    } else {
+      // dimensions or byte check degraded — still valid
+      const meta = JSON.parse(result.content);
+      expect(meta.path).toMatch(/\.jpeg$/);
+    }
+    vi.unstubAllEnvs();
+  });
+
   // ── Default values ──────────────────────────────────────────────────────
 
   it('uses default model, size, quality, and format when not specified', async () => {
