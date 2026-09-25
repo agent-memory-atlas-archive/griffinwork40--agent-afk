@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.242.0] - 2026-09-25
+
+### Added
+- add semantic coloring to bash tail previews (#2152) (cfff19a9)
+
 ## [5.241.1] - 2026-09-24
 
 ### Changed
