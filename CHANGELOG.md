@@ -11,6 +11,25 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.248.0] - 2026-09-25
+
+### Added
+- surface task responsibility labels on agent rows (#2173) (2e1c4830)
+- add placeholder prevention SessionStart hook (Layer 1) (8fbb3008)
+
+### Fixed
+- gracefully handle shallow-checkout diff failure in changedSince() (a2a30fa2)
+- update SessionStart hook count assertion to 2 (placeholder-prevent built-in) (e1f1baab)
+- cap blank gap above committed band on short terminals (#2182) (a3428c82)
+
+### Changed
+- Merge pull request #2179 from griffinwork40/afk/iso-agent-tool-2-05vah6 (239cc28c)
+- update stale hash pins after rebase on main (df3d2e57)
+- sync baseline after rebase on main (createDefaultHookRegistry 240→250) (b993f072)
+- promote funcsize gate to CI-blocking (fa94f211)
+- Merge pull request #2192 from griffinwork40/afk/iso-agent-tool-1-bo5jkl (bd5898f2)
+- Merge pull request #2189 from griffinwork40/afk/iso-agent-tool-3-2a5ujd (bfa99f3f)
+
 ## [5.247.2] - 2026-09-25
 
 ### Fixed
