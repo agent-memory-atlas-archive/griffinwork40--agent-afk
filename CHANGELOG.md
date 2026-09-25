@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.248.1] - 2026-09-25
+
+### Fixed
+- restore strict assertions in 2 DAG isolation tests (8e183b1f)
+
+### Changed
+- Merge pull request #2178 from griffinwork40/afk/iso-agent-tool-1-6jr39a (6f3fb823)
+- add 4 missing DAG isolation edge-case tests (087d4762)
+
 ## [5.248.0] - 2026-09-25
 
 ### Added
