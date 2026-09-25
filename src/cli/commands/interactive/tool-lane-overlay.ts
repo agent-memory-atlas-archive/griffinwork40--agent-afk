@@ -181,6 +181,12 @@ export function renderToolLaneOverlay(
         // label lives in scrollback above. Header was already committed so
         // this is structural geometry only — dim the marker.
         lines.push(clamp(palette.dimCompleted(g.turnRoot)));
+      } else if (entry.result) {
+        // Completed nesting root whose children are still in the lane:
+        // addResult() sets entry.result before the next overlay repaint,
+        // so a completed parent must use dimCompleted — not activeAgent —
+        // to maintain the active-vs-completed distinction.
+        lines.push(clamp(palette.dimCompleted(g.turnRoot) + entry.prefix));
       } else {
         // Active (in-flight) nesting root: use activeAgent for the ◉ marker
         // so the whole row is clearly readable. The entry.prefix (agent name
