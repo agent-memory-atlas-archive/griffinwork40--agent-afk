@@ -11,6 +11,24 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.247.2] - 2026-09-25
+
+### Fixed
+- remove setTimeout race conditions in lifecycle module (b062de37)
+- thread resolved sessionId into tool dispatcher for fresh sessions (beeee004)
+- gate compactScrollback on captureMode (f8c78b76)
+- view_image non-blocking follow-ups from review (8f74c792)
+
+### Changed
+- Merge pull request #2190 from griffinwork40/afk/iso-agent-tool-2-c2aqyb (503cf42b)
+- Merge pull request #2188 from griffinwork40/fix/image-generate-sessionid-wiring (9dfc9c80)
+- Merge pull request #2187 from griffinwork40/afk/iso-agent-tool-1-thtbyl (2ada9857)
+- Merge pull request #2186 from griffinwork40/afk/iso-agent-tool-2-hdzwj1 (52ef1aaf)
+- Merge pull request #2185 from griffinwork40/afk/iso-agent-tool-5-1qs2bs (9b360bac)
+- add 4 missing DAG isolation edge-case tests (#2183) (19fb251d)
+- improve colorize test coverage (#2184) (a75de197)
+- harden colorize regex patterns (068bbe21)
+
 ## [5.247.1] - 2026-09-25
 
 ### Fixed
