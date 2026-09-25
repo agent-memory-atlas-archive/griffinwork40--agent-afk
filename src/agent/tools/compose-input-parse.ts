@@ -341,6 +341,9 @@ export function parseComposeInput(input: unknown): ParseResult {
           `or omit isolation to pin a specific cwd.`,
         );
       }
+      // Normalize isolation:"none" to undefined so the output interface is
+      // consistent with the agent-tool parser, which never emits isolation:"none".
+      if (nodeIsolation === 'none') nodeIsolation = undefined;
     }
 
     parsed.push({
