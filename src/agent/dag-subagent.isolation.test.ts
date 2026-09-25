@@ -204,9 +204,9 @@ describe('runSubagentDAG — isolation:"worktree" wiring', () => {
 
       expect(createIsolatedWorktree).toHaveBeenCalledTimes(1);
       const createArg = createIsolatedWorktree.mock.calls[0]![0] as { cwd: string };
-      // Falls back to process.cwd() — verify it is a non-empty absolute path string.
-      expect(typeof createArg.cwd).toBe('string');
-      expect(createArg.cwd.length).toBeGreaterThan(0);
+      // The cwd passed to createIsolatedWorktree must be the real process.cwd()
+      // value, not anchorCwd (which was never supplied).
+      expect(createArg.cwd).toBe(process.cwd());
     });
 
     it('does NOT create a worktree when isolation is "none" (explicit no-op)', async () => {
@@ -373,7 +373,7 @@ describe('runSubagentDAG — isolation:"worktree" wiring', () => {
         }),
       } as unknown as SubagentManager;
 
-      await runSubagentDAG({
+      const result = await runSubagentDAG({
         manager,
         parentSession: makeParent(),
         nodes: [{
@@ -386,6 +386,9 @@ describe('runSubagentDAG — isolation:"worktree" wiring', () => {
         anchorCwd: '/repo',
       });
 
+      // The node fails (forkSubagent threw), but teardown must NOT be called
+      // because no worktree was created.
+      expect(result.failed).toHaveLength(1);
       expect(createIsolatedWorktree).not.toHaveBeenCalled();
       expect(teardownBackgroundWorktree).not.toHaveBeenCalled();
     });
