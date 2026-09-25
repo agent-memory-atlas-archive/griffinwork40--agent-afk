@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.247.1] - 2026-09-25
+
+### Fixed
+- preserve spine root anchor on short-terminal overlay truncation (#2176) (b25115e5)
+
 ## [5.247.0] - 2026-09-25
 
 ### Added
