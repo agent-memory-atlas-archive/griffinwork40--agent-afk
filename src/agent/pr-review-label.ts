@@ -24,6 +24,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import type { ExecFn } from './gh.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -76,15 +77,6 @@ export type ReviewClassification =
   | { label: typeof LABEL_HUMAN_REVIEWED; humanLogins: string[] }
   | { label: typeof LABEL_AGENT_REVIEWED; botLogins: string[] }
   | { label: typeof LABEL_AUTO_MERGED };
-
-/**
- * Injected exec function — matches the shape used across this module for
- * testability (file + args, no shell).
- */
-export type ExecFn = (
-  file: string,
-  args: string[],
-) => Promise<{ stdout: string; stderr: string }>;
 
 // ---------------------------------------------------------------------------
 // Helpers
