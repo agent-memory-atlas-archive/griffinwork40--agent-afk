@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.249.2] - 2026-09-25
+
+### Fixed
+- spine-continuation separator between compose/skill sibling bands (#2196) (931e368a)
+
 ## [5.249.1] - 2026-09-25
 
 ### Fixed
