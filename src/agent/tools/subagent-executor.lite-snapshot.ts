@@ -29,6 +29,10 @@ export interface SubagentsLite {
      * jobs owned by a different session.
      */
     recentActivity?: string;
+    /** ISO 8601 timestamp of last observed activity. Only for running jobs. */
+    lastActivityAt?: string;
+    /** Milliseconds since last observed activity. Computed at snapshot time. Only for running jobs. */
+    idleSinceMs?: number;
   }>;
 }
 
@@ -52,6 +56,7 @@ export function buildSubagentsLite(
   const active = subagentManager
     .list()
     .map((h) => ({ id: h.id, status: h.status }));
+  const now = Date.now();
   const backgroundJobs = backgroundRegistry
     ? backgroundRegistry.list().map((j) => {
         const base = {
@@ -60,6 +65,11 @@ export function buildSubagentsLite(
           startedAt: new Date(j.startedAt).toISOString(),
           label: j.label.length > 0 ? j.label : null,
         };
+        // Surface activity timestamps only for running jobs (terminal jobs have endedAt).
+        if (j.status === 'running' && j.lastActivityAt !== undefined) {
+          (base as Record<string, unknown>)['lastActivityAt'] = new Date(j.lastActivityAt).toISOString();
+          (base as Record<string, unknown>)['idleSinceMs'] = now - j.lastActivityAt;
+        }
         // Only surface transcript for the caller's own running jobs.
         if (
           callerSessionId &&
