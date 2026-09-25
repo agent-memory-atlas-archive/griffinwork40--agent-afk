@@ -8,9 +8,16 @@
  * PNG). The model can read the saved file via read_file if it needs to
  * inspect the image in a follow-up turn.
  *
+ * Auth resolution (highest wins):
+ *   1. `AFK_IMAGE_API_KEY` env var (dedicated billing separation)
+ *   2. `resolveOpenAIAuth()` from the openai-compatible provider, which
+ *      covers OPENAI_API_KEY, CODEX_API_KEY, ~/.codex/auth.json (API-key
+ *      mode), and ChatGPT-subscription OAuth (when AFK_OPENAI_CHATGPT_OAUTH
+ *      is truthy). ChatGPT OAuth tokens route through the ChatGPT backend
+ *      Responses API (see image-generate.chatgpt.ts) instead of the standard
+ *      Images API, which rejects the OAuth token's limited scopes.
+ *
  * Safety layers:
- * - Separate API key (AFK_IMAGE_API_KEY) to avoid billing collision with
- *   the openai-compatible chat provider's OPENAI_API_KEY.
  * - Registered in the effect ledger as ALWAYS_EXTERNAL (classifier.ts).
  * - riskClass: 'caution' + concurrencySafe: false in the schema.
  * - Per-session generation cap via AFK_IMAGE_SESSION_LIMIT (default 10).
@@ -23,6 +30,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { env } from '../../../config/env.js';
+import { resolveOpenAIAuth } from '../../providers/openai-compatible/auth.js';
+import { generateImageViaChatGpt } from './image-generate.chatgpt.js';
 import type { ToolHandler, ToolHandlerContext } from '../types.js';
 import type { ToolResult } from '../../providers/shared/tool-result.js';
 
@@ -142,16 +151,46 @@ export function createImageGenerateHandler(
     signal: AbortSignal,
     context?: ToolHandlerContext,
   ): Promise<ToolResult> => {
-    // 1. Check API key
-    const apiKey = env.AFK_IMAGE_API_KEY;
+    // 1. Resolve auth — prefer dedicated AFK_IMAGE_API_KEY, then fall through
+    //    to the full openai-compatible auth chain (OPENAI_API_KEY, CODEX_API_KEY,
+    //    ~/.codex/auth.json API-key mode, and ChatGPT-subscription OAuth).
+    const dedicatedKey = env.AFK_IMAGE_API_KEY;
+    let apiKey: string | undefined;
+    let authSource: string | undefined;
+    let extraHeaders: Record<string, string> | undefined;
+
+    if (dedicatedKey) {
+      apiKey = dedicatedKey;
+      authSource = 'AFK_IMAGE_API_KEY';
+    } else {
+      const resolved = resolveOpenAIAuth(undefined);
+      if (resolved.apiKey) {
+        apiKey = resolved.apiKey;
+        authSource = resolved.source;
+        // ChatGPT OAuth tokens need the account id header for billing.
+        if (resolved.source === 'chatgpt-oauth' && resolved.accountId) {
+          extraHeaders = { 'chatgpt-account-id': resolved.accountId };
+        }
+      } else if (resolved.source === 'chatgpt-oauth-expired') {
+        return {
+          content:
+            'ChatGPT subscription token from ~/.codex/auth.json is expired. ' +
+            'Re-run `codex` to refresh the token, then retry. ' +
+            '(AFK reads the token but does not refresh it.)',
+          isError: true,
+        };
+      }
+    }
+
     if (!apiKey) {
       return {
         content:
-          'image_generate requires AFK_IMAGE_API_KEY to be set. ' +
-          'Get an API key from https://platform.openai.com/api-keys and add it to ~/.afk/config/afk.env:\n' +
-          '  AFK_IMAGE_API_KEY=sk-...\n\n' +
-          'Note: this is intentionally separate from OPENAI_API_KEY (which funds chat completions) ' +
-          'to prevent accidental cross-billing.',
+          'image_generate requires OpenAI auth. Options (checked in order):\n' +
+          '  1. AFK_IMAGE_API_KEY in ~/.afk/config/afk.env (dedicated image billing)\n' +
+          '  2. OPENAI_API_KEY env var\n' +
+          '  3. `codex login --api-key` (writes ~/.codex/auth.json)\n' +
+          '  4. ChatGPT subscription OAuth (set AFK_OPENAI_CHATGPT_OAUTH=1)\n\n' +
+          'No usable auth was found from any source.',
         isError: true,
       };
     }
@@ -190,69 +229,38 @@ export function createImageGenerateHandler(
       return { content: parsed.error, isError: true };
     }
 
-    // 5. Call OpenAI Images API
-    const body = JSON.stringify({
-      model: parsed.model,
-      prompt: parsed.prompt,
-      size: parsed.size,
-      quality: parsed.quality,
-      output_format: parsed.output_format,
-      n: 1,
-    });
+    // 5. Generate image — route through ChatGPT subscription backend when
+    //    auth is chatgpt-oauth (the standard Images API rejects the token),
+    //    otherwise use the public OpenAI Images API.
+    let imageData: string;
+    let revisedPrompt: string | null;
 
-    let response: Response;
-    try {
-      response = await fetchFn('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body,
+    if (authSource === 'chatgpt-oauth' && extraHeaders?.['chatgpt-account-id']) {
+      const chatgptResult = await generateImageViaChatGpt({
+        prompt: parsed.prompt,
+        size: parsed.size,
+        quality: parsed.quality,
+        output_format: parsed.output_format,
+        apiKey: apiKey!,
+        accountId: extraHeaders['chatgpt-account-id'],
         signal,
+        fetchFn,
       });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return {
-        content: `OpenAI Images API request failed: ${msg}`,
-        isError: true,
-      };
-    }
-
-    if (!response.ok) {
-      let errorDetail: string;
-      try {
-        const errorBody = await response.text();
-        errorDetail = errorBody.slice(0, 2000);
-      } catch {
-        errorDetail = `HTTP ${response.status} ${response.statusText}`;
+      if ('error' in chatgptResult) {
+        return { content: chatgptResult.error, isError: true };
       }
-      return {
-        content: `OpenAI Images API returned ${response.status}: ${errorDetail}`,
-        isError: true,
-      };
+      imageData = chatgptResult.b64_json;
+      revisedPrompt = chatgptResult.revised_prompt;
+    } else {
+      const result = await callImagesApi(
+        fetchFn, apiKey!, parsed, extraHeaders, signal,
+      );
+      if ('error' in result) {
+        return { content: result.error, isError: true };
+      }
+      imageData = result.b64_json;
+      revisedPrompt = result.revised_prompt;
     }
-
-    // 6. Parse response
-    let responseData: { data?: Array<{ b64_json?: string; revised_prompt?: string }> };
-    try {
-      responseData = (await response.json()) as typeof responseData;
-    } catch {
-      return {
-        content: 'Failed to parse OpenAI Images API response as JSON.',
-        isError: true,
-      };
-    }
-
-    const imageData = responseData.data?.[0]?.b64_json;
-    if (!imageData) {
-      return {
-        content: 'OpenAI Images API returned no image data (missing b64_json field).',
-        isError: true,
-      };
-    }
-
-    const revisedPrompt = responseData.data?.[0]?.revised_prompt;
 
     // 7. Save to disk
     const imageId = crypto.randomUUID().slice(0, 8);
@@ -292,6 +300,7 @@ export function createImageGenerateHandler(
       format: parsed.output_format,
       bytes: imageBuffer.length,
       revised_prompt: revisedPrompt ?? null,
+      auth_source: authSource,
       session_images_used: newCount,
       session_images_limit: limit,
     };
@@ -303,3 +312,74 @@ export function createImageGenerateHandler(
 }
 
 export const imageGenerateHandler = createImageGenerateHandler();
+
+// ---------------------------------------------------------------------------
+// OpenAI Images API (standard path for API-key auth)
+// ---------------------------------------------------------------------------
+
+interface ImagesApiResult {
+  b64_json: string;
+  revised_prompt: string | null;
+}
+
+async function callImagesApi(
+  fetchFn: typeof globalThis.fetch,
+  apiKey: string,
+  parsed: ParsedInput,
+  extraHeaders: Record<string, string> | undefined,
+  signal: AbortSignal,
+): Promise<ImagesApiResult | { error: string }> {
+  const body = JSON.stringify({
+    model: parsed.model,
+    prompt: parsed.prompt,
+    size: parsed.size,
+    quality: parsed.quality,
+    output_format: parsed.output_format,
+    n: 1,
+  });
+
+  let response: Response;
+  try {
+    response = await fetchFn('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        ...extraHeaders,
+      },
+      body,
+      signal,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { error: `OpenAI Images API request failed: ${msg}` };
+  }
+
+  if (!response.ok) {
+    let detail: string;
+    try {
+      const errorBody = await response.text();
+      detail = errorBody.slice(0, 2000);
+    } catch {
+      detail = `HTTP ${response.status} ${response.statusText}`;
+    }
+    return { error: `OpenAI Images API returned ${response.status}: ${detail}` };
+  }
+
+  let responseData: { data?: Array<{ b64_json?: string; revised_prompt?: string }> };
+  try {
+    responseData = (await response.json()) as typeof responseData;
+  } catch {
+    return { error: 'Failed to parse OpenAI Images API response as JSON.' };
+  }
+
+  const b64 = responseData.data?.[0]?.b64_json;
+  if (!b64) {
+    return { error: 'OpenAI Images API returned no image data (missing b64_json field).' };
+  }
+
+  return {
+    b64_json: b64,
+    revised_prompt: responseData.data?.[0]?.revised_prompt ?? null,
+  };
+}

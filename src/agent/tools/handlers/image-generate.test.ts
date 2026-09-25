@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import { createImageGenerateHandler } from './image-generate.js';
 
+// Mock resolveOpenAIAuth so tests control auth resolution without touching disk.
+vi.mock('../../providers/openai-compatible/auth.js', () => ({
+  resolveOpenAIAuth: vi.fn(() => ({ apiKey: null, source: 'no-usable-auth' })),
+}));
+
+// Mock the ChatGPT image module so tests control its behavior.
+vi.mock('./image-generate.chatgpt.js', () => ({
+  generateImageViaChatGpt: vi.fn(),
+}));
+
+import { resolveOpenAIAuth } from '../../providers/openai-compatible/auth.js';
+import { generateImageViaChatGpt } from './image-generate.chatgpt.js';
+const mockResolveAuth = vi.mocked(resolveOpenAIAuth);
+const mockChatGptImage = vi.mocked(generateImageViaChatGpt);
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -35,20 +50,110 @@ describe('image_generate handler', () => {
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp('/tmp/afk-image-gen-test-');
+    // Default: resolveOpenAIAuth returns no auth (tests that need it override).
+    mockResolveAuth.mockReturnValue({ apiKey: null, source: 'no-usable-auth' });
+    mockChatGptImage.mockReset();
   });
 
   afterEach(async () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  // ── API key gating ──────────────────────────────────────────────────────
+  // ── Auth resolution ────────────────────────────────────────────────────
 
-  it('returns error when AFK_IMAGE_API_KEY is not set', async () => {
+  it('returns error when no auth source is available', async () => {
     vi.stubEnv('AFK_IMAGE_API_KEY', '');
     const handler = createImageGenerateHandler();
     const result = await handler({ prompt: 'a cat' }, signal);
     expect(result.isError).toBe(true);
     expect(result.content).toContain('AFK_IMAGE_API_KEY');
+    expect(result.content).toContain('OPENAI_API_KEY');
+    expect(result.content).toContain('ChatGPT subscription OAuth');
+    vi.unstubAllEnvs();
+  });
+
+  it('falls back to resolveOpenAIAuth when AFK_IMAGE_API_KEY is unset', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', '');
+    mockResolveAuth.mockReturnValue({ apiKey: 'sk-resolved', source: 'env', envVar: 'OPENAI_API_KEY' });
+    const handler = createImageGenerateHandler();
+    // Should NOT error on missing key — proceeds to input validation.
+    const result = await handler({}, signal);
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('prompt');
+    expect(result.content).not.toContain('auth');
+    vi.unstubAllEnvs();
+  });
+
+  it('prefers AFK_IMAGE_API_KEY over resolveOpenAIAuth', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', 'dedicated-key');
+    mockResolveAuth.mockReturnValue({ apiKey: 'oauth-token', source: 'chatgpt-oauth' });
+    const fetchFn = vi.fn().mockResolvedValue(makeOkResponse(TINY_PNG_B64));
+    const handler = createImageGenerateHandler(fetchFn);
+    mockResolveAuth.mockClear(); // clear prior calls from other tests
+    await handler({ prompt: 'test' }, signal, { cwd: tmpDir, sessionId: 'pref-test' });
+    // Should use the dedicated key, not the OAuth token.
+    const [, opts] = fetchFn.mock.calls[0]!;
+    expect(opts.headers['Authorization']).toBe('Bearer dedicated-key');
+    // resolveOpenAIAuth should not be called when dedicated key exists.
+    expect(mockResolveAuth).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it('routes ChatGPT OAuth through the subscription Responses endpoint', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', '');
+    mockResolveAuth.mockReturnValue({
+      apiKey: 'chatgpt-access-token',
+      source: 'chatgpt-oauth',
+      accountId: 'acct_abc123',
+    });
+    mockChatGptImage.mockResolvedValue({
+      b64_json: TINY_PNG_B64,
+      revised_prompt: 'a revised prompt',
+    });
+    const fetchFn = vi.fn(); // should NOT be called directly
+    const handler = createImageGenerateHandler(fetchFn);
+    const result = await handler({ prompt: 'test' }, signal, { cwd: tmpDir, sessionId: 'oauth-test' });
+
+    expect(result.isError).toBeUndefined();
+    // The direct fetchFn should NOT be called — ChatGPT path uses its own fetch.
+    expect(fetchFn).not.toHaveBeenCalled();
+    // generateImageViaChatGpt should be called with the right args.
+    expect(mockChatGptImage).toHaveBeenCalledOnce();
+    const args = mockChatGptImage.mock.calls[0]![0];
+    expect(args.apiKey).toBe('chatgpt-access-token');
+    expect(args.accountId).toBe('acct_abc123');
+    expect(args.prompt).toBe('test');
+    const meta = JSON.parse(result.content);
+    expect(meta.auth_source).toBe('chatgpt-oauth');
+    expect(meta.revised_prompt).toBe('a revised prompt');
+    vi.unstubAllEnvs();
+  });
+
+  it('returns error when ChatGPT subscription path fails', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', '');
+    mockResolveAuth.mockReturnValue({
+      apiKey: 'chatgpt-access-token',
+      source: 'chatgpt-oauth',
+      accountId: 'acct_abc123',
+    });
+    mockChatGptImage.mockResolvedValue({
+      error: 'ChatGPT backend returned 429: usage limit reached',
+    });
+    const handler = createImageGenerateHandler();
+    const result = await handler({ prompt: 'test' }, signal, { cwd: tmpDir, sessionId: 'oauth-err' });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('429');
+    vi.unstubAllEnvs();
+  });
+
+  it('returns expired-token error for chatgpt-oauth-expired', async () => {
+    vi.stubEnv('AFK_IMAGE_API_KEY', '');
+    mockResolveAuth.mockReturnValue({ apiKey: null, source: 'chatgpt-oauth-expired', expiresAt: 1 });
+    const handler = createImageGenerateHandler();
+    const result = await handler({ prompt: 'test' }, signal);
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('expired');
+    expect(result.content).toContain('codex');
     vi.unstubAllEnvs();
   });
 
