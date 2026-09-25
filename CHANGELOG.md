@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.247.0] - 2026-09-25
+
+### Added
+- collapse completed agent subtrees in scrollback (#2174) (0efa2c8a)
+
 ## [5.246.0] - 2026-09-25
 
 ### Added
