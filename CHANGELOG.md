@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.242.1] - 2026-09-25
+
+### Added
+- add get_background_job_health tool for parent-owned job inspection (e0e4044b)
+
+### Fixed
+- replace fixed 100ms reap wait with retry loop in SIGKILL process-group test (ccd4741e)
+- add last-resort orphan tool_use repair before every messages.create (7d703eb9)
+
+### Changed
+- Merge pull request #2139 from griffinwork40/afk/bg-job-health-snapshot (69689e26)
+- Merge pull request #2135 from griffinwork40/afk/fix-orphan-tool-use-400 (37a00e72)
+- Merge pull request #2138 from griffinwork40/afk/investigate-macos-bash-sigkill (63e0edcd)
+
 ## [5.242.0] - 2026-09-25
 
 ### Added
