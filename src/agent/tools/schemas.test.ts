@@ -9,8 +9,8 @@ import {
 import { cancelBackgroundJobTool, sendMessageToAgentTool, getBackgroundJobHealthTool } from './schemas.orchestration.js';
 
 describe('builtinToolSchemas', () => {
-  it('contains exactly 38 tools', () => {
-    expect(builtinToolSchemas).toHaveLength(38);
+  it('contains exactly 39 tools', () => {
+    expect(builtinToolSchemas).toHaveLength(39);
   });
 
   it('exports the expected tool names', () => {
@@ -26,6 +26,7 @@ describe('builtinToolSchemas', () => {
       'send_telegram',
       'web_scrape',
       'web_request',
+      'image_generate',
       'create_schedule',
       'update_schedule',
       'list_schedules',

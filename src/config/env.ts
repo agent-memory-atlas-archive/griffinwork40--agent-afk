@@ -848,6 +848,30 @@ export const ENV_REGISTRY = [
     secret: true,
   },
 
+  // ── Image generation ─────────────────────────────────────────────────────
+  {
+    name: 'AFK_IMAGE_API_KEY',
+    description: 'Dedicated OpenAI API key for the image_generate tool. Checked before OPENAI_API_KEY to keep image billing separate from chat completions. When unset, OPENAI_API_KEY is used as a fallback. Get a key from https://platform.openai.com/api-keys.',
+    type: 'string',
+    required: false,
+    category: 'auth',
+    secret: true,
+  },
+  {
+    name: 'AFK_IMAGE_SESSION_LIMIT',
+    description: 'Maximum number of images the image_generate tool may produce per session. Prevents runaway spend in autonomous loops. Default: 10.',
+    type: 'string',
+    required: false,
+    category: 'misc',
+  },
+  {
+    name: 'AFK_IMAGE_ALLOW_DAEMON',
+    description: 'Set to "1" to allow image_generate in daemon/cron sessions. Blocked by default to prevent unattended API spend.',
+    type: 'string',
+    required: false,
+    category: 'misc',
+  },
+
   // ── Telegram ──────────────────────────────────────────────────────────────
   {
     name: 'TELEGRAM_BOT_TOKEN',
