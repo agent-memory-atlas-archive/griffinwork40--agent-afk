@@ -18,17 +18,34 @@ import { palette } from './palette.js';
 import { hardWrapToWidth } from './wrap.js';
 import { displayWidth, truncateDisplayWidth } from './display.js';
 import type { BandRowMeta } from './terminal-compositor.types.js';
+import { contentMargin } from './render/measure.js';
 
 export const ELAPSED_GRACE_MS = 2_000;
+export const ELAPSED_AMBER_SEC = 10;
+export const ELAPSED_RED_SEC = 60;
+
+/**
+ * Returns the appropriate palette tone for an elapsed-time display.
+ * - ≥60s → palette.error (red)
+ * - ≥10s → palette.warning (amber)
+ * - <10s  → palette.dim
+ * Do NOT use green (<10s): green = success/done is a reserved semantic.
+ */
+function elapsedTone(totalSec: number): (s: string) => string {
+  if (totalSec >= ELAPSED_RED_SEC) return palette.error;
+  if (totalSec >= ELAPSED_AMBER_SEC) return palette.warning;
+  return palette.dim;
+}
 
 export function formatElapsed(startedAt: number): string {
   const elapsed = Date.now() - startedAt;
   if (elapsed < ELAPSED_GRACE_MS) return '';
   const totalSec = Math.floor(elapsed / 1000);
-  if (totalSec < 60) return palette.dim(` ${totalSec}s`);
+  const tone = elapsedTone(totalSec);
+  if (totalSec < 60) return tone(` ${totalSec}s`);
   const min = Math.floor(totalSec / 60);
   const sec = totalSec % 60;
-  return palette.dim(` ${min}m${sec.toString().padStart(2, '0')}s`);
+  return tone(` ${min}m${sec.toString().padStart(2, '0')}s`);
 }
 
 /**
@@ -240,8 +257,15 @@ export function buildScrollbackArchiveEscape(
     for (let r = 0; r < residentRows; r++) out += `\x1b[${floor + r};1H\x1b[2K`;
     // Paint the chunk top-aligned at the floor, flowing with \r\n so each
     // logical line starts on a fresh row and autowrap owns intra-line wrapping.
+    // Apply contentMargin() so archived rows are left-aligned at the same
+    // horizontal offset as the live centered frame. Archived rows are
+    // immutable (never reflow), so baking the margin in here is safe and
+    // mirrors the margin applied at paint time by the band paint paths
+    // (commitPhase3Band, commitPhase3Hold, repositionCommittedBand,
+    // archiveBandPrefixAndRepaintSurvivors).
+    const pad = contentMargin();
     out += `\x1b[${floor};1H`;
-    out += chunk.map((l) => `\x1b[2K${l}`).join('\r\n');
+    out += chunk.map((l) => `\x1b[2K${pad}${l}`).join('\r\n');
     // Scroll the RESIDENT rows off the top into scrollback — not `chunkRows`:
     // for an over-height line the autowrap overflow already scrolled the
     // difference, and counting it twice appends `chunkRows - chunkMax` blank
@@ -284,7 +308,7 @@ export function buildScrollbackArchiveEscape(
  * overflow the row — char-count truncation would under-truncate them 2:1.
  */
 export function formatTipRow(text: string, cols: number): string {
-  const prefix = '  💡 Tip: ';
+  const prefix = '  Tip: ';
   // Reserve the prefix chrome and 1 col for the truncation marker so the
   // rendered line always fits in `cols` regardless of body length.
   const bodyBudget = Math.max(8, cols - displayWidth(prefix) - 1);

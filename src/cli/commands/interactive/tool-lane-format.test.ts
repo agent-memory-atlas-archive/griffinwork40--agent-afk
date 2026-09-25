@@ -98,11 +98,11 @@ describe('activeToolBadge — live in-flight parallel-wave indicator (Phase 2, i
     toolUseIds: new Set(ids),
   });
 
-  it('renders [×N] for a member id in an active wave', () => {
+  it('renders ∥N for a member id in an active wave', () => {
     const active = makeActive(3, 'tool-a', 'tool-b', 'tool-c');
-    expect(stripAnsi(activeToolBadge('tool-a', active))).toBe(' [×3]');
-    expect(stripAnsi(activeToolBadge('tool-b', active))).toBe(' [×3]');
-    expect(stripAnsi(activeToolBadge('tool-c', active))).toBe(' [×3]');
+    expect(stripAnsi(activeToolBadge('tool-a', active))).toBe('  ∥3');
+    expect(stripAnsi(activeToolBadge('tool-b', active))).toBe('  ∥3');
+    expect(stripAnsi(activeToolBadge('tool-c', active))).toBe('  ∥3');
   });
 
   it('is empty for a non-member id (not currently running)', () => {
@@ -119,11 +119,10 @@ describe('activeToolBadge — live in-flight parallel-wave indicator (Phase 2, i
     expect(activeToolBadge('tool-a', active)).toBe('');
   });
 
-  it('uses a different glyph (×) than the completed badge (∥) to distinguish live from committed', () => {
+  it('uses the ∥ glyph (same as completed badge, but with leading spaces as distinct prefix)', () => {
     const active = makeActive(2, 'tool-a', 'tool-b');
     const live = stripAnsi(activeToolBadge('tool-a', active));
-    expect(live).toContain('×');
-    expect(live).not.toContain('∥');
+    expect(live).toContain('∥');
   });
 });
 
@@ -1664,5 +1663,135 @@ describe('formatOutcome — bash truncation / capture display', () => {
     // Line should be clipped at 120 chars + '…' not the full 130
     expect(out).toContain('…');
     expect(out.split('\n').some(l => l.trim().length > 125)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatOutcome — error gutter ▌ on continuation lines (C-4)
+// The U+258C LEFT HALF BLOCK is used as a 1-col gutter on continuation
+// lines of error results, so that the spine-break is visually demarcated.
+// ---------------------------------------------------------------------------
+
+describe('formatOutcome — error gutter ▌ on continuation lines', () => {
+  // (a) Error result with tailPreview includes ▌ in continuation lines.
+  it('(a) error result with tailPreview includes ▌ in continuation lines', () => {
+    const chunk: ToolResultChunk = {
+      type: 'tool_result',
+      toolUseId: 'gutter-test',
+      content: 'error output',
+      isError: true,
+      lineCount: 10,
+      tailPreview: ['error line 9', 'error line 10'],
+    };
+    const raw = formatOutcome(chunk, undefined, 80, 'bash');
+    const lines = raw.split('\n');
+    // First line is the header — no gutter expected there.
+    // Continuation lines (tailPreview rows) must carry ▌.
+    const continuationLines = lines.slice(1);
+    expect(continuationLines.length).toBeGreaterThan(0);
+    for (const line of continuationLines) {
+      expect(stripAnsi(line)).toContain('▌');
+    }
+  });
+
+  it('(a) error result with hiddenLineCount includes ▌ in the hidden-lines notice', () => {
+    const chunk: ToolResultChunk = {
+      type: 'tool_result',
+      toolUseId: 'gutter-hidden',
+      content: 'error output',
+      isError: true,
+      lineCount: 20,
+      hiddenLineCount: 15,
+      tailPreview: ['last line'],
+    };
+    const raw = formatOutcome(chunk, undefined, 80, 'bash');
+    const lines = raw.split('\n');
+    const hiddenLine = lines.find((l) => stripAnsi(l).includes('earlier lines hidden'));
+    expect(hiddenLine, 'expected hidden-lines notice').toBeDefined();
+    expect(stripAnsi(hiddenLine!)).toContain('▌');
+  });
+
+  it('(a) error result with hiddenLineCount but no tailPreview still includes ▌ in the hidden-lines notice', () => {
+    const chunk: ToolResultChunk = {
+      type: 'tool_result',
+      toolUseId: 'gutter-hidden-no-tail',
+      content: 'error output',
+      isError: true,
+      lineCount: 20,
+      hiddenLineCount: 15,
+    };
+    const raw = formatOutcome(chunk, undefined, 80, 'bash');
+    const lines = raw.split('\n');
+    const hiddenLine = lines.find((l) => stripAnsi(l).includes('earlier lines hidden'));
+    expect(hiddenLine, 'expected hidden-lines notice').toBeDefined();
+    expect(stripAnsi(hiddenLine!)).toContain('▌');
+  });
+
+  // (b) Benign-failure uses warning-tone gutter, not error-tone.
+  it('(b) benign failure uses warning-tone gutter on continuation lines', () => {
+    const savedWarning = palette.warning;
+    const savedError = palette.error;
+    try {
+      palette.warning = sentinelChalk('WARN');
+      palette.error = sentinelChalk('ERR');
+
+      const chunk: ToolResultChunk = {
+        type: 'tool_result',
+        toolUseId: 'benign-gutter',
+        content: 'permission denied',
+        isError: true,
+        failureClass: 'permission-denied', // benign — uses warning tone
+        lineCount: 5,
+        tailPreview: ['denied'],
+      };
+      const raw = formatOutcome(chunk, undefined, 80);
+      const lines = raw.split('\n');
+      const continuationLines = lines.slice(1);
+      expect(continuationLines.length).toBeGreaterThan(0);
+      // The raw (colored) continuation must use the WARNING sentinel, not ERROR.
+      for (const line of continuationLines) {
+        expect(line).toContain('WARN:▌');
+        expect(line).not.toContain('ERR:▌');
+      }
+    } finally {
+      palette.warning = savedWarning;
+      palette.error = savedError;
+    }
+  });
+
+  // (c) Success result has no gutter character on continuation lines.
+  it('(c) success result has no ▌ gutter on continuation lines', () => {
+    const chunk: ToolResultChunk = {
+      type: 'tool_result',
+      toolUseId: 'success-no-gutter',
+      content: 'ok output',
+      isError: false,
+      lineCount: 5,
+      tailPreview: ['ok line 4', 'ok line 5'],
+    };
+    const raw = formatOutcome(chunk, undefined, 80, 'bash');
+    const lines = raw.split('\n');
+    const continuationLines = lines.slice(1);
+    expect(continuationLines.length).toBeGreaterThan(0);
+    for (const line of continuationLines) {
+      expect(stripAnsi(line)).not.toContain('▌');
+    }
+  });
+
+  it('(c) success with hiddenLineCount has no ▌ in the hidden-lines notice', () => {
+    const chunk: ToolResultChunk = {
+      type: 'tool_result',
+      toolUseId: 'success-hidden',
+      content: 'ok',
+      isError: false,
+      lineCount: 10,
+      hiddenLineCount: 7,
+      tailPreview: ['tail line'],
+    };
+    const raw = formatOutcome(chunk, undefined, 80, 'bash');
+    const lines = raw.split('\n');
+    const hiddenLine = lines.find((l) => stripAnsi(l).includes('earlier lines hidden'));
+    expect(hiddenLine).toBeDefined();
+    expect(stripAnsi(hiddenLine!)).not.toContain('▌');
   });
 });

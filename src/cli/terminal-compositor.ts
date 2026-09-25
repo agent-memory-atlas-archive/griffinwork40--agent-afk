@@ -879,6 +879,14 @@ export class TerminalCompositor {
     // is captured/re-pinned. flushPendingRepaint is a no-op when nothing is
     // pending, so this is free on the common (non-typing) commit path.
     this.flushPendingRepaint();
+    // Content centering (AFK_CENTER_CONTENT): centering is applied at PAINT
+    // TIME (repositionCommittedBand, commitPhase3Band, scrollback flush),
+    // NOT baked into the stored text. Baking margin spaces into the committed
+    // band causes wrapping chaos on terminal resize (tmux split, window drag):
+    // 40 padding spaces computed at 180 cols are still in every line after a
+    // resize to 90 cols, eating half the width and triggering re-wrap havoc.
+    // Storing raw (unpadded) content lets reflow and paint derive the correct
+    // margin from the CURRENT width.
     CommittedBand.commitAbove(this, text);
   }
 

@@ -2,6 +2,7 @@ import { ResizeBus } from './terminal-size.js';
 import type { TerminalCompositor } from './terminal-compositor.js';
 import type { OverlayComposer } from './_lib/overlay-composer.js';
 import { calculateContentWidth, calculateProseContentWidth, formatPendingBuffer, formatBlockForCommit, applyIndent, initLogUpdateModule, accumulateCommitted, scheduleWithThrottle, isInOpenCodeFence } from './markdown-stream-format.js';
+import { contentMargin } from './render/measure.js';
 import {
   type InputBufferState,
   type LogUpdateFunction,
@@ -203,7 +204,13 @@ export class StreamingMarkdownRenderer {
       ? calculateContentWidth(this.indent.length)
       : calculateProseContentWidth(this.indent.length);
     const formatted = formatPendingBuffer(this.buffer, contentWidth, this.isTTY && !this.flushing);
-    return applyIndent(formatted, this.indent);
+    // Content centering (AFK_CENTER_CONTENT): live pending prose is part of
+    // the overlay frame, so it receives the centering margin here (the overlay
+    // is never routed through commitAbove, which handles scrollback centering).
+    const pad = contentMargin();
+    const indented = applyIndent(formatted, this.indent);
+    if (!pad) return indented;
+    return indented.split('\n').map(l => l === '' ? l : pad + l).join('\n');
   }
 
   /**

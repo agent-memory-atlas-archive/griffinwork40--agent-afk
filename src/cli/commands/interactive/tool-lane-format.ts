@@ -6,8 +6,10 @@ import { palette } from '../../palette.js';
 import { statusBadge } from '../../render/status-badge.js';
 import { fileHyperlink, hyperlinksEnabled } from '../../hyperlink.js';
 import { humanVerbForTool } from '../../tool-category.js';
+import { truncateDisplayWidth } from '../../display.js';
 import { sanitizeLabel, sanitizeTextParagraph } from './tool-lane-format-sanitize.js';
 import { colorizePreviewLine } from './tool-lane-format-colorize.js';
+import { shortenPaths } from './tool-lane-format-args.js';
 
 // Re-export the split modules' public surface so external callers keep
 // importing the whole tool-lane formatting API from './tool-lane-format.js'.
@@ -125,6 +127,15 @@ export function formatOutcome(
   const resultColor = chunk.isError
     ? (isBenignFailure(chunk.failureClass) ? palette.warning : palette.error)
     : palette.dim;
+
+  // C-4: Error gutter on continuation lines. U+258C LEFT HALF BLOCK (▌) is
+  // 1 display column; `▌` + 3 spaces = 4 cols total, matching the prior
+  // 4-space indent — net column cost: 0. Color mirrors the outcome tone so a
+  // benign refusal shows a warning-tone gutter rather than a red one.
+  const gutterChar = chunk.isError
+    ? (isBenignFailure(chunk.failureClass) ? palette.warning('▌') : palette.error('▌'))
+    : '';
+  const contPrefix = chunk.isError ? gutterChar + '   ' : '    ';
   const effectiveHomeDir = homeDir ?? env.HOME ?? '___NOHOME___';
   const exitSuffix = chunk.exitCode !== undefined && chunk.exitCode !== 0
     ? resultColor(` · exit ${chunk.exitCode}`)
@@ -136,7 +147,7 @@ export function formatOutcome(
   // on error so the user sees the actual error text instead of a stale
   // success-shape summary the handler may have set before failing.
   if (chunk.display !== undefined && !chunk.isError) {
-    return resultColor(chunk.display);
+    return resultColor(shortenPaths(chunk.display));
   }
 
   if (chunk.persistedPath) {
@@ -193,40 +204,49 @@ export function formatOutcome(
     }
 
     if (chunk.hiddenLineCount !== undefined && chunk.hiddenLineCount > 0) {
-      headline += '\n' + palette.dim(`    ${chunk.hiddenLineCount} earlier lines hidden`);
+      headline += '\n' + contPrefix + palette.dim(`${chunk.hiddenLineCount} earlier lines hidden`);
     }
 
     // Append actual tail lines when available. Each line is sanitized (same
-    // sanitizer as the single-line preview path) and indented with `    ` to
-    // sit visually under the `⎿` connector rendered by formatToolResultLine.
+    // sanitizer as the single-line preview path) and indented with `contPrefix`
+    // (4 cols: error gutter + 3 spaces, or 4 plain spaces for success) to sit
+    // visually under the `⎿` connector rendered by formatToolResultLine.
     if (chunk.tailPreview !== undefined && chunk.tailPreview.length > 0) {
       const tailLines = chunk.tailPreview
         .map(l => {
-          const sanitized = sanitizeLabel(l.length > 120 ? l.slice(0, 120) + '…' : l);
+          const sanitized = sanitizeLabel(truncateDisplayWidth(shortenPaths(l), maxPreview > 0 ? maxPreview : 120));
           // Try to colorize recognizable patterns (git stat, test
           // results, tsc errors) before falling back to default dim.
-          return colorizePreviewLine(sanitized)
-            ?? palette.dim('    ' + sanitized);
+          // colorizePreviewLine returns colorized CONTENT without indent;
+          // contPrefix (error gutter + 3 spaces for errors, or 4 plain
+          // spaces for success) is always prepended so the gutter tone is
+          // correct regardless of which pattern matched (Fix: C-4 gutter
+          // was bypassed when colorizePreviewLine returned non-null).
+          return contPrefix + (colorizePreviewLine(sanitized) ?? palette.dim(sanitized));
         })
         .join('\n');
       return headline + '\n' + tailLines;
     }
     return headline;
   }
-  const preview = chunk.content.length > maxPreview
-    ? chunk.content.slice(0, maxPreview - 3) + '…'
-    : chunk.content;
-  // sanitizeLabel is the right sanitizer for outcome previews: chunk.content
-  // is LLM-controlled and can embed BEL (rings the terminal bell), backspace,
-  // DEL, CSI/OSC sequences, or bare CR (repositions the cursor). The earlier
-  // shape — sanitizePrefixString(stripAnsi(...)) — only scrubbed ESC-prefixed
-  // sequences plus \r\n, letting every other C0 byte through to the terminal.
-  // Outcome lines are single-line contexts so trim + multi-space collapse
-  // (sanitizeLabel's full shape) are the correct semantics.
+  // shortenPaths BEFORE truncation: collapsing `/Users/me/proj/src/x.ts` to
+  // `x.ts` first makes the preview fit in budget far more often, and prevents
+  // the display-width clipper from slicing a long path before the collapsing
+  // regex ever sees it.
+  const shortened = shortenPaths(sanitizeLabel(chunk.content));
+  const preview = shortened.length > maxPreview
+    ? truncateDisplayWidth(shortened, maxPreview)
+    : shortened;
+  // sanitizeLabel (applied above, before shortenPaths) is the right sanitizer
+  // for outcome previews: chunk.content is LLM-controlled and can embed BEL,
+  // backspace, DEL, CSI/OSC sequences, or bare CR. Outcome lines are
+  // single-line contexts so trim + multi-space collapse are the correct
+  // semantics. shortenPaths then collapses absolute paths to clickable
+  // basenames before truncation clips the result.
   const durSuffix = chunk.durationMs !== undefined
     ? palette.dim(` · ${(chunk.durationMs / 1000).toFixed(1)}s`)
     : '';
-  return resultColor(sanitizeLabel(preview)) + exitSuffix + durSuffix;
+  return resultColor(preview) + exitSuffix + durSuffix;
 }
 
 /**
@@ -260,12 +280,16 @@ export function batchBadge(chunk: ToolResultChunk | undefined): string {
  * Live activity badge for an in-flight tool row (Phase 2, issue #516).
  *
  * Rendered while the dispatcher reports this call as one of N genuinely
- * running in parallel. Shows `[×N]` (dim) next to the spinner so the operator
- * sees real concurrency RIGHT NOW, ahead of Phase 1's post-completion `∥i/N`
- * badge on each settled row.
+ * running in parallel. Shows `∥N` in `palette.brand` (warm orange) next to
+ * the spinner so the operator sees real concurrency RIGHT NOW.
+ *
+ * Both the live badge (`  ∥N`, two leading spaces) and the post-completion
+ * badge (`∥i/N`) use the `∥` (PARALLEL TO) glyph for vocabulary consistency:
+ * `∥` = parallel, always. The visual discriminator is the prefix spacing and
+ * color, not the glyph itself.
  *
  * Invariant: `activeTools` is a dispatcher-observed snapshot, so this function
- * is purely a projection of it — it never widens or ages the set. `[×N]`
+ * is purely a projection of it — it never widens or ages the set. `∥N`
  * therefore always equals the number of handlers actually executing, and a
  * queued or already-settled call cannot be badged.
  *
@@ -273,11 +297,7 @@ export function batchBadge(chunk: ToolResultChunk | undefined): string {
  *  - No parallel wave is active (`activeTools` is null).
  *  - The `toolUseId` is not currently running.
  *  - `activeCount ≤ 1` (defensive — notifyToolActivity nulls the state instead,
- *    so a lone straggler never renders `[×1]`).
- *
- * The badge intentionally uses `×` (MULTIPLICATION SIGN) to distinguish
- * "currently running N-parallel" from the post-completion `∥i/N` (PARALLEL TO)
- * badge — they carry complementary information (live vs. committed).
+ *    so a lone straggler never renders `∥1`).
  */
 export function activeToolBadge(
   toolUseId: string,
@@ -286,7 +306,7 @@ export function activeToolBadge(
   if (!activeTools || activeTools.toolUseIds.size <= 1 || !activeTools.toolUseIds.has(toolUseId)) {
     return '';
   }
-  return palette.dim(` [×${activeTools.toolUseIds.size}]`);
+  return palette.brand(`  ∥${activeTools.toolUseIds.size}`);
 }
 
 /**
