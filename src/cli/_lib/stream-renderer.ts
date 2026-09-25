@@ -243,7 +243,11 @@ export class StreamRenderer {
     // finish (approach A — feat: collapse completed agent subtrees).
     // On non-TTY (logs, CI) the tool-call tree is the only visible output,
     // so compact mode is disabled and the full tree is preserved.
-    this.toolLane.compactScrollback = this.isTTY;
+    // Capture mode is also excluded: a pseudoTTY test harness may have
+    // isTTY = true, but suppressing tool-call detail from the capture
+    // artifact is undesirable — same rationale as the thinkingMode downgrade
+    // above (line 223).
+    this.toolLane.compactScrollback = this.isTTY && !this.captureMode;
     this.activeSkillName = opts.activeSkillName;
     this.history = opts.history;
     this.autocompleteState = opts.autocompleteState;
