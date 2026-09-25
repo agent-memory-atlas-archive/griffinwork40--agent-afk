@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.244.1] - 2026-09-25
+
+### Added
+- visual redesign — depth dimming, spacing, centering (#2141) (fa30684a)
+
+### Fixed
+- make Google results clearly show this is docs (#2170) (c5c6dac0)
+
 ## [5.244.0] - 2026-09-25
 
 ### Added
