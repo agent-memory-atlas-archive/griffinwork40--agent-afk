@@ -11,6 +11,25 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.246.0] - 2026-09-25
+
+### Added
+- add proposal/eval-case promotion workflow (0bcd564e)
+- track human vs agent review coverage at merge time (a4dc600a)
+
+### Fixed
+- route USER/USERNAME through env registry; always validate --status (be50b56a)
+- address review feedback — parsePrNumber, ExecFn import, SKILL.md body-append, hash pins (a59f82ff)
+- windows production code gaps blocking test skips (fa467349)
+
+### Changed
+- Merge pull request #2105 from griffinwork40/refactor/2064-cast-removal (518d1441)
+- Merge pull request #2101 from griffinwork40/afk/fix-of-fix-detector-2012 (dcf9fcc7)
+- Merge pull request #2089 from griffinwork40/feat/1916-approve-promotion-workflow (2be8d9bf)
+- Merge pull request #2150 from griffinwork40/afk/iso-issue-1941-8-qn5otw (e6c5fc48)
+- remove type-assertion casts in AgentSession provider delegations (6e59e0a2)
+- regenerate env-registry docs (USER, USERNAME added) (c4b2c09a)
+
 ## [5.245.0] - 2026-09-25
 
 ### Added
