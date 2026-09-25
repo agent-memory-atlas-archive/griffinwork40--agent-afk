@@ -116,11 +116,32 @@ describe('buildSubagentsLite', () => {
     expect(result.backgroundJobs[0]!.recentActivity).toBeUndefined();
   });
 
+  it('omits recentActivity for user-provenance (Ctrl+B promoted) jobs', () => {
+    // Structural provenance gate: user-promoted jobs are excluded even when
+    // parentSessionId matches and transcript is present.
+    const job = makeJob({ parentSessionId: 'session-abc', status: 'running', provenance: 'user' });
+    const registry = fakeRegistry([job], { 'bg-test-1': 'some output' });
+    const result = buildSubagentsLite(fakeManager(), registry, 'session-abc');
+    expect(result.backgroundJobs[0]!.recentActivity).toBeUndefined();
+  });
+
+  it('omits recentActivity when both parentSessionId and callerSessionId are undefined (double-undefined security hardening)', () => {
+    // Both BackgroundJob.parentSessionId and IAgentSession.sessionId are typed
+    // `string | undefined`. Without the `callerSessionId &&` guard, two
+    // undefined values would satisfy `undefined === undefined` and leak
+    // recentActivity to an identity-less caller.
+    const job = makeJob({ parentSessionId: undefined, status: 'running' });
+    const registry = fakeRegistry([job], { 'bg-test-1': 'sensitive output' });
+    // Pass undefined explicitly as the callerSessionId (identity-less caller).
+    const result = buildSubagentsLite(fakeManager(), registry, undefined);
+    expect(result.backgroundJobs[0]!.recentActivity).toBeUndefined();
+  });
+
   // -------------------------------------------------------------------------
   // recentActivity — truncation
   // -------------------------------------------------------------------------
 
-  it('truncates recentActivity to last 2048 bytes', () => {
+  it('truncates recentActivity to last 2048 chars', () => {
     const long = 'x'.repeat(4000);
     const job = makeJob({ parentSessionId: 'session-abc', status: 'running' });
     const registry = fakeRegistry([job], { 'bg-test-1': long });
@@ -130,12 +151,22 @@ describe('buildSubagentsLite', () => {
     expect(result.backgroundJobs[0]!.recentActivity).toBe(long.slice(long.length - 2048));
   });
 
-  it('does not truncate recentActivity when under 2048 bytes', () => {
+  it('does not truncate recentActivity when under 2048 chars', () => {
     const short = 'Reading src/agent/session.ts and analyzing the control flow...';
     const job = makeJob({ parentSessionId: 'session-abc', status: 'running' });
     const registry = fakeRegistry([job], { 'bg-test-1': short });
     const result = buildSubagentsLite(fakeManager(), registry, 'session-abc');
     expect(result.backgroundJobs[0]!.recentActivity).toBe(short);
+  });
+
+  it('returns verbatim at exactly 2048 chars (boundary: > not >=)', () => {
+    // The truncation guard uses `>`, so a 2048-char string must NOT be trimmed.
+    const exact = 'y'.repeat(2048);
+    const job = makeJob({ parentSessionId: 'session-abc', status: 'running' });
+    const registry = fakeRegistry([job], { 'bg-test-1': exact });
+    const result = buildSubagentsLite(fakeManager(), registry, 'session-abc');
+    expect(result.backgroundJobs[0]!.recentActivity).toBe(exact);
+    expect(result.backgroundJobs[0]!.recentActivity).toHaveLength(2048);
   });
 
   // -------------------------------------------------------------------------
