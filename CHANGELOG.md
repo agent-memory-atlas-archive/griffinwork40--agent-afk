@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.308.11] - 2026-10-11
+
+### Changed
+- extract renderPickerRows/handlePickerKey from runPicker; extract renderOverlayNestingChild from renderOverlayChildren (#3515) (39776e19)
+
 ## [5.308.10] - 2026-10-11
 
 ### Changed
