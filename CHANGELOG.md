@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.308.13] - 2026-10-11
+
+### Added
+- service status shows running version and warns on skew (#3313) (72b5dd8c)
+
+### Fixed
+- model_complete accepts empty prompt when input_path is set (#3344) (60bbe3e2)
+- advisory findings from 2026-10-08 pr-triage batch (#3347) (e17bf566)
+- render ledgerTruncated in insights HTML; remove dispatcher double-gate; export LEDGER_READ_LIMIT (#3374) (cd35a29e)
+
 ## [5.308.12] - 2026-10-11
 
 ### Fixed
