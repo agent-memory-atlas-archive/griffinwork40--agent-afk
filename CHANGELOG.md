@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.308.10] - 2026-10-11
+
+### Changed
+- extract runDaemonAction and runFarmPostRun under 200-line ceiling (#3516) (4f6800ba)
+
 ## [5.308.9] - 2026-10-11
 
 ### Changed
