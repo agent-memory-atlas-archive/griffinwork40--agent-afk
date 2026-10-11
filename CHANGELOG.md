@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.309.4] - 2026-10-11
+
+### Fixed
+- strengthen isIndexLine guard and fix isError assertion (#3527) (a253e5f2)
+- dedupeAndSort simplification, double-bind guard, armTimeout-after-dispose test, JSDoc fix (#3523) (efae12ce)
+
+### Changed
+- extend skip-audit table with 4 additional non-JSONL-parse sites (#3528) (ae5ab60d)
+- retire disposeRenderer from funcsize baseline (#3525) (c2a497c5)
+- extract getScopeAbortMessage to utils/abort (#3529) (b63407ba)
+
 ## [5.309.3] - 2026-10-11
 
 ### Fixed
