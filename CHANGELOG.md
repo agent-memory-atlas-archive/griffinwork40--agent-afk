@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.2] - 2026-10-11
+
+### Fixed
+- complete advisory cleanup and release test ledger (#3574) (98980630)
+
 ## [5.310.1] - 2026-10-11
 
 ### Fixed
