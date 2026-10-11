@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.0] - 2026-10-11
+
+### Added
+- remove AFK_OPENAI_CHATGPT_OAUTH; ChatGPT OAuth is the last-resort tier (#3388) (23404057)
+
 ## [5.309.5] - 2026-10-11
 
 ### Fixed
