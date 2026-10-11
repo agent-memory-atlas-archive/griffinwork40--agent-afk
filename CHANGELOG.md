@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.308.9] - 2026-10-11
+
+### Changed
+- retire handleNavKey + readWithAutocompleteTty from funcsize baseline (#3514) (b03e5ae8)
+
 ## [5.308.8] - 2026-10-11
 
 ### Fixed
