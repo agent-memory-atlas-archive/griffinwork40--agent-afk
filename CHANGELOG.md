@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.308.12] - 2026-10-11
+
+### Fixed
+- fix --days 0 parsing, ledger cap warning, hidden-cluster count, path sanitization (#3373) (53aaf569)
+- add unnamed-worker empty-guard test + fix JSDoc arg reference (#3391) (b13a1f86)
+
+### Changed
+- extract downloadTelegramFile into media-download.ts (#3306) (f0e3f9d6)
+
 ## [5.308.11] - 2026-10-11
 
 ### Changed
