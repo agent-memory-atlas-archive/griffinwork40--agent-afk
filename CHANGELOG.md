@@ -11,6 +11,21 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.309.1] - 2026-10-11
+
+### Added
+- support object-valued source entries in marketplace manifests (#3551) (a29885d3)
+- make cron-task elicitations visible via handoff + notifyOn (#3531) (0410547f)
+
+### Fixed
+- close provider SQLite handle (kv.db) when session closes (#3550) (a7f30981)
+
+### Changed
+- bump the fumadocs group across 1 directory with 2 updates (#3535) (5aca60fc)
+- bump typescript from 5.9.3 to 7.0.2 in /dashboard (#3543) (b2181af7)
+- adopt atomic-write helper at 4 hand-rolled tmp+rename sites (#3530) (1328d226)
+- adopt errorMessage helper at 4 telegram sites (#3548) (79bbbe49)
+
 ## [5.309.0] - 2026-10-11
 
 ### Added
