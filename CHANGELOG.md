@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.309.2] - 2026-10-11
+
+### Fixed
+- advisory findings from 2026-10-11 PR triage batch (#3552) (157854cd)
+
+### Changed
+- raise coverage on src/cli/commands/browser.ts (16% → 98%) (#3557) (21c749fa)
+
 ## [5.309.1] - 2026-10-11
 
 ### Added
