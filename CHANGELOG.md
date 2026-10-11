@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.309.5] - 2026-10-11
+
+### Fixed
+- posix-guard timeout, scheduler gate indentation, double applyAutoDisable, JSDoc corrections (#3526) (e8a88411)
+
 ## [5.309.4] - 2026-10-11
 
 ### Fixed
