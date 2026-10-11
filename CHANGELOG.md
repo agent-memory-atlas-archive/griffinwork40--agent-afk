@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.309.3] - 2026-10-11
+
+### Fixed
+- never close caller-injected stores in provider.close() (#3559) (c08635e2)
+
 ## [5.309.2] - 2026-10-11
 
 ### Fixed
