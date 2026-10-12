@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.8] - 2026-10-12
+
+### Fixed
+- support comma-list brace expansion in the glob tool (#3578) (#3582) (29d90d53)
+
 ## [5.310.7] - 2026-10-12
 
 ### Fixed
