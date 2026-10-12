@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.12] - 2026-10-12
+
+### Fixed
+- never cut off ask_question text (#3625) (4f04d330)
+
 ## [5.310.11] - 2026-10-12
 
 ### Fixed
