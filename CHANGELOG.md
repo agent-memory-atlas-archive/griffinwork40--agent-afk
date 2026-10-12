@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.13] - 2026-10-12
+
+### Added
+- opt-in repo-declared worktree setup step (#3611) (8715836c)
+
+### Changed
+- adopt atomic-write for launchd plist install/upgrade (#3615) (8788ae22)
+
 ## [5.310.12] - 2026-10-12
 
 ### Fixed
