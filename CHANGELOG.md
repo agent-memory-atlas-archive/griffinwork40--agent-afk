@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.11] - 2026-10-12
+
+### Fixed
+- match BASH_HIGH tokens only at shell word starts (#3610) (f4cf9300)
+- thread AFK_THINKING/AFK_EFFORT into Telegram bot constructor (#3613) (1192ede6)
+
+### Changed
+- raise bot.ts statement coverage 56.5% → 91.6% (setupHandlers closures) (#3618) (a99e34ef)
+- extract connectMcpTraced helper (MCP trace-phase duplication) (#3617) (937f8fd8)
+- adopt errorMessage at ?? 'aborted' sites in abort.ts and browser/web handlers (#3614) (01c1cb90)
+- convert score/writeScore to writeJsonFileAsync (#3612) (4037a8a2)
+- strengthen B3/B5 resize-burst precision + add cpr diagnostic (#3603) (b61e74d7)
+
 ## [5.310.10] - 2026-10-12
 
 ### Fixed
