@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.9] - 2026-10-12
+
+### Fixed
+- auto-install dashboard deps in build-web-ui when missing (local only) (#3602) (ffe5fa8f)
+
 ## [5.310.8] - 2026-10-12
 
 ### Fixed
