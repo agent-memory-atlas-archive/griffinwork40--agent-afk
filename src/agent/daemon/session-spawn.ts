@@ -124,6 +124,14 @@ export async function spawnDaemonSession(taskId: string, options: DaemonSpawnOpt
   mcpManager?: McpManager;
   /** Archive the cross-surface registry handle. Called by runOnce on close. */
   dispose: () => void;
+  /**
+   * The per-tick session label derived from `daemonTraceLabel(taskId)`. This
+   * value is also threaded into the dispatcher as `context.sessionId` so
+   * `ask-question.ts` can pass it to `elicitationRouter.route()` as a lookup
+   * key. Returned here so the caller can register a per-session elicitation
+   * handler under this exact key, eliminating the single-slot race (#3619).
+   */
+  elicitationKey: string;
 }> {
   // Derive a unique-per-tick sessionId (daemonTraceLabel appends a random
   // suffix, so each tick gets its own label) so hook commands receive a
@@ -218,9 +226,15 @@ export async function spawnDaemonSession(taskId: string, options: DaemonSpawnOpt
     // break scheduled tasks that depend on tool execution.
     permissionMode: 'bypassPermissions',
     hookRegistry: registry,
-    // Pull tasks keep ask_question (handoff handler persists the question
-    // for eventual reply); cron/sessionstart tasks strip it.
-    isNonInteractive: options.trigger !== 'pull',
+    // All daemon tasks now install an elicitation handler before sendMessage
+    // (pull: makeDaemonElicitationHandler; cron/sessionstart:
+    // makeCronElicitationHandler — #3243 item 2), so ask_question must NOT be
+    // stripped for any trigger. The ask_question strip is driven by
+    // isNonInteractive in dispatcher-wiring.ts; setting it false here keeps
+    // the tool available. The unattended-bash floor (isHeadlessSession) is
+    // preserved independently via surface:'daemon' below, so bash-restriction
+    // hooks are unaffected by this change.
+    isNonInteractive: false,
     // Surface stamps the session as 'daemon' so routing-decision telemetry
     // rows derive origin:'daemon' correctly. Placed before sessionConfig so
     // an operator escape-hatch via sessionConfig.surface can still override.
@@ -273,6 +287,7 @@ export async function spawnDaemonSession(taskId: string, options: DaemonSpawnOpt
       memoryStore,
       stateStore,
       dispose: registration.dispose,
+      elicitationKey: sessionId,
       ...(mcpManager !== undefined ? { mcpManager } : {}),
     };
   } catch (err) {
