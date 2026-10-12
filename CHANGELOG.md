@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.3] - 2026-10-12
+
+### Fixed
+- correct workflow annotations and formatter edge cases (#3570) (3dec3a1e)
+
+### Changed
+- document verdict reasons and temp-root privacy (#3569) (6eab069d)
+- add Invariant: prefix to long JSDoc block in stream-renderer-dispose.ts (#3564) (c0ead9bd)
+
 ## [5.310.2] - 2026-10-11
 
 ### Fixed
