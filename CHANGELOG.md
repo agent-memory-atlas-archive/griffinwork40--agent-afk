@@ -11,6 +11,21 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.10] - 2026-10-12
+
+### Fixed
+- track StateStore handles to fix Windows EBUSY on kv.db teardown (#3605) (5144a3ba)
+- review follow-ups from #3582, #3583, #3584 (#3598) (d5c71a3d)
+- move WorkspaceStore into try and log session-close failures (#3597) (073ac4e8)
+- advisory findings from 2026-10-09 PR triage batch (#3594) (42bfa165)
+- align mkdir options and preserve private state parents (#3599) (c313e2e5)
+- per-root try in afkStateRootsResolved, test hygiene (#3596) (d0fdeebd)
+- unify OAuth resolution and guard one-shot endpoints (#3595) (79966b65)
+
+### Changed
+- wait for schedule writers to close before retrying cleanup (#3600) (43676d18)
+- reuse one validated temp-root snapshot per write classification (#3604) (5dc1b243)
+
 ## [5.310.9] - 2026-10-12
 
 ### Fixed
