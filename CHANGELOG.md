@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.5] - 2026-10-12
+
+### Fixed
+- pass thinking/effort from env to Telegram bot sessions (#3289) (9ea268b9)
+
 ## [5.310.4] - 2026-10-12
 
 ### Added
