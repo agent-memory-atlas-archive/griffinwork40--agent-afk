@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.7] - 2026-10-12
+
+### Fixed
+- one leaf tool surface for every compose node (#3579, #3580) (#3583) (61164044)
+- credential gate honors --model/--provider (#3581) (#3584) (b6e3e8ba)
+
 ## [5.310.6] - 2026-10-12
 
 ### Added
