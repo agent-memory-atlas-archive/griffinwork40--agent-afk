@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.311.0] - 2026-10-12
+
+### Added
+- return committed fact access metadata (#3623) (2ebcb5d8)
+- add --aa flag for A/A calibration mode (Step 0) (#3630) (6a50ad73)
+- install daemon elicitation handler for cron/sessionstart tasks (#3619) (8e10e234)
+
 ## [5.310.14] - 2026-10-12
 
 ### Added
