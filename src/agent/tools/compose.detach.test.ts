@@ -91,6 +91,8 @@ vi.mock('./compose-agent-resolve.js', () => ({
     canUseTool: undefined,
     namedAgentModel: undefined,
   })),
+  resolvedAgentToolRestriction: vi.fn(() => ({})),
+  resolveComposeAgentPrompt: vi.fn((_agent, basePrompt: string) => basePrompt),
 }));
 
 vi.mock('./compose-node-provider.js', () => ({
