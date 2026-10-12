@@ -26,8 +26,7 @@
  * the turn-boundary check in {@link run} fires `compactHistory('token_threshold')`
  * once the context-window footprint crosses it (mirrors anthropic-direct/query.ts).
  *
- * Things deliberately deferred:
- *   - File checkpointing / rewindFiles (deferred — `canRewind: false`)
+ * File checkpointing and rewindFiles track file-writing tool mutations.
  *
  * @module agent/providers/openai-compatible/query
  */
@@ -78,7 +77,8 @@ import {
   resolveAutoCompactThreshold,
 } from '../shared/auto-compact.js';
 import { AbortCoordinator, CLOSED_SENTINEL } from '../shared/abort-coordinator.js';
-
+import { FileCheckpointState } from './query.file-checkpoint.js';
+import { currentWritePolicy } from '../../file-checkpoint/write-policy.js';
 import { HookBlockedError, ensureError } from '../../../utils/errors.js';
 
 import { EXIT_PLAN_MODE_TOOL_NAME } from '../../tools/handlers/exit-plan-mode.js';
@@ -243,6 +243,9 @@ export class OpenAICompatibleQuery implements ProviderQuery, TurnDriverContext, 
    */
   private readonly autoCompactThreshold: number | undefined;
 
+  /** File-checkpoint state: enabled flag + current turn id + begin/end/rewind helpers. */
+  private readonly checkpoint: FileCheckpointState;
+
   constructor(opts: OpenAICompatibleQueryOptions) {
     this.opts = opts;
     this.initSessionId = opts.synthesizedSessionId;
@@ -255,6 +258,7 @@ export class OpenAICompatibleQuery implements ProviderQuery, TurnDriverContext, 
     this.traceWriter = opts.traceWriter;
     this.fastTier = new FastTierSession(opts.fastTier);
     this.autoCompactThreshold = resolveAutoCompactThreshold(opts.config.autoCompact, opts.model);
+    this.checkpoint = new FileCheckpointState(opts.config.enableFileCheckpointing ?? false, opts.synthesizedSessionId);
 
     // Pre-compute the OpenAI tool catalog once.
     if (this.toolDispatcher) {
@@ -338,7 +342,7 @@ export class OpenAICompatibleQuery implements ProviderQuery, TurnDriverContext, 
         const turnResult = nextOrClose as IteratorResult<ProviderUserTurn>;
         if (turnResult.done) break;
 
-        yield* this.runTurn(turnResult.value.content);
+        yield* this.runTurn(turnResult.value.content, turnResult.value.userMessageId);
 
         // Auto-compaction fires at the natural turn boundary.
         if (this.autoCompactThreshold !== undefined && !this.closed) {
@@ -404,12 +408,16 @@ export class OpenAICompatibleQuery implements ProviderQuery, TurnDriverContext, 
    * token-refresh retry on 401 (see query/token-refresh.ts, issue #3396).
    * `this` satisfies `TurnDriverContext` so all live field reads work.
    */
-  private async *runTurn(content: ProviderUserTurn['content']): AsyncGenerator<ProviderEvent> {
+  private async *runTurn(content: ProviderUserTurn['content'], userMessageId?: string): AsyncGenerator<ProviderEvent> {
     const controller = this.abort.begin();
     if (controller.signal.aborted) return;
 
     const turnStartTime = Date.now();
     const taskId = randomUUID();
+
+    // File-checkpoint: wire a fresh registry onto the dispatcher so write-class
+    // tool handlers snapshot files before mutation.
+    const checkpointId = this.checkpoint.begin(this.toolDispatcher, userMessageId);
 
     const trace = new TurnTrace(controller.signal, this.traceWriter, 'openai-compatible');
     this.fastTier.beginTurn(this.currentModel);
@@ -417,14 +425,15 @@ export class OpenAICompatibleQuery implements ProviderQuery, TurnDriverContext, 
       // Pass `this` — which implements TurnDriverContext — so every mutable
       // field read inside runTurnInner is always live (no stale snapshot).
       // wrapTurnWithOAuthRefresh is a no-op for non-chatgpt-oauth sessions.
-      yield* wrapTurnWithOAuthRefresh(
+      yield* this.checkpoint.events(wrapTurnWithOAuthRefresh(
         this,
         runTurnInner(this, content, controller, turnStartTime, taskId),
         () => runTurnInner(this, content, controller, turnStartTime, taskId),
         this._authDeps,
-      );
+      ), this.toolDispatcher, checkpointId);
     } finally {
       trace.finish(Date.now() - turnStartTime);
+      this.checkpoint.end(this.toolDispatcher);
     }
   }
 
@@ -540,14 +549,8 @@ export class OpenAICompatibleQuery implements ProviderQuery, TurnDriverContext, 
     return { authSource: this.opts.auth.source };
   }
 
-  async rewindFiles(
-    _userMessageId: string,
-    _options?: { dryRun?: boolean },
-  ): Promise<ProviderRewindResult> {
-    return {
-      canRewind: false,
-      error: `${PROVIDER_NAME} provider does not support file checkpoint rewind yet.`,
-    };
+  async rewindFiles(userMessageId: string, options?: { dryRun?: boolean }): Promise<ProviderRewindResult> {
+    return this.checkpoint.rewind(userMessageId, options, currentWritePolicy(this.toolDispatcher, { resolveBase: this.opts.config.cwd ?? process.cwd() }));
   }
 
   /** Live conversation in journal form (router `/model` swap carry); undefined without a journal. */

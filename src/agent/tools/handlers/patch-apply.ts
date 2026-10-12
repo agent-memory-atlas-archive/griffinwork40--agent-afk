@@ -18,6 +18,7 @@ import { validatePatchChanges, type PatchFileChange } from './patch-validate.js'
 import { applyPatch } from './patch-apply-engine.js';
 import { errorMessage } from '../../../utils/errors.js';
 import { isBlankInput } from '../subagent/optional-input.js';
+import { validatedWriteTarget } from '../../file-checkpoint/write-policy.js';
 
 // ---------------------------------------------------------------------------
 // Input parsing
@@ -173,7 +174,21 @@ export function createPatchApplyHandler(cwd?: string): ToolHandler {
       };
     }
 
-    const { changes, dry_run } = parsed;
+    const { dry_run } = parsed;
+    let changes = parsed.changes;
+    const callerPaths = new Map<string, string>();
+    try {
+      // Snapshot and atomically replace the same physical target, preserving
+      // file symlinks rather than replacing the link itself with a regular file.
+      changes = await Promise.all(changes.map(async (change) => {
+        const target = await validatedWriteTarget(change.path, context, resolveBase);
+        callerPaths.set(target, change.path);
+        return { ...change, path: target };
+      }));
+    } catch (err) {
+      return { content: JSON.stringify({ status: 'validation_failed', diff: '', files_changed: [],
+        errors: [{ error: 'path_containment', detail: errorMessage(err) }] }), isError: true };
+    }
 
     if (changes.length === 0) {
       return {
@@ -191,7 +206,7 @@ export function createPatchApplyHandler(cwd?: string): ToolHandler {
       };
     }
 
-    // Validate.
+    // Validate hashes and replacements after pinning the policy-checked target.
     const validation = await validatePatchChanges(changes, resolveBase, context);
 
     if (!validation.valid) {
@@ -205,6 +220,15 @@ export function createPatchApplyHandler(cwd?: string): ToolHandler {
         content: JSON.stringify(result, null, 2),
         isError: true,
       };
+    }
+
+    // Snapshot only validated physical destinations, immediately before apply.
+    if (context?.fileCheckpoint && !dry_run) {
+      await Promise.all(
+        Array.from(validation.fileContents.keys()).map((resolvedPath) =>
+          context.fileCheckpoint!.snapshotFile(resolvedPath),
+        ),
+      );
     }
 
     // Apply (or dry-run).
@@ -224,7 +248,8 @@ export function createPatchApplyHandler(cwd?: string): ToolHandler {
     // using pre-patch content as old_string can silently revert the patch.
     // Surface a clear instruction in the result so the agent re-reads before
     // any further edits.
-    const modifiedPaths = applyResult.files_changed.map((f) => f.path);
+    // Invariant: warnings name caller paths; mutation/checkpoint receipts stay canonical.
+    const modifiedPaths = applyResult.files_changed.map((f) => callerPaths.get(f.path) ?? f.path);
     const rereadWarning =
       (applyResult.status === 'applied' || applyResult.status === 'partial_failure') &&
       modifiedPaths.length > 0
