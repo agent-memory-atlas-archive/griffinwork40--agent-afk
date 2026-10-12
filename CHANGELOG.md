@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.14] - 2026-10-12
+
+### Added
+- add responderIdentity to HandoffRecord for response provenance (#3627) (a1e07953)
+
+### Fixed
+- address advisory findings from 2026-10-12 PR triage batch (#3626) (dec4d416)
+- thread customBaseURL into resolveWireMode on complete() and one-shot-router paths (#3624) (a93be7fe)
+
+### Changed
+- adopt readJsonlFile in ledger/store; audit remaining sites (#3622) (5f38fe77)
+
 ## [5.310.13] - 2026-10-12
 
 ### Added
