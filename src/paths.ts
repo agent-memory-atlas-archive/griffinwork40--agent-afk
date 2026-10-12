@@ -794,29 +794,9 @@ export function getOauthPendingPath(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Wave manifest paths
+// Wave manifest paths — extracted to paths.wave.ts for the 350-line ceiling.
 // ---------------------------------------------------------------------------
-
-/**
- * Root for wave manifests: `~/.afk/state/waves/`.
- *
- * One JSON file per wave (≥2 concurrent dispatches in one turn) lives here.
- * Written by coordinators (SubagentExecutor, ComposeExecutor) before a fan-out
- * starts; cleaned up by the reconciler and witness sweep after TTL expiry.
- */
-export function getWavesDir(): string {
-  return join(getAfkStateDir(), 'waves');
-}
-
-/**
- * Per-manifest file: `~/.afk/state/waves/<waveId>.json`.
- *
- * waveId is a UUID v4, which fits the isSafeLedgerSessionId charset
- * ([A-Za-z0-9_-]), so no extra validation is needed beyond the UUID generator.
- */
-export function getWaveManifestPath(waveId: string): string {
-  return join(getWavesDir(), `${waveId}.json`);
-}
+export { getWavesDir, getWaveManifestPath } from './paths.wave.js';
 
 // ---------------------------------------------------------------------------
 // Effect ledger path
@@ -848,4 +828,5 @@ export { getWhatifDir } from './paths.whatif.js';
 // ---------------------------------------------------------------------------
 export { getPeerInboxRoot, getPeerInboxDir } from './paths.peer.js';
 export { getFileCheckpointsRoot, getFileCheckpointSessionDir, getFileCheckpointTurnDir } from './paths.checkpoint.js';
+export { getArtifactRegistryDir, getArtifactStoreDir, getArtifactIndexPath } from './paths.artifact.js';
 
