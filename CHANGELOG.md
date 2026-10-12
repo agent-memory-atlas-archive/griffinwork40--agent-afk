@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.310.6] - 2026-10-12
+
+### Added
+- file checkpoint and rewind (write_file, edit_file, patch_apply) (#3355) (5365d21a)
+
+### Fixed
+- recreate owned stores after provider close (#3567) (5f671185)
+
 ## [5.310.5] - 2026-10-12
 
 ### Fixed
