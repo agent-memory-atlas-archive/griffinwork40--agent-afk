@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.0] - 2026-10-12
+
+### Added
+- content-addressed artifact registry (put/get/list/read) (#3629) (f22ec95a)
+
 ## [5.311.0] - 2026-10-12
 
 ### Added
