@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.7] - 2026-10-13
+
+### Changed
+- split telegram streamResponse under 200-line ceiling (#3658) (4b286689)
+
 ## [5.312.6] - 2026-10-13
 
 ### Changed
