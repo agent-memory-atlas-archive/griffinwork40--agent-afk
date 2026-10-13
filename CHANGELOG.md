@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.3] - 2026-10-13
+
+### Changed
+- split renderToolLaneOverlay under 200-line ceiling (#3649) (52e8909b)
+- add shared execFileAsync (#3653) (20968114)
+- add abortReason helper for AbortSignal.reason sites (#3654) (ccfe7fe5)
+- adopt isErrnoCode/isEnoent at errno cast sites (#3655) (79026f23)
+
 ## [5.312.2] - 2026-10-13
 
 ### Fixed
