@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.6] - 2026-10-13
+
+### Changed
+- split makeTelegramElicitationHandler under 200-line ceiling (#3656) (2d3cf0b5)
+- split runSweep under 200-line ceiling (#3657) (2fa61bb6)
+
 ## [5.312.5] - 2026-10-13
 
 ### Changed
