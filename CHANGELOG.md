@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.5] - 2026-10-13
+
+### Changed
+- split registerInteractiveCommand under 200-line ceiling (#3651) (7cebc1cf)
+
 ## [5.312.4] - 2026-10-13
 
 ### Changed
