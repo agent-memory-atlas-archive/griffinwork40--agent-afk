@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.8] - 2026-10-13
+
+### Fixed
+- advisory findings from PR triage batch #3638-#3647 (#3664) (9e3cf384)
+- remaining cosmetic items — fast-path comment, dedupe compose-agent-resolve tests (#3662) (e1012b60)
+
+### Changed
+- split interactive runTurn under 200-line ceiling (#3650) (43d3a44b)
+
 ## [5.312.7] - 2026-10-13
 
 ### Changed
