@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.2] - 2026-10-13
+
+### Fixed
+- narrow-terminal layout: wrap to real width, force spill below 20 cols, add edge-case tests (#3643) (2cc5fb5f)
+
 ## [5.312.1] - 2026-10-12
 
 ### Fixed
