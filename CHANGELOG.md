@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.312.4] - 2026-10-13
+
+### Changed
+- split setupSurface under 200-line ceiling (#3648) (26ffc64e)
+
 ## [5.312.3] - 2026-10-13
 
 ### Changed
