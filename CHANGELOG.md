@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.314.0] - 2026-10-14
+
+### Added
+- suppress no-info hook_decision rows, add hook_summary and search_witness where filter (#3728) (b5c39cab)
+
 ## [5.313.15] - 2026-10-14
 
 ### Fixed
