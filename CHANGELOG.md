@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.8] - 2026-10-14
+
+### Changed
+- split buildChildConfig under 200-line ceiling (#3688) (2c4945d7)
+
 ## [5.313.7] - 2026-10-14
 
 ### Added
