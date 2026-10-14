@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.9] - 2026-10-14
+
+### Changed
+- split registerChatCommand under 200-line ceiling (#3685) (55a74162)
+
 ## [5.313.8] - 2026-10-14
 
 ### Changed
