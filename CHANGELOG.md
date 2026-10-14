@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.4] - 2026-10-14
+
+### Changed
+- split createBashHandler under 200-line ceiling (#3690) (93ff16b5)
+- split SubagentHandleImpl.run under 200-line ceiling (#3700) (cbfbe6b7)
+
 ## [5.313.3] - 2026-10-14
 
 ### Changed
