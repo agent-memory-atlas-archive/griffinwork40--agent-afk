@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.3] - 2026-10-14
+
+### Changed
+- split SubagentManager.forkSubagent under 200-line ceiling (#3699) (f0c909da)
+
 ## [5.313.2] - 2026-10-14
 
 ### Changed
