@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.315.3] - 2026-10-14
+
+### Added
+- add /bug to report bugs via a prefilled GitHub issue link (#3746) (e30f0b14)
+
+### Fixed
+- show status-bar cap when maxBudgetUsd === 0 (hard-stop sentinel) (#3745) (be9a4a94)
+- name sanctioned alternatives in high-risk refusals (#3727 follow-up) (#3760) (ef09815a)
+
 ## [5.315.2] - 2026-10-14
 
 ### Fixed
