@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.6] - 2026-10-14
+
+### Fixed
+- resolve nit/low advisory findings from PR triage batch #3670-#3680 (#3703) (10538e16)
+
 ## [5.313.5] - 2026-10-14
 
 ### Added
