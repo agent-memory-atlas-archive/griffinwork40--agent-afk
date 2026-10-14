@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.14] - 2026-10-14
+
+### Fixed
+- add PreToolUse order assertion and deduplicate Invariant comment (#3730) (54af8768)
+- route browser login launch through GuardedEgress proxy (#3731) (a415bd0b)
+- batched nits — comment, unreachable fallback, mock cleanup, collectAsyncIter, named guard, debugLog (#3640) (1d93e243)
+
 ## [5.313.13] - 2026-10-14
 
 ### Fixed
