@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.315.0] - 2026-10-14
+
+### Added
+- content-addressed checkpoint blobs with integrity verification (#3628) (1215b324)
+
 ## [5.314.0] - 2026-10-14
 
 ### Added
