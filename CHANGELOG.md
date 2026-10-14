@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.10] - 2026-10-14
+
+### Fixed
+- apply SSRF egress guard to browser_open navigation (#2313) (109db833)
+
+### Changed
+- SW(27,16) result write-up and README section (#3717) (cfcb1f06)
+
 ## [5.313.9] - 2026-10-14
 
 ### Changed
