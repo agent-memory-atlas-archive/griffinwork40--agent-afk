@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.15] - 2026-10-14
+
+### Fixed
+- extract streamer.utils.ts, add settled guard, consolidate killGroup, add helpers tests (#3740) (6621d7a0)
+- close egress proxy test coverage gaps (items 1-4) (#3742) (484d37dd)
+
 ## [5.313.14] - 2026-10-14
 
 ### Fixed
