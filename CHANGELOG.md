@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.11] - 2026-10-14
+
+### Changed
+- split createDefaultHookRegistry under 200-line ceiling (#3684) (c8151569)
+- split transformProviderEvent under 200-line ceiling (#3667) (6b6691a2)
+- split startShell under 200-line ceiling (#3682) (9b1d4554)
+- split parseAgentInput under 200-line ceiling (#3666) (aa03c31a)
+- split observePage under 200-line ceiling (#3681) (2c42787c)
+- split parseComposeInput under 200-line ceiling (#3683) (4e0a74d4)
+- raise coverage on COV-009..013 modules (#3669) (688e0fa1)
+
 ## [5.313.10] - 2026-10-14
 
 ### Fixed
