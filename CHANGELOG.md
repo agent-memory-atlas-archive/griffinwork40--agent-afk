@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.316.0] - 2026-10-14
+
+### Added
+- /bug --file files the report directly with gh after confirmation (#3750) (81098984)
+
 ## [5.315.3] - 2026-10-14
 
 ### Added
