@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.2] - 2026-10-14
+
+### Changed
+- split anthropic-direct runTurn under 200-line ceiling (#3698) (e43106db)
+- split preserveRowsBeforeFrameRender under 200-line ceiling (#3692) (1a8a234b)
+
 ## [5.313.1] - 2026-10-14
 
 ### Changed
