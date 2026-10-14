@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.12] - 2026-10-14
+
+### Added
+- durable pending-question store wired into elicitation router (#3678) (3cceb09d)
+
+### Fixed
+- split question-only prompts over 4096 chars (item 3) (#3663) (990f8646)
+
+### Changed
+- adopt atomic-write at 5 hand-rolled sites (#3668) (3e47d1ec)
+- add SW(29,16) symmetric weighing matrix (#3722) (034e2f89)
+
 ## [5.313.11] - 2026-10-14
 
 ### Changed
