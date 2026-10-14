@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.13] - 2026-10-14
+
+### Fixed
+- name the safe alternative in two high-friction denials (#3727) (aa94b8e7)
+
 ## [5.313.12] - 2026-10-14
 
 ### Added
