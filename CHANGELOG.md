@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.313.1] - 2026-10-14
+
+### Changed
+- split consumeRoundStream under 200-line ceiling (#3697) (84ca3e2b)
+- split ComposeExecutor.execute under 200-line ceiling (#3696) (d4801b60)
+- split streamToFinalMessage under 200-line ceiling (#3695) (755eaf31)
+- split handleEnter under 200-line ceiling (#3691) (300d76ee)
+- split runForegroundWithPromotion under 200-line ceiling (#3689) (e16db44d)
+
 ## [5.313.0] - 2026-10-13
 
 ### Added
