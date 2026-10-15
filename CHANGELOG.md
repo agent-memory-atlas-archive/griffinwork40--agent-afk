@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.319.0] - 2026-10-15
+
+### Added
+- accept free-text revision feedback in exit_plan_mode (#3832) (4d1fb31d)
+
 ## [5.318.13] - 2026-10-15
 
 ### Fixed
