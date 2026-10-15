@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.3] - 2026-10-15
+
+### Fixed
+- import REDUNDANCY_THRESHOLD and add fixture similarity assertion in run.test.ts (#3803) (476bc5b5)
+- add direct unit tests for checkReadOnlyDispatchIntent gate (#3805) (3bbce2c0)
+
 ## [5.318.2] - 2026-10-15
 
 ### Fixed
