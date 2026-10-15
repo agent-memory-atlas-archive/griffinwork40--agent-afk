@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.4] - 2026-10-15
+
+### Fixed
+- await pending child cancellation writes inside TraceWriter.seal() (#3807) (6f391479)
+
+### Changed
+- pin Scenario 3 – goal change while worker runs yields no superseded marker (#3806) (4af5afe4)
+
 ## [5.318.3] - 2026-10-15
 
 ### Fixed
