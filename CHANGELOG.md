@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.0] - 2026-10-15
+
+### Added
+- hook-block repeat circuit breaker (#3789) (adcc1ace)
+
+### Changed
+- Happy Eyeballs fallback + split connect/inactivity timeout (#3792) (1612ec17)
+
 ## [5.317.1] - 2026-10-15
 
 ### Fixed
