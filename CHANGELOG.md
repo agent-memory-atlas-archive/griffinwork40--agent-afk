@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.9] - 2026-10-15
+
+### Added
+- record running afk version and the child's real model in journal meta (#3808) (#3830) (d5f4731b)
+- opt-in git_read tool replaces bash on read-only children (#3812) (74f4daba)
+
+### Fixed
+- do not dispatch tool calls whose arguments were lost or unparseable (#3829) (f0c8dd46)
+- bound seal() wait on pending child writes; InMemoryTraceWriter parity (#3831) (d336dafc)
+
+### Changed
+- pin Scenario 4, a bash write after a test pass leaves the artifact unverified (#3810) (1d8cfc99)
+
 ## [5.318.8] - 2026-10-15
 
 ### Fixed
