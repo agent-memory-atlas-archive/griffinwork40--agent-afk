@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.10] - 2026-10-15
+
+### Fixed
+- reject whatif --aa --verify, which silently ran no episodes (#3856) (0c7d88a8)
+
 ## [5.318.9] - 2026-10-15
 
 ### Added
