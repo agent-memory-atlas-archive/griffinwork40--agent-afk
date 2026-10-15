@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.7] - 2026-10-15
+
+### Fixed
+- stop treating "next" Done bullets as deferred work (#3813) (324d4eb7)
+
 ## [5.318.6] - 2026-10-15
 
 ### Fixed
