@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.2] - 2026-10-15
+
+### Fixed
+- correct mislabelled catch-branch line numbers in schedule.test.ts (#3733) (4981f257)
+
 ## [5.318.1] - 2026-10-15
 
 ### Added
