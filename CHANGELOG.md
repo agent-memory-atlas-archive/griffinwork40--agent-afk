@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.317.0] - 2026-10-15
+
+### Added
+- read-only hooks view; config_get errors on unknown keys (#3735) (db3038da)
+
+### Fixed
+- drop redundant early-return, warn on partial mid-flight deletion, reorder collectAsyncIter, add direct unit tests (#3782) (9385e52b)
+
 ## [5.316.4] - 2026-10-15
 
 ### Fixed
