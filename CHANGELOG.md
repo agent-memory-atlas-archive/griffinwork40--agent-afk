@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.1] - 2026-10-15
+
+### Added
+- block-evasion monitor — analyzer, tests, and afk trace show --evasion (#3785) (48f2fa56)
+- shadow-mode detector for git --no-verify and identity overrides (#3783) (b4457491)
+
+### Fixed
+- address advisory findings from 2026-10-14 PR triage batch (#3791) (4949cadf)
+
 ## [5.318.0] - 2026-10-15
 
 ### Added
