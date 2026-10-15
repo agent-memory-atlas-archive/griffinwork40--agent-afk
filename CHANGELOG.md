@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.8] - 2026-10-15
+
+### Fixed
+- refuse to overwrite an unreadable schedules.json (#3819) (5224e6cc)
+
+### Changed
+- pin Scenario 5, future-version schedules.json is cast, not refused (#3809) (7f76a0c5)
+- never cancel in-progress CI runs on main (#3818) (3cfa7a6b)
+- add nightly live provider test workflow (#2217) (eda80a93)
+
 ## [5.318.7] - 2026-10-15
 
 ### Fixed
