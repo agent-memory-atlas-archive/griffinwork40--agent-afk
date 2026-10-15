@@ -11,6 +11,22 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.316.1] - 2026-10-15
+
+### Fixed
+- distinguish recovered gate blocks from failed runs (#3781) (295e9b22)
+- reject fatal test typecheck input diagnostics (#3773) (000c958e)
+- make AFK_CENTER_CONTENT render as faithfully as non-centered mode (#3765) (e33892ff)
+- redact raw value from budget env warnings; say "finite" for Infinity (#3743) (14d97841)
+- tighten refusal guidance and clarify factory contracts (#3774) (42eda72b)
+- pin bug filing host and bound confirmation previews (#3776) (4275b6d3)
+
+### Changed
+- fix journal writer path in tracing section (#3787) (1e236048)
+- cover gh jq flag alternatives (#3777) (b15eac1e)
+- cover production dispatcher cwd setup (#3775) (adcb0671)
+- clarify root grants for unconfined forks (#3772) (1a76dde6)
+
 ## [5.316.0] - 2026-10-14
 
 ### Added
