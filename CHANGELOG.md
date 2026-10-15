@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.5] - 2026-10-15
+
+### Fixed
+- preserve GhError detail, tighten test coverage across advisory items (#3798) (1ff57c30)
+- replace fixed sleep(600) with vi.waitFor in send-failures test (#3800) (0cf36811)
+
+### Changed
+- BgResultNotifier.dispose() with pending injections (turn-ends-before-drain) (#3804) (957616d5)
+
 ## [5.318.4] - 2026-10-15
 
 ### Fixed
