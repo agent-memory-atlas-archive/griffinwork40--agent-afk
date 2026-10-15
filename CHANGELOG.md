@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.11] - 2026-10-15
+
+### Added
+- remote_agent tool dispatches afk agents to other machines over SSH (#3837) (70fd1d49)
+
+### Fixed
+- canonical redactSecrets in whatif runner; escape bg-result envelope attributes (#3857) (b5b407b5)
+
 ## [5.318.10] - 2026-10-15
 
 ### Fixed
