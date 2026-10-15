@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.319.1] - 2026-10-15
+
+### Changed
+- retire proxy-redundant egress checks (#3854) (c2a3cb8e)
+
 ## [5.319.0] - 2026-10-15
 
 ### Added
