@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.6] - 2026-10-15
+
+### Fixed
+- distinguish hook command data from executable input (#3780) (36fa3b4d)
+- center status line under AFK_CENTER_CONTENT (#3801) (7b900f23)
+
 ## [5.318.5] - 2026-10-15
 
 ### Fixed
