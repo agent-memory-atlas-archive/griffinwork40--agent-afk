@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.316.4] - 2026-10-15
+
+### Fixed
+- document compose leaf tool restrictions (#3778) (1fa2e823)
+
+### Changed
+- restore .test-typecheck-baseline.json (2767) (#3793) (a43552fb)
+
 ## [5.316.3] - 2026-10-15
 
 ### Fixed
