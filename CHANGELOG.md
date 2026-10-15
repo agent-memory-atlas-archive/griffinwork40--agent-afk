@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.12] - 2026-10-15
+
+### Added
+- read-only GET /api/handoffs lists pending daemon handoffs (#3858) (9fcc9ae5)
+
+### Fixed
+- expire daemon handoffs on the pull tick under the handoff lock (#3859) (d8e0c3fc)
+
+### Changed
+- replace fixed sleep with vi.waitFor in background-registry stopReason meta test (#3844) (e2a95438)
+
 ## [5.318.11] - 2026-10-15
 
 ### Added
