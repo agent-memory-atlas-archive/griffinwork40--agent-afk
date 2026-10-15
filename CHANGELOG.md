@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.318.13] - 2026-10-15
+
+### Fixed
+- stop confining unconfined openai-compatible forks to read roots [] (#3815) (82aa12e4)
+
 ## [5.318.12] - 2026-10-15
 
 ### Added
