@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.320.3] - 2026-10-16
+
+### Fixed
+- stop runAt overlap noise, record blocked reasons, warn on date-pinned crons (#3824) (e6437fc7)
+
 ## [5.320.2] - 2026-10-16
 
 ### Fixed
