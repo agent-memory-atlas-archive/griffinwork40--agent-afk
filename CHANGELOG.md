@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.319.6] - 2026-10-16
+
+### Fixed
+- one shared session-cost definition that includes subagent spend (#3888) (a5bb4943)
+
 ## [5.319.5] - 2026-10-16
 
 ### Fixed
