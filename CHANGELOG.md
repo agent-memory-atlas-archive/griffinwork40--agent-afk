@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.5] - 2026-10-16
+
+### Fixed
+- roll nested and skill fork spend into root session (#3960) (713edaea)
+
 ## [5.321.4] - 2026-10-16
 
 ### Fixed
