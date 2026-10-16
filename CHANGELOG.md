@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.319.3] - 2026-10-16
+
+### Fixed
+- run handoff maintenance and resumption in every daemon mode (#3877) (c6f259ea)
+
 ## [5.319.2] - 2026-10-16
 
 ### Fixed
