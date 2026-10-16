@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.319.5] - 2026-10-16
+
+### Fixed
+- guard stale-unlink retry in worktree-sweep lock on Windows (#3881) (ebeaadd9)
+- keep [vitals] notes out of the Esc-Esc rewind picker (#3870) (048b33d9)
+
 ## [5.319.4] - 2026-10-16
 
 ### Fixed
