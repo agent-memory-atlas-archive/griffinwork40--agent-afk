@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.320.2] - 2026-10-16
+
+### Fixed
+- truncatedByBudget false when all episodes ran despite budget exceeded (#3906) (7fa0605d)
+- send MCP status logs to stderr so -f json stdout stays clean (#3905) (1c7a04c6)
+
 ## [5.320.1] - 2026-10-16
 
 ### Fixed
