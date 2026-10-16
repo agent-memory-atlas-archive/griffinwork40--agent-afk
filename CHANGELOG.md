@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.3] - 2026-10-16
+
+### Fixed
+- harden remote_agent cwd validation, quoting, and output framing (#3917) (e4b55fd6)
+
 ## [5.321.2] - 2026-10-16
 
 ### Fixed
