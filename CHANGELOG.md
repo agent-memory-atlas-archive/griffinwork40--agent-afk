@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.320.0] - 2026-10-16
+
+### Added
+- probe model slots with a custom endpoint + docs: local Mac model guide (#3887) (283cc1f0)
+
 ## [5.319.6] - 2026-10-16
 
 ### Fixed
