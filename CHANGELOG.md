@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.0] - 2026-10-16
+
+### Added
+- billing-normalized token rollups split by provider (#3889) (ff2316cf)
+
+### Fixed
+- downgrade plan mode to default on Telegram (seed drain is REPL-only) (#3916) (c5f7f45c)
+
 ## [5.320.5] - 2026-10-16
 
 ### Fixed
