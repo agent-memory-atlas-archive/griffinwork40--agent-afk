@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.1] - 2026-10-16
+
+### Fixed
+- resolve each probed slot's route once instead of twice (#3910) (0a8139a9)
+- merge prompt-dump secret shapes into canonical redactSecrets; add parity test (#3918) (d4d7fb05)
+- correct lost-root-closure under-report and backstop-seal $0 root (#3909) (b694971f)
+
 ## [5.321.0] - 2026-10-16
 
 ### Added
