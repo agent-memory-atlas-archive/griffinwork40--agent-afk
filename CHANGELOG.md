@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.320.4] - 2026-10-16
+
+### Fixed
+- retire dead gpt-5.4/grok-4.6 ids, add gpt-6 family (#3825) (2a1ac81c)
+
 ## [5.320.3] - 2026-10-16
 
 ### Fixed
