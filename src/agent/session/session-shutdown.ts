@@ -14,6 +14,7 @@
  */
 
 import type { TraceWriter } from '../trace/writer.js';
+import { awaitPendingWritesBounded, SEAL_PENDING_WRITES_TIMEOUT_MS } from '../trace/pending-writes.js';
 import { dispatchSessionEnd } from './hooks-dispatch.js';
 import { emitClosureEvent, sealTraceWriter, type SealTraceInput } from './closure-emitter.js';
 import type { AccountingAccumulator } from './accounting-accumulator.js';
@@ -106,6 +107,20 @@ export class SessionShutdown {
       config.drainSubagents?.(reason).catch(() => {}),
     ]);
 
+    // Cancellation/drain can abandon a provider iterator. Wait for its final
+    // billing callback BEFORE freezing accounting, not inside writer.seal().
+    // Each source already unions root-manager AND compose-node streams via
+    // `pendingChildBillingStreams` (manager-shutdown-config.ts).
+    const pendingBilling = [
+      ...(config.executors?.getPendingChildBillingStreams?.() ?? []),
+      ...(config.getPendingChildBillingStreams?.() ?? []),
+    ];
+    await awaitPendingWritesBounded(
+      [...new Set(pendingBilling)], SEAL_PENDING_WRITES_TIMEOUT_MS, 'SessionShutdown',
+      (unsettled, total) => `[SessionShutdown] billing: abandoned ${unsettled} of ${total} pending child ` +
+        `stream(s) after ${SEAL_PENDING_WRITES_TIMEOUT_MS}ms — taking accounting snapshot anyway; billing may be incomplete`,
+    );
+
     const signals = accounting.closureSignals(getAbortController().signal, reason);
     const acct = accounting.snapshot();
 
@@ -132,6 +147,8 @@ export class SessionShutdown {
         subagentCompletedCount: acct.subagentCompletedCount,
         subagentRunningTokens: acct.subagentRunningTokens,
         subagentRunningCostUsd: acct.subagentRunningCostUsd,
+        ...(acct.sessionBilling !== undefined ? { sessionBilling: acct.sessionBilling } : {}),
+        ...(acct.subagentBilling !== undefined ? { subagentBilling: acct.subagentBilling } : {}),
         // Collect in-flight child terminal emit promises so they land before
         // session_sealed even when the drain timed out or was not configured
         // (#3714). Called after the drain so all active handles have had a
