@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.2] - 2026-10-16
+
+### Fixed
+- re-send handoff reminder with inline keyboard buttons on recovery (#3915) (9b6e374c)
+- stop builtin agents and fix-pr from pinning models (#3926) (801f2a85)
+- stamp subagentId on child closure events so root-filter guard works (#3912) (060ee7a1)
+
 ## [5.321.1] - 2026-10-16
 
 ### Fixed
