@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.320.1] - 2026-10-16
+
+### Fixed
+- preserve existing body >300 chars when reinforcing SPINE entries (#3908) (58c9dd16)
+- resolve slash-routing contradiction and measure mid-message skill references (#3884) (99ac1575)
+- stop /clear waiting on the SPINE classifier (#3843) (5817ea85)
+- route-aware credential check and suppress SPINE.md rewrites in A/B arms (#3907) (d98a6350)
+- stream chatgpt-oauth turn events instead of buffering the whole turn (#3826) (40ee2959)
+
 ## [5.320.0] - 2026-10-16
 
 ### Added
