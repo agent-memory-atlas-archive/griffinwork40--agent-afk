@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.320.5] - 2026-10-16
+
+### Fixed
+- keep per-fork workspace preamble out of the sibling-shared cached prefix (#3923) (5d12bcde)
+
 ## [5.320.4] - 2026-10-16
 
 ### Fixed
