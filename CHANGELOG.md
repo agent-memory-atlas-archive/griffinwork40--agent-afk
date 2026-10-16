@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.4] - 2026-10-16
+
+### Fixed
+- pin receipt cost rows and trace total; fix facet doc (#3911) (9835afd8)
+- reclaim parked lease immediately when periodic sweep expires its handoff (#3913) (72ab0460)
+
 ## [5.321.3] - 2026-10-16
 
 ### Fixed
