@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.319.2] - 2026-10-16
+
+### Fixed
+- pin shared WorkspaceStore lifetime across child session close (#3827) (bd119ab9)
+
 ## [5.319.1] - 2026-10-15
 
 ### Changed
