@@ -11,6 +11,21 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.319.4] - 2026-10-16
+
+### Fixed
+- apply Windows delete-pending contention fix to 3 remaining O_EXCL lock sites (#3875) (01c74ea8)
+- treat mutating bash calls as writes for last-mutation ordering (#3872) (be5fcef5)
+- extract splitFrontmatter to unify three divergent frontmatter parsers (#3874) (f0de21bc)
+- anchor truncated-marker fallback to tail; export shared constant (#3873) (0b4fe90f)
+- accept read-only polling builtins and pipelines (#3853) (2980ab38)
+- add remote_agent to ALWAYS_EXTERNAL_TOOLS (#3871) (8b51407c)
+- ignore proven quoted heredoc data (#3855) (2a65059c)
+- let confined forks write to the OS temp dir (#3864) (95dbc2c2)
+
+### Changed
+- add explicit threat model (docs/threat-model.md) (#3851) (835fe595)
+
 ## [5.319.3] - 2026-10-16
 
 ### Fixed
