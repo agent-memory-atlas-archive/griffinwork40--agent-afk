@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.12] - 2026-10-17
+
+### Fixed
+- publish remote-dispatch guide and fix broken link in tools-reference (#4018) (938dd63c)
+
 ## [5.322.11] - 2026-10-17
 
 ### Fixed
