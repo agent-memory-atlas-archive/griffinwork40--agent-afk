@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.9] - 2026-10-17
+
+### Fixed
+- narrow read-only dispatch-intent gate, name the match, enforce in compose (#3944) (733eff5b)
+- await startup recovery in HandoffMaintenanceHandle.stop() (#3948) (e7b0dd40)
+- lost-args failureClass, alignment guard, and missing tests (#3952) (1757ff41)
+
 ## [5.321.8] - 2026-10-17
 
 ### Fixed
