@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.8] - 2026-10-17
+
+### Fixed
+- forward operator-explicit permissionMode only; extract ResolvedSessionManagerOptions alias (#3994) (77110792)
+
 ## [5.322.7] - 2026-10-17
 
 ### Fixed
