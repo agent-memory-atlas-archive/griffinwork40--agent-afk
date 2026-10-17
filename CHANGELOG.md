@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.10] - 2026-10-17
+
+### Fixed
+- add boundary test, document permissionMode host field, restore blank line (#3982) (ef9d5ec6)
+
 ## [5.322.9] - 2026-10-17
 
 ### Fixed
