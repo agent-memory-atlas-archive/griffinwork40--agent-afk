@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.1] - 2026-10-17
+
+### Fixed
+- expose skippedByBudget in VerifyResult and replace tautological assertion (#3988) (4fd46664)
+
 ## [5.322.0] - 2026-10-17
 
 ### Added
