@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.6] - 2026-10-17
+
+### Fixed
+- clear 2 test-typecheck errors that turned main's ratchet red (#4015) (a78bcb2a)
+
 ## [5.322.5] - 2026-10-17
 
 ### Fixed
