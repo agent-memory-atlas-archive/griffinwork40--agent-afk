@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.11] - 2026-10-17
+
+### Fixed
+- append `wait` in stdin-isolation test to drain background job before cleanup (#4017) (08bc05c9)
+
 ## [5.322.10] - 2026-10-17
 
 ### Fixed
