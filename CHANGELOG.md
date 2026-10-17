@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.0] - 2026-10-17
+
+### Added
+- self-diagnosing real-Chrome setup for `afk browser connect` (#3933) (263b3f20)
+
+### Fixed
+- add remote_agent to tools reference (#3914) (36d51ca4)
+- shadow-git false negatives (bundled flags, backslash continuation, escaped quotes) + abort-only lost-work test (#3799) (a9ea6acf)
+- inflate pendingResizeErase footprint for centered-content narrowing resize (#3802) (b02bcd74)
+- detect lost root closure by actor provenance, not cost equality (#3935) (64ed2cfe)
+- clamp over-max timeout_ms instead of rejecting (#3820) (d5804441)
+- emit billing_settled phase for post-cancel delta; move runInProgress inside try (#3938) (9d4e021a)
+
 ## [5.321.10] - 2026-10-17
 
 ### Added
