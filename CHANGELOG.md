@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.10] - 2026-10-17
+
+### Added
+- wake idle Telegram sessions when a background subagent settles (#3953) (7fa10cef)
+
+### Fixed
+- carry accumulated usage across stop-hook continuations (#3936) (ba01631a)
+- add --permission-mode to afk chat and pin it on remote runs (#3947) (2154b025)
+
 ## [5.321.9] - 2026-10-17
 
 ### Fixed
