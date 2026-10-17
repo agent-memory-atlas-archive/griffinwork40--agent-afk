@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.2] - 2026-10-17
+
+### Added
+- add Telegram /inbox command for held peer messages (#3616) (9146a963)
+
+### Fixed
+- gate dashboard install on .modules.yaml, clean partial dir on failure, add tests (#3608) (ee1e15b8)
+- hasHandler sessionKey, concurrent-tick latch, setupNotice field (#3661) (0b298a8d)
+- strict ISO 8601 validator, overflow/null rejection, tests (#3591) (36bf64a3)
+- align dispatch guidance with tool allowlists (#3816) (35cb7ea4)
+
 ## [5.322.1] - 2026-10-17
 
 ### Fixed
