@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.9] - 2026-10-17
+
+### Fixed
+- fix stale comments, add JSDoc note, extract named opts objects (#3999) (b5d2c97f)
+- advisory findings from PR triage batch (#3780, #3798, #3800, #3801) (#4000) (5ac5e6f2)
+
 ## [5.322.8] - 2026-10-17
 
 ### Fixed
