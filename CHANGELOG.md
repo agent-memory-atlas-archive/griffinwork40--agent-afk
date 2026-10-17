@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.3] - 2026-10-17
+
+### Fixed
+- safe filename encoding for Telegram topic sessions; deterministic tailLedger test (#3814) (afb59aeb)
+
 ## [5.322.2] - 2026-10-17
 
 ### Added
