@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.7] - 2026-10-17
+
+### Added
+- mark subagent results as superseded when goal changed at delivery (#3951) (b1cdb4f1)
+
+### Fixed
+- add missing stderr tests for OAuth/refresh paths; use restoreAllMocks (#3946) (8e47c5d4)
+- harden skill-reference telemetry — non-object JSON guard, in-flight promise dedup, Set-based dedup (#3940) (57a037df)
+- address advisory findings from 2026-10-16 PR triage batch (#3955) (10b91b0e)
+
 ## [5.321.6] - 2026-10-17
 
 ### Fixed
