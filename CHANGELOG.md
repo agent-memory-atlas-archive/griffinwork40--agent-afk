@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.7] - 2026-10-17
+
+### Fixed
+- per-entry _schemaVersion guard in write path; shape error for primitives (#3993) (4ec15faf)
+- add missing tests for scalar-JSON guard and inflight dedup (#3991) (a2a587a9)
+- JSDoc invariants and compose exemption tests for dispatch-intent gate (#3990) (ce5822c8)
+- address advisory findings from 2026-10-15 PR triage batch (#4001) (9457323a)
+
 ## [5.322.6] - 2026-10-17
 
 ### Fixed
