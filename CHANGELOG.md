@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.6] - 2026-10-17
+
+### Fixed
+- add maxTurns to cost estimator to model multi-turn episode spend (#3949) (fa420138)
+- gate splitAtWorkspacePreamble on fork provenance, not marker text (#3943) (eeca6650)
+- clarify JournalMeta.model semantics, fix child provider source, add noop forSubagent params (#3950) (12694cb0)
+- guard sumBillingUsage provider mismatch + document outcome tag on SessionExecutorsBindTarget (#3941) (bb3f0ffe)
+- remove skippedByBudget double-count in runTask (#3945) (a4e87629)
+- add schema-version guard to loadSchedules; refuse future/unknown shapes (#3954) (4e0c0a17)
+- wire bot-level permissionMode into every Telegram session's AgentConfig (#3942) (7a9fd9f4)
+- narrow Bearer/AWS false positives from loosened anchors (#3937) (2ea8bc3d)
+
 ## [5.321.5] - 2026-10-16
 
 ### Fixed
