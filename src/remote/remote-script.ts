@@ -21,6 +21,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import type { PermissionMode } from '../agent/types/sdk-types.js';
 
 /** Line the launch script prints with the detached afk pid. */
 export const PID_MARKER = '__AFK_REMOTE_PID__';
@@ -104,6 +105,12 @@ export interface LaunchScriptOptions {
   /** Absolute afk path on the remote; resolved by the script when absent. */
   afkPath?: string;
   /**
+   * Permission mode to pin on the remote `afk chat` invocation via
+   * `--permission-mode`. When absent the remote resolves its own default
+   * (typically `bypassPermissions` from `DEFAULT_CLI_PERMISSION_MODE`).
+   */
+  permissionMode?: PermissionMode;
+  /**
    * When set, the POSIX-escaped remote login password. The script reads it from
    * a heredoc and feeds it to `security -i` through a pipe. It is already
    * escaped by {@link escapeForSecurityInteractive} in `keychain-unlock.ts`.
@@ -167,9 +174,9 @@ export function buildLaunchScript(opts: LaunchScriptOptions): string {
   if (opts.resume !== undefined) args.push('--resume', opts.resume);
   else args.push('--session-id', opts.sessionId);
   if (opts.model !== undefined) args.push('--model', opts.model);
+  if (opts.permissionMode !== undefined) args.push('--permission-mode', opts.permissionMode);
 
   const promptDelim = makeHeredocDelimiter(opts.prompt);
-
   const lines = [
     'set -e',
     'umask 077',

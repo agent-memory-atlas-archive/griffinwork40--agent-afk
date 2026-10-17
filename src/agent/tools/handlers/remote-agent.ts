@@ -158,6 +158,7 @@ export function createRemoteAgentHandler(deps: RemoteAgentDeps): ToolHandler {
       if (/[\0\n\r]/.test(cwd)) return fail('resolved `cwd` must not contain NUL, newline, or carriage-return.');
       if (cwd.startsWith('-')) return fail('resolved `cwd` may not start with "-".');
     }
+    const permissionMode = host.permissionMode;
     const outcome = await runRemoteAgent(
       {
         target: host.ssh,
@@ -170,6 +171,7 @@ export function createRemoteAgentHandler(deps: RemoteAgentDeps): ToolHandler {
         ...(input.model !== undefined ? { model: input.model } : {}),
         ...(input.resume !== undefined ? { resume: input.resume } : {}),
         ...(host.afkPath !== undefined ? { afkPath: host.afkPath } : {}),
+        ...(permissionMode !== undefined ? { permissionMode } : {}),
       },
       signal,
       { runner: deps.runner, ...(deps.sleep ? { sleep: deps.sleep } : {}) },
