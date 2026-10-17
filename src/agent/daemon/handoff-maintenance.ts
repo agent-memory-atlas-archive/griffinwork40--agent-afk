@@ -74,7 +74,20 @@ export interface HandoffMaintenanceOpts {
 }
 
 export interface HandoffMaintenanceHandle {
-  stop(): void;
+  /**
+   * Clear the periodic maintenance interval and await the one-shot startup
+   * recovery that was fired on construction. Awaiting `stop()` guarantees no
+   * further writes into `queueDir` can race a subsequent directory removal
+   * (e.g. `rmSync(tmpHome, { recursive: true })` in test teardown).
+   *
+   * Idempotent: every caller that `await`s `stop()` receives the same captured
+   * `startupRecovery` promise. The first call clears the interval and awaits
+   * the promise; subsequent calls re-await the already-settled promise, which
+   * resolves immediately at zero cost. There is no "already stopped" guard
+   * needed — `clearInterval` on an already-cleared timer is a safe no-op and
+   * the captured promise never changes identity after construction.
+   */
+  stop(): Promise<void>;
 }
 
 function log(msg: string): void {
@@ -130,11 +143,16 @@ export async function consumeAndResume(opts: HandoffMaintenanceOpts, resumeDir: 
 
 /**
  * Run startup recovery once and start the periodic maintenance tick.
- * The returned handle's `stop()` clears the interval.
+ * The returned handle's `stop()` clears the interval AND awaits the one-shot
+ * startup-recovery promise so callers can be certain no further writes into
+ * `queueDir` are in flight after `stop()` resolves — preventing the macOS
+ * ENOTEMPTY race in test teardown when `queueDir` is inside a temp directory
+ * that is removed synchronously right after `stop()` (#3925).
  */
 export function startHandoffMaintenance(opts: HandoffMaintenanceOpts): HandoffMaintenanceHandle {
   const resumeDir = resumeQueueDir(opts.queueDir);
-  void runStartupRecovery(opts, resumeDir);
+  // Keep a reference to the startup promise so stop() can await it.
+  const startupRecovery = runStartupRecovery(opts, resumeDir);
   let resuming = false;
   const timer = setInterval(() => {
     // Expiry runs every tick, even while a long resume run is in progress.
@@ -144,5 +162,13 @@ export function startHandoffMaintenance(opts: HandoffMaintenanceOpts): HandoffMa
     void consumeAndResume(opts, resumeDir).finally(() => { resuming = false; });
   }, opts.intervalMs ?? HANDOFF_MAINTENANCE_INTERVAL_MS);
   timer.unref();
-  return { stop: () => clearInterval(timer) };
+  return {
+    stop: async () => {
+      clearInterval(timer);
+      // Await the startup recovery so no in-flight writes race a subsequent
+      // directory removal by the caller (e.g. test teardown rmSync). The
+      // promise is already settled in the happy path; this is a no-op then.
+      await startupRecovery;
+    },
+  };
 }
