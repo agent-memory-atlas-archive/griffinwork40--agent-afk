@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.4] - 2026-10-17
+
+### Fixed
+- add pinning tests for unconfined-parent writeRoots/readRoots no-op behaviour (#3797) (e88363d6)
+
 ## [5.322.3] - 2026-10-17
 
 ### Fixed
