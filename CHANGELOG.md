@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.321.8] - 2026-10-17
+
+### Fixed
+- thread parentBillingStreams registry so depth-2+ abandoned streams reach session_sealed (#3962) (29b36826)
+
 ## [5.321.7] - 2026-10-17
 
 ### Added
