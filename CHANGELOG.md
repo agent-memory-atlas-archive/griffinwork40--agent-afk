@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.326.0] - 2026-10-18
+
+### Added
+- resolve generated-file conflicts with pnpm regen:generated (#4116) (a50df293)
+
 ## [5.325.0] - 2026-10-18
 
 ### Added
