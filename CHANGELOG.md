@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.325.0] - 2026-10-18
+
+### Added
+- transcribe inbound Telegram voice and audio messages (#4047) (9a5169e8)
+
+### Fixed
+- erase tmux-reflowed echo duplicate on pane split (#4114) (97eaa72f)
+
 ## [5.324.4] - 2026-10-18
 
 ### Fixed
