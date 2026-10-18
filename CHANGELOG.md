@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.324.4] - 2026-10-18
+
+### Fixed
+- strip quoted content before dispatch-intent classification (#4101) (9c9f6bdf)
+- tidy two-phase MCP provider rebuild from #4069 (#4093) (7cadc910)
+- add missing read-only subcommands to git_read (#4099) (4b595a2f)
+- keep tools on anthropic-direct wind-down rounds for prefix-cache preservation (#4094) (b2ee0b22)
+
 ## [5.324.3] - 2026-10-18
 
 ### Added
