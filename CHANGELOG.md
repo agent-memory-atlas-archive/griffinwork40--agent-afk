@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.14] - 2026-10-18
+
+### Added
+- add per-slot maxOutputTokens; derive smarter default for unlisted openai-compat ids (#4025) (386a9b36)
+
+### Fixed
+- restore telemetry for clamped bash timeout_ms and tighten warning test (#4022) (1aaf5cbf)
+
+### Changed
+- cross-path dispatch-policy parity matrix (#4049) (5870700b)
+
 ## [5.322.13] - 2026-10-18
 
 ### Fixed
