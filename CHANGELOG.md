@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.15] - 2026-10-18
+
+### Fixed
+- deduct baseline-sample cost from maxUsdRemaining in verifyRun (#4004) (5a9f1b8f)
+- address remaining advisory findings from 2026-10-14 PR triage batch (#4003) (64c0ba92)
+- accumulate costUsd across all turns in RunBillingContext (#4005) (c3db1d1a)
+
 ## [5.322.14] - 2026-10-18
 
 ### Added
