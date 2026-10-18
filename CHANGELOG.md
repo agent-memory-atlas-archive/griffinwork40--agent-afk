@@ -11,6 +11,20 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.18] - 2026-10-18
+
+### Fixed
+- MCP-aware unknown-tool messages and session-init failure notice (#4068) (ad38d39a)
+
+### Changed
+- bump @types/node from 26.6.4 to 26.6.5 in /website (#4082) (6aeac344)
+- bump the fumadocs group in /website with 3 updates (#4079) (46697ce8)
+- bump actions/setup-node from 4 to 7 (#4078) (4b475ed7)
+- bump the prod-minor-patch group with 7 updates (#4086) (e093c5ec)
+- bump the dashboard-prod-minor-patch group (#4084) (55c38a76)
+- bump react from 19.3.0 to 19.3.1 in /website (#4081) (862168d2)
+- bump actions/checkout from 4 to 7 (#4076) (9d149f55)
+
 ## [5.322.17] - 2026-10-18
 
 ### Added
