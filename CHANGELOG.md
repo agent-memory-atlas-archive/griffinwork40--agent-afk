@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.324.0] - 2026-10-18
+
+### Added
+- post-edit LSP diagnostics (phase 1, opt-in, off by default) (#4044) (8573cfa3)
+- per-provider subagent concurrency caps for fan-out waves (#4037) (c6cf83d9)
+
+### Changed
+- complete docs overhaul: new navigation, every feature documented, generated references with CI drift gates (#4070) (ff5c18b2)
+
 ## [5.323.0] - 2026-10-18
 
 ### Added
