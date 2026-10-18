@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.17] - 2026-10-18
+
+### Added
+- offline OTLP/JSON export of witness traces with GenAI semantic conventions (#4046) (1fbf2426)
+
+### Fixed
+- strip git commit -F - heredoc body from restricted-path scan (#4034) (b5e17a20)
+- keep tools on wind-down rounds so prefix caches survive (#4048) (a139de71)
+- tell read-only git agents about the git_read swap (#4056) (d689813c)
+
+### Changed
+- guard safe-table verdict with classifyBashCommand mutation check (#4032) (305b5f3c)
+
 ## [5.322.16] - 2026-10-18
 
 ### Fixed
