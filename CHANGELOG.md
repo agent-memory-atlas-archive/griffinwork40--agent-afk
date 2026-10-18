@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.322.13] - 2026-10-18
+
+### Fixed
+- apply reflow inflation to EXPAND branch; fix tautological center-band test; add widen-guard and EXPAND tests (#4019) (c02c55c2)
+- isSuperseded cleared/paused goal, escapeXml notice, cleared-goal tests (#3987) (d9f31330)
+- warn and skip on malformed stored runAt/expiresAt (#4024) (4bbf1200)
+- document mixed provider on BillingUsage and add rollup test (#3986) (2a320c75)
+- correct billing_settled JSDoc to say cumulative totals, not delta (#4020) (a7b7a68d)
+
+### Changed
+- verify closure provenance stamping through real emitClosureEvent path (#4021) (71460dc5)
+
 ## [5.322.12] - 2026-10-17
 
 ### Fixed
