@@ -11,6 +11,14 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.326.3] - 2026-10-19
+
+### Added
+- journal AI ghost-text suggestions and their outcomes (#4128) (f15358df)
+
+### Changed
+- stage 2 — shared root validation + reuse setupIsolationWorktree in DAG dispatch (#4138) (c6fffd6a)
+
 ## [5.326.2] - 2026-10-19
 
 ### Fixed
