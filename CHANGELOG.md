@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.4] - 2026-10-19
+
+### Fixed
+- sanitise toolName in mcpUnknownToolMessage + make dedup test reach collision branch (#4157 follow-up) (#4173) (61baa1b3)
+- include offending value in startup quarantine warning (#4161 follow-up) (#4171) (5695f9b7)
+
 ## [5.327.3] - 2026-10-19
 
 ### Fixed
