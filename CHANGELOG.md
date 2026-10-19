@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.3] - 2026-10-19
+
+### Fixed
+- harden MCP failure-notice sanitiser and wire-prefix glob (#4157) (64df554b)
+
 ## [5.327.2] - 2026-10-19
 
 ### Fixed
