@@ -11,6 +11,16 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.0] - 2026-10-19
+
+### Added
+- add /handoffs and /handoffs:answer REPL slash commands (#4027) (e9dba5f2)
+- POST /api/handoffs/:taskId/answer with CSRF + responder identity (#4033) (2c328d93)
+- fall back to parent model when the default subagent model is rejected (#4117) (bc465c2f)
+
+### Fixed
+- stop LLM ghost-text suggestions from truncating mid-word (#4142) (c663ec63)
+
 ## [5.326.3] - 2026-10-19
 
 ### Added
