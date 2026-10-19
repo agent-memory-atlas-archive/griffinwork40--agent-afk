@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.326.2] - 2026-10-19
+
+### Fixed
+- address advisory findings from voice/audio transcription review (#4132) (a27acb0f)
+- harden regen:generated marker scan and conflicted-stage parsing (#4131) (c5a8db4b)
+- forward toolCount through provider boundary; add mcpServers e2e variant (#4137) (acc498b6)
+
 ## [5.326.1] - 2026-10-19
 
 ### Fixed
