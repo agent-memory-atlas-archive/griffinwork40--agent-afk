@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.1] - 2026-10-19
+
+### Added
+- /export md|html — self-contained session export (#4026) (23c7c271)
+- afk acp — Agent Client Protocol JSON-RPC 2.0 stdio server (#4040) (b1f8b8c8)
+
+### Fixed
+- Linux CHROME_CONFIG_HOME/XDG_CONFIG_HOME ignored by real-Chrome probe; surface silent catch in error-hints (#4023) (c46be820)
+- bash write-shaped verification command also advances lastMutationIndex (#4028) (ca6edc96)
+- stop hardcoding bash/workspace_query as forbidden in compose prompt suffix (#4016) (f116f20d)
+- regenerate slash-command reference after /handoffs landed (#4164) (875c97e5)
+
 ## [5.327.0] - 2026-10-19
 
 ### Added
