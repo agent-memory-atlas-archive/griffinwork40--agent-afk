@@ -11,6 +11,19 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.2] - 2026-10-19
+
+### Fixed
+- cross-reference mirror guard comment + document per-call allocation nit (#4163) (aa0596dd)
+- apply reflowedPhysicalRows inflation to disarmed EXPAND path (#4162) (4fc3100c)
+- quarantine malformed runAt/expiresAt tasks at daemon startup (#4161) (7791f0f4)
+- advisory findings from #3986 — mixed provider on BillingUsage (#4160) (a6dac97b)
+- advisory closure-provenance test improvements from #4021 review (#4159) (5676dfcb)
+- add explicit test for pause→resume→same-text not superseded (#4158) (4b54ee4f)
+- add Known residual test for FS_MUTATING over-gate in risk-classifier (#4156) (c0b2dd37)
+- doc, test, comment, and regex-safety fixes for wind-down-final (#4155) (fec0d50e)
+- add single-quoted -c test case and document -C/--git-dir omission (#4154) (0b00bc7f)
+
 ## [5.327.1] - 2026-10-19
 
 ### Added
