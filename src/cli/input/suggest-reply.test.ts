@@ -37,6 +37,16 @@ describe('joinContinuation', () => {
     expect(joinContinuation('fix the ', 'failing test')).toBe('fix the failing test');
   });
 
+  it('strips a repeated last word when the buffer ends in whitespace (non-compliant model)', () => {
+    // Model non-compliantly repeats the preceding word "bar" followed by new text:
+    // "foo bar " + "bar baz" must yield "foo bar baz", not "foo bar bar baz".
+    expect(joinContinuation('foo bar ', 'bar baz')).toBe('foo bar baz');
+    // A bare echo of just the preceding word with nothing new must be rejected.
+    expect(joinContinuation('foo bar ', 'bar')).toBeNull();
+    // A different word is kept verbatim.
+    expect(joinContinuation('foo bar ', 'baz qux')).toBe('foo bar baz qux');
+  });
+
   it('still accepts a reply that echoes the whole buffer (non-compliant model)', () => {
     expect(joinContinuation('git st', 'git status')).toBe('git status');
   });
