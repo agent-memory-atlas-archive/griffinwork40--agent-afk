@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.9] - 2026-10-20
+
+### Fixed
+- correct billing_settled comment to say cumulative totals, not delta (#4184) (a918fbec)
+- pin readRoots/writeRoots confinement descriptions in CI (#3772) (#4186) (65265cbb)
+
 ## [5.327.8] - 2026-10-20
 
 ### Fixed
