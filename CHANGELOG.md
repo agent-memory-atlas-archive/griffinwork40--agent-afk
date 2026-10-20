@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.13] - 2026-10-20
+
+### Changed
+- stable tool-list partition for prefix-cache reuse (#4205) (06c5cb04)
+
 ## [5.327.12] - 2026-10-20
 
 ### Added
