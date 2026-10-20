@@ -11,6 +11,12 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.10] - 2026-10-20
+
+### Fixed
+- add disarmCols to ResetStateHost and zero it in resetState (#4177) (2ce59472)
+- clean up fallbackBySession on mint completion and document void close() (#4178) (0f2a4f47)
+
 ## [5.327.9] - 2026-10-20
 
 ### Fixed
