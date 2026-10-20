@@ -11,6 +11,18 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.328.2] - 2026-10-20
+
+### Fixed
+- SSRF host guard, timeout tests, botInfo fail-closed (#4145) (1688dc5d)
+- pin agent-tool error strings, fix DAG isolation test name, add Invariant comment, fix stale docstring (#4148) (5dca1d07)
+- move duplicated normalizeSlotProvider/parseStringField into model-slots.utils.ts (#4143) (d130f41b)
+- advisory findings from 2026-10-14 PR triage batch (#4002) (40d9bb2f)
+- make durationMs test deterministic — drop wall-clock margin (#4144) (0d244dbf)
+
+### Changed
+- remove the auto-release workflow; releases are manual (#4146) (e056015e)
+
 ## [5.328.1] - 2026-10-20
 
 ### Fixed
