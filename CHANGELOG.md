@@ -11,6 +11,15 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.328.0] - 2026-10-20
+
+### Added
+- grant git_read to research-agent under AFK_READONLY_GIT_TOOL (#4196) (a4c82f2f)
+
+### Fixed
+- address handoffs-view review findings (#4197 follow-up) (#4207) (56420f74)
+- plan-mode gate for agent{host}, host control-char rejection (#4206) (c0a8bdd3)
+
 ## [5.327.13] - 2026-10-20
 
 ### Changed
