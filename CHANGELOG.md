@@ -11,6 +11,17 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.12] - 2026-10-20
+
+### Added
+- wire host field on agent tool to RemoteSubagentHandle (#4202) (5262a205)
+- pending handoffs view in dashboard (poll + answer form) (#4197) (6ff53f95)
+- LSP symbol lookup tool (phase 2, opt-in, off by default) (#4201) (bcaf1538)
+
+### Fixed
+- route DaemonHandle.registerTask through quarantine, fix JSDoc, strengthen quarantine tests (#4175) (4d4604fe)
+- fix dead code in checkMirror, improve order-mismatch logging, export registrations/checkMirror, add tests (#4193) (14e5a0f7)
+
 ## [5.327.11] - 2026-10-20
 
 ### Added
