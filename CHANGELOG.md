@@ -11,6 +11,13 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.7] - 2026-10-20
+
+### Fixed
+- oauth_pending servers and mid-session disconnects now surface model-visible notices (#4183) (b6542f25)
+- fix four low-risk advisory correctness gaps in /handoffs:answer (#4180) (a7b97e60)
+- add missing test assertions from 2026-10-19 advisory findings (#4176) (8e7eb6bc)
+
 ## [5.327.6] - 2026-10-20
 
 ### Fixed
