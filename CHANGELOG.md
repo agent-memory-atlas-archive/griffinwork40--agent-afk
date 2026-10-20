@@ -11,6 +11,11 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.328.1] - 2026-10-20
+
+### Fixed
+- fix word-doubling in joinContinuation, add missing tests, deprecate completeWithWire (#4174) (81b38187)
+
 ## [5.328.0] - 2026-10-20
 
 ### Added
