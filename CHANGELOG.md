@@ -11,6 +11,18 @@ auto-release workflow to deduplicate commits across successive runs.
 
 ## [Unreleased]
 
+## [5.327.11] - 2026-10-20
+
+### Added
+- measure shadow-git-detect observe-window firing rate (#4200) (53c4e74f)
+- live OTLP/HTTP push for afk trace export-otlp (#4195) (0f09b9fe)
+- add /insights Telegram command for text summary of usage analytics (#4194) (95f3ecc3)
+- surface riskCategory in trace show and status-line chip (#4199) (9263d0c9)
+
+### Fixed
+- @internal tags on OTLP wire types; ROOT_PARENT_SENTINEL for background agents (#4192) (becd7fa1)
+- use "safe idempotent" in web_request retry wording (#4191) (096a2c75)
+
 ## [5.327.10] - 2026-10-20
 
 ### Fixed
