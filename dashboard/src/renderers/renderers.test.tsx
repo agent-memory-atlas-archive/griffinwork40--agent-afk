@@ -51,7 +51,7 @@ describe('structured command renderers', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it.each(['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'file:///etc/passwd', 'not a url'])('does not link unsafe URL %s', (url) => {
+  it.each(['javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'file:///etc/passwd', 'mailto:someone@example.com', 'not a url'])('does not link unsafe URL %s', (url) => {
     show({ ...fallback, kind: 'link', label: 'Unsafe', url });
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByText('plain fallback')).toBeInTheDocument();

@@ -1,12 +1,12 @@
 # Web Command Layer — Architecture
 
-> Stage 0 of the Web↔CLI Parity Command Layer (PATH_B: surface-agnostic command layer, staged).
+> Stages 0 and 2 of the Web↔CLI Parity Command Layer (PATH_B: surface-agnostic command layer, staged).
 
 ## Overview
 
 The web surface (`afk web`) exposes slash commands through a structured HTTP API rather than
 running the CLI's interactive loop. This document describes the architecture, data flow, and
-intentional limitations of Stage 0.
+intentional limitations of the command transport and structured-output layer.
 
 ## Request Flow
 
@@ -27,7 +27,7 @@ Browser composer
                  BufferingWriter       ← captures all handler output
                  createWebSlashContext()
                  cmd.handler(ctx, args)
-                 writer.toOutputBlock()
+                 writer.toOutputBlocks()
                  normalizeSlashResult()
                  → 200 { blocks, control }
                } finally { releaseTurn() }
@@ -39,7 +39,7 @@ Browser composer
 |---|---|
 | `src/web-server/slash-registry.ts` | Shared `ensureSlashRegistry()` memo — one registry init for both `routes.ts` and `slash-dispatch.ts` |
 | `src/web-server/command-gate.ts` | Canonical gate list; `isGated(name)` + `gateReason(name)`; **single source of truth** for Stage 0 |
-| `src/web-server/writer.buffer.ts` | `BufferingWriter` — captures handler output; `toOutputBlock()` strips VT control chars |
+| `src/web-server/writer.buffer.ts` | `BufferingWriter` — captures ordered text/structured output; `toOutputBlocks()` returns snapshots |
 | `src/web-server/session-owner.slash.ts` | Per-session `SessionStats` side-car; `buildSessionRef()` |
 | `src/web-server/slash-context.web.ts` | `createWebSlashContext()` — `SlashContext` adapter for web |
 | `src/web-server/routes.commands.ts` | `POST /api/sessions/:id/commands` handler |
@@ -60,6 +60,7 @@ POST /api/sessions/:id/commands
 {
   "blocks": [
     {
+      "kind": "text",
       "ansi": "\u001b[1mAvailable commands\u001b[0m\n...",
       "text": "Available commands\n..."
     }
@@ -67,6 +68,49 @@ POST /api/sessions/:id/commands
   "control": { "kind": "continue" }
 }
 ```
+
+### Structured blocks (Stage 2)
+
+`src/cli/slash/output-blocks.ts` defines an optional `Writer.block(block)` capability.
+`output-blocks.format.ts` provides `writeTable`, `writeKeyValue`, `writeDiff`,
+`writeList`, and `writeLink`. Each helper takes semantic data and a legacy rendering
+callback: block-capable writers receive structure; console writers execute the
+original palette/line rendering unchanged. This callback is necessary to preserve
+existing whitespace, colors, widths and newline behavior rather than invent a
+second generic terminal format.
+
+All blocks carry mandatory `text` (plain clipboard/fallback representation) and
+`ansi` (text renderer representation). Structured helpers strip terminal controls
+from all fields and generate deterministic fallbacks. The JSON-only wire contract
+is mirrored in `dashboard/src/types/command-wire.ts`, with no CLI imports:
+
+| kind | Additional fields |
+|---|---|
+| `text` | none; legacy responses without `kind` remain supported |
+| `table` | `columns: string[]`, `rows: string[][]`, optional `title` |
+| `keyValue` | `entries: {key: string, value: string}[]`, optional `title` |
+| `diff` | `diff: string` (unified diff), optional `fileName` |
+| `list` | `items: {text: string, description?: string}[]`, optional `title` |
+| `link` | `url: string`, `label: string` |
+
+The buffer preserves write order: contiguous `line`/`raw` writes become a text
+block, each structured write flushes preceding text, and following text forms a
+new block. Snapshots are non-destructive and detached; no output returns `[]`.
+`SlashResult` remains control-only.
+
+The dashboard registry selects renderers by `kind`; unknown kinds fall back to
+text. Tables use accessible headers and horizontal scrolling, key-values use
+semantic description lists, diffs render escaped React text with line colors,
+and links accept only HTTP(S) schemes. Copy concatenates block `text` fields in
+order. Navigation metadata lives in `dashboard/src/lib/nav-registry.ts`.
+
+Migrated handlers: `/help` (same flat registry order as REPL), `/usage`, `/tokens`
+(and `/ctx`), `/mcp` (including auth links), `/diff`, `/worktree list`.
+`/info` did not exist in the baseline; Stage 2 adds a read-only local-stat summary.
+`/resume` is a picker/session swap and remains deferred, not a plain listing.
+Twenty original plain/ANSI golden cases in `output-parity.test.ts` prove the
+migrated console paths are byte-identical; `/info` has its own exact-output test.
+Renderer tests cover all kinds, unknown fallback, safety and clipboard behavior.
 
 ### Control variants
 
@@ -96,8 +140,8 @@ duration of the browser session. On page reload, only server-persisted transcrip
 (tool cards, assistant messages, etc.) reappear.
 
 This is intentional for Stage 0: command output is ephemeral diagnostic/utility output.
-Stage 2 will introduce structured output blocks (keyValue, table, list, diff) that may be
-selectively persisted via the journal.
+Stage 2 adds structured output blocks but does not change persistence: all command output
+remains client-local, including structured blocks.
 
 ## Session Stats
 

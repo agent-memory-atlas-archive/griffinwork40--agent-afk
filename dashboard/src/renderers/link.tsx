@@ -10,7 +10,7 @@ export function renderLink(block: CommandOutputBlock) {
   } catch {
     return <span>{block.text}</span>;
   }
-  if (!['https:', 'http:', 'mailto:'].includes(url.protocol)) return <span>{block.text}</span>;
+  if (!['https:', 'http:'].includes(url.protocol)) return <span>{block.text}</span>;
   return (
     <a href={url.href} target="_blank" rel="noopener noreferrer" className={cn('break-all text-primary underline underline-offset-2', 'rounded focus:outline-none focus:ring-1 focus:ring-ring')}>
       {block.label}

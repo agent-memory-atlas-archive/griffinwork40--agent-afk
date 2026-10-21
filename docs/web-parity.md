@@ -20,15 +20,16 @@ Baseline measured 2026-10-21 on main @ 1c846bee0.
 
 | Command | REPL class | Web now | Target | Web form |
 |---|---|---|---|---|
-| /help | portable | TEXT | S0 → S2 | command palette + text |
+| /help | portable | DONE | S2 | structured command list, preserving REPL registry order |
+| /info | portable | DONE | S2 | new read-only session key-value summary |
 | /cost | portable | TEXT | S0 → S2 | keyValue block; session meter already shows cost |
-| /tokens | portable | TEXT | S0 → S2 | keyValue/table |
+| /tokens | portable | DONE | S2 | keyValue panels + category table; local fallback |
 | /history | portable | TEXT | S0 | text (transcript view already covers display) |
 | /tools | portable | TEXT | S0 → S2 | list |
-| /mcp | portable | TEXT | S0 → S2 + UX | MCP panel (servers, status, pending OAuth URLs) |
+| /mcp | portable | DONE | S2; dedicated view UX | server/status table; auth links |
 | /limits | portable | TEXT | S0 → S2 | table |
 | /debug | portable | TEXT | S0 | text |
-| /usage | portable | TEXT | S0 → S2 + UX | quota panel (5h/7d windows) |
+| /usage | portable | DONE | S2; dedicated view UX | quota keyValue panel (5h/7d windows); unavailable warning |
 | /todo | portable | TEXT | S0 + UX | todo panel above composer |
 | /goal | portable | TEXT | S0 + UX | goal chip in session header |
 | /name | portable | GATED | S1 | inline rename in sidebar; requires session-control service |
@@ -43,10 +44,10 @@ Baseline measured 2026-10-21 on main @ 1c846bee0.
 | /stats | portable | TEXT | S0 → S2 | table |
 | /font-size | portable | GATED | N/A | edits VS Code/Cursor terminal settings; browser zoom covers web |
 | /allow-dir | portable | TEXT | S0 | text; later a settings section |
-| /worktree | portable | TEXT | S0 → S2 | table |
+| /worktree | portable | DONE (list) | S2 | list table; other actions retain text |
 | /reauth | portable | GATED | S1 | settings action |
 | /search | portable | TEXT | S0 + UX | transcript find (Cmd+F within session) |
-| /diff | portable | TEXT | S0 → S2 | diff block via existing diff viewer |
+| /diff | portable | DONE | S2 | structured unified diff; empty-state message |
 | /doctor | portable | TEXT | S0 → S2 | checklist |
 | /spine | portable | TEXT | S0 | text |
 | /whatif | portable | TEXT | S0 | text with progress |
@@ -67,7 +68,7 @@ Baseline measured 2026-10-21 on main @ 1c846bee0.
 | /theme | session-control | GATED | UX | dashboard light/dark/auto theme |
 | /retry | session-control | GATED | S1 | retry action on last message; requires session-control service |
 | /model | partial | GATED | S1 (arg) → S3 (picker) | composer model selector (wired to the session) |
-| /resume | partial | GATED | S4 | sidebar: take over a stored session |
+| /resume | partial | GATED | S3 / S4 | picker, not a plain listing; intentionally not migrated in S2 |
 | /transcript | partial | TEXT | S0 | text; transcript view already exists |
 | /afk-md | partial | TEXT | S0 (show/reload/add) | `user`/`project` edit subcommands → UX editor |
 | /config | partial | TEXT | S1 (view/set) → UX | editable settings view |

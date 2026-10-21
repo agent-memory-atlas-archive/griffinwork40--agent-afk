@@ -83,7 +83,7 @@ describe.each([0, 1] as const)('original console bytes (color=%i)', (level) => {
     chalk.level = level;
     const { ctx, bytes } = context();
     if (scenario === 'usage-empty') vi.mocked(fetchSubscriptionUsage).mockResolvedValue({ kind: 'ok' } as never);
-    if (scenario === 'usage-unavailable') vi.mocked(fetchSubscriptionUsage).mockResolvedValue({ kind: 'unavailable', reason: 'no-token' });
+    if (scenario === 'usage-unavailable') vi.mocked(fetchSubscriptionUsage).mockResolvedValue({ kind: 'unavailable', reason: 'no-token', detail: 'No token' });
     if (scenario === 'tokens-local') vi.mocked(ctx.session.current.getContextUsage).mockRejectedValue(new Error('offline'));
     const name = scenario.startsWith('tokens-') ? '/tokens' : scenario.startsWith('usage') ? '/usage' : scenario.startsWith('mcp') ? '/mcp' : `/${scenario}`;
     const command = [...infoCommands, ...coreCommands, diffCmd, worktreeCmd].find((cmd) => cmd.name === name)!;
@@ -117,7 +117,11 @@ describe('structured command output uses source data', () => {
     if (name === '/mcp' && !args) expect(blocks[0]).toMatchObject({ rows: [['search', 'connected'], ['browser', 'oauth_pending'], ['legacy', '']] });
     if (kind === 'link') expect(blocks[0]).toMatchObject({ url: 'https://example.test/oauth', label: 'Authorize browser' });
     if (kind === 'diff') {
-      expect(blocks[0]).toMatchObject({ diff: rawDiff, fileName: 'a.ts' });
+      expect(blocks[0]).toMatchObject({ kind: 'keyValue', title: 'Uncommitted changes', entries: [
+        { key: 'Path', value: 'a.ts' }, { key: 'Files', value: '1' },
+        { key: 'Additions', value: '1' }, { key: 'Deletions', value: '1' },
+      ] });
+      expect(blocks[1]).toMatchObject({ diff: rawDiff, fileName: 'a.ts' });
       expect(bytes()).toBe('');
     }
     if (name === '/worktree') expect(blocks[0]).toMatchObject({ rows: [
