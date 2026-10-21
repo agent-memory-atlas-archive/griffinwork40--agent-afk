@@ -139,7 +139,7 @@ describe('classifySlashInput', () => {
       // No acceptsAttachments — native command, not a skill.
     });
     const result = await classifySlashInput('/help', '/tmp', undefined);
-    expect(result.kind).toBe('passthrough');
+    expect(result.kind).toBe('native');
   });
 
   it('returns skill with built message for skill commands', async () => {

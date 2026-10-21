@@ -44,6 +44,7 @@ import { handleSearchMemory, handleGetHotMemory } from './routes.memory.js';
 import { handleListBgJobs, handleGetBgJob } from './routes.bg-jobs.js';
 import { handleGetConfig } from './routes.config.js';
 import { handleListHandoffs, handleAnswerHandoff } from './routes.handoffs.js';
+import { handleCommand } from './routes.commands.js';
 import { errorMessage } from '../utils/errors.js';
 
 export const DEFAULT_WEB_PORT = 4141;
@@ -310,6 +311,12 @@ async function dispatch(
   const promptMatch = /^\/api\/sessions\/([^/]+)\/prompt$/.exec(path);
   if (promptMatch?.[1] && method === 'POST') {
     await handlePrompt(ctx, res, decodeURIComponent(promptMatch[1]), await readBody(req));
+    return;
+  }
+
+  const commandMatch = /^\/api\/sessions\/([^/]+)\/commands$/.exec(path);
+  if (commandMatch?.[1] && method === 'POST') {
+    await handleCommand(ctx, res, decodeURIComponent(commandMatch[1]), await readBody(req));
     return;
   }
 

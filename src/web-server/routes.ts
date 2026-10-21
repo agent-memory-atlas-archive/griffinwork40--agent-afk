@@ -124,13 +124,12 @@ let commandUniverseInitialization: Promise<CommandEntry[]> | null = null;
 type CommandUniverseLoader = () => Promise<CommandEntry[]>;
 
 const defaultCommandUniverseLoader: CommandUniverseLoader = async () => {
-  const [{ registerAll }, { buildSlashUniverse }, { registerPluginSkillsForWeb }] = await Promise.all([
-    import('../cli/slash/index.js'),
+  const [{ ensureSlashRegistry }, { buildSlashUniverse }] = await Promise.all([
+    import('./slash-registry.js'),
     import('../cli/input/trigger.js'),
-    import('./register-plugin-skills.js'),
   ]);
-  registerAll();
-  await registerPluginSkillsForWeb();
+  // Use shared memo — avoids double-calling registerAll() which resets the registry.
+  await ensureSlashRegistry();
   return buildSlashUniverse();
 };
 
@@ -209,7 +208,24 @@ export async function handleCommands(res: ServerResponse): Promise<void> {
       return;
     }
   }
-  sendJson(res, 200, { commands: commandUniverse });
+  // Enrich each command with kind/web/gateReason for the dashboard (A4).
+  // Re-lookup via registry to get the full SlashCommand (which carries
+  // acceptsAttachments) — CommandEntry is a lighter projection that omits it.
+  const [{ isGated, gateReason }, { lookup }] = await Promise.all([
+    import('./command-gate.js'),
+    import('../cli/slash/registry.js'),
+  ]);
+  const enriched = (commandUniverse ?? []).map((cmd) => {
+    const full = lookup(cmd.name); // SlashCommand | undefined (registry is initialized by now)
+    const gated = isGated(cmd.name);
+    return {
+      ...cmd,
+      kind: full?.acceptsAttachments ? 'skill' : 'native',
+      web: gated ? 'gated' : 'ok',
+      ...(gated ? { gateReason: gateReason(cmd.name) } : {}),
+    };
+  });
+  sendJson(res, 200, { commands: enriched });
 }
 
 /**
@@ -390,6 +406,11 @@ async function dispatchSlashForWeb(
           : `Unknown command: ${result.command}`,
       });
       return true;
+
+    case 'native':
+      // Native command — caller routes to /api/sessions/:id/commands instead.
+      // No turn was queued; nothing to release.
+      return false;
   }
 }
 
