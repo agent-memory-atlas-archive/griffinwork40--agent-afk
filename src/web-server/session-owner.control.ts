@@ -1,7 +1,8 @@
 /** Web-owned accounting and stable-id projection around canonical session controls.
  * Admission belongs exclusively to the commands route, not this adapter.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { clearConversation } from '../agent/session-control/index.js';
 import { FastModeController } from '../agent/fast-mode.js';
 import { resolveModelId } from '../agent/session/model-resolution.js';
@@ -17,7 +18,7 @@ import type { CommandControl } from './shared/command-wire.js';
 export interface SessionControlResult {
   result: Awaited<ReturnType<SlashCommand['handler']>>;
   control?: CommandControl;
-  session?: { model?: string; name?: string };
+  session?: { model?: string; name?: string; thinkingUi?: 'summary' | 'live' | 'digest' | 'off' };
 }
 
 /** One instance per owned session, including before provider construction. */
@@ -84,10 +85,10 @@ export class WebSessionControl {
     const result = await cmd.handler(ctx, args);
     this.stats.sessionId = this.id;
     this.onMetadata({ model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}) });
-    if (cmd.name === '/model' || cmd.name === '/name') {
+    if (cmd.name === '/model' || cmd.name === '/name' || cmd.name === '/thinking') {
       // Metadata is authoritative even when validation rejected the requested value.
       this.persist();
-      return { result, session: { model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}) } };
+      return { result, session: { model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}), ...(cmd.name === '/thinking' ? { thinkingUi: this.stats.thinkingUi ?? 'live' } : {}) } };
     }
     return { result };
   }
@@ -97,17 +98,19 @@ export class WebSessionControl {
     saveSession({ ...this.stats, sessionId: this.session.sessionId ?? this.id }, this.id);
   }
 
-  /** Canonical reset seals the OLD provider ledger and mints a new provider id.
-   * Browser ownership must keep its original id, so replace its cleared projection
-   * and mirror future output there. Provider journals/ledgers remain untouched.
-   * Clients reconnect SSE without Last-Event-ID on the clear control.
+  /** Reset can retain its memoized provider id. Atomically replace the stable
+   * ledger so tailers can detect a generation even if it outgrows their offset.
+   * When ids match the provider remains the sole writer. Only distinct provider
+   * ids need a second, browser-owned projection.
    */
   private async resetProjection(): Promise<void> {
     await this.projection?.close('reset');
     mkdirSync(getSessionLedgerDir(this.id), { recursive: true });
-    writeFileSync(getSessionLedgerPath(this.id), '', { mode: 0o600 });
-    this.projection = new SessionLedgerWriter(this.id);
-    this.projection.record({ kind: 'meta', sessionId: this.id, model: String(this.stats.model), ...(this.stats.cwd ? { cwd: this.stats.cwd } : {}) });
+    const path = getSessionLedgerPath(this.id);
+    const temporary = `${path}.${randomUUID()}.reset`;
+    writeFileSync(temporary, JSON.stringify({ v: 1, ts: Date.now(), kind: 'meta', sessionId: this.id, model: String(this.stats.model), ...(this.stats.cwd ? { cwd: this.stats.cwd } : {}) }) + '\n', { mode: 0o600 });
+    renameSync(temporary, path);
+    this.projection = this.session.sessionId !== this.id ? new SessionLedgerWriter(this.id) : undefined;
     if (this.bound) return;
     this.bound = true;
     const sideband = this.session.pushSidebandEvent.bind(this.session);

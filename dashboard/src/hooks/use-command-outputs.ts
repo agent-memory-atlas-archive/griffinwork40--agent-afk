@@ -23,6 +23,7 @@ export interface CommandOutputItem {
 export interface UseCommandOutputsResult {
   /** Ordered output items for one session (empty when none). */
   itemsFor: (sessionId: string | null) => CommandOutputItem[];
+  clearItems: (sessionId: string, preserveClearConfirmation?: boolean) => void;
   /** Append an output for a session, anchored after `afterCount` transcript items. */
   addItem: (sessionId: string, input: string, response: CommandResponse, afterCount: number) => void;
 }
@@ -47,10 +48,19 @@ export function useCommandOutputs(): UseCommandOutputsResult {
     [],
   );
 
+  const clearItems = useCallback((sessionId: string, preserveClearConfirmation = false) => {
+    setBySession((prev) => {
+      const confirmation = preserveClearConfirmation
+        ? [...(prev[sessionId] ?? EMPTY)].reverse().find((item) => item.response.control.kind === 'clear')
+        : undefined;
+      return { ...prev, [sessionId]: confirmation ? [confirmation] : EMPTY };
+    });
+  }, []);
+
   const itemsFor = useCallback(
     (sessionId: string | null) => (sessionId === null ? EMPTY : bySession[sessionId] ?? EMPTY),
     [bySession],
   );
 
-  return { itemsFor, addItem };
+  return { itemsFor, addItem, clearItems };
 }

@@ -62,7 +62,7 @@ function record(stream: number, id: number, text: string) {
 }
 
 describe('Dashboard session controls', () => {
-  it('clear removes old transcript and local outputs, retains confirmation, and ignores late old replay', async () => {
+  it('clear response before SSE reset retains fresh confirmation without reopening the reader', async () => {
     const ta = await selectFirst();
     act(() => {
       record(0, 1, 'Old transcript message');
@@ -75,19 +75,51 @@ describe('Dashboard session controls', () => {
 
     response = { blocks: [{ text: 'Conversation cleared.', ansi: 'Conversation cleared.' }], control: { kind: 'clear' } };
     await command(ta, '/clear ');
-    await waitFor(() => expect(streams).toHaveLength(2));
-    expect(screen.queryByText('Old transcript message')).toBeNull();
+    act(() => streams[0]!.enqueue(new TextEncoder().encode('data: {"reset":true}\n\n')));
+    await waitFor(() => expect(screen.queryByText('Old transcript message')).toBeNull());
+    expect(streams).toHaveLength(1);
     expect(screen.queryByText('Old command output')).toBeNull();
     expect(screen.getByText('Conversation cleared.')).toBeTruthy();
-    expect((fetchStream.mock.calls[1]![1] as RequestInit).headers).not.toHaveProperty('last-event-id');
-
-    act(() => {
-      record(0, 2, 'Late stale replay');
-      record(1, 1, 'New transcript message');
-    });
+    act(() => record(0, 1, 'New transcript message'));
     await screen.findByText('New transcript message');
-    expect(screen.queryByText('Late stale replay')).toBeNull();
     expect(screen.getByText('Conversation cleared.')).toBeTruthy();
+  });
+
+  it('server reset from another tab drops local output and queued prompts, then keeps new records', async () => {
+    const ta = await selectFirst();
+    response = { blocks: [{ text: 'Obsolete local output', ansi: 'Obsolete local output' }], control: { kind: 'continue' } };
+    await command(ta, '/cost ');
+    act(() => record(0, 1, 'Active old question'));
+    await screen.findByText('Active old question');
+    await command(ta, 'Queued before remote clear');
+    await screen.findByText('Queued before remote clear');
+    act(() => streams[0]!.enqueue(new TextEncoder().encode(
+      'data: {"reset":true}\n\nid: new-generation:0\ndata: {"record":{"kind":"user","text":"Fresh remote generation"},"replay":false}\n\n',
+    )));
+    await screen.findByText('Fresh remote generation');
+    expect(screen.queryByText('Active old question')).toBeNull();
+    expect(screen.queryByText('Obsolete local output')).toBeNull();
+    expect(screen.queryByText('Queued before remote clear')).toBeNull();
+    expect(fetchStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('SSE reset before clear response retains confirmation but a subsequent remote reset removes it', async () => {
+    const ta = await selectFirst();
+    let resolve!: (value: unknown) => void;
+    vi.mocked(apiFetch).mockImplementation(async (url) => {
+      if (url === '/api/models') return { models: [] };
+      if (url === '/api/commands') return { commands: [] };
+      return new Promise((done) => { resolve = done; });
+    });
+    fireEvent.change(ta, { target: { value: '/clear ' } });
+    fireEvent.keyDown(ta, { key: 'Enter' });
+    await waitFor(() => expect(resolve).toBeTypeOf('function'));
+    act(() => streams[0]!.enqueue(new TextEncoder().encode('data: {"reset":true}\n\n')));
+    await act(async () => resolve({ blocks: [{ text: 'Fresh confirmation', ansi: 'Fresh confirmation' }], control: { kind: 'clear' } }));
+    await screen.findByText('Fresh confirmation');
+    act(() => streams[0]!.enqueue(new TextEncoder().encode('data: {"reset":true}\n\n')));
+    await waitFor(() => expect(screen.queryByText('Fresh confirmation')).toBeNull());
+    expect(fetchStream).toHaveBeenCalledTimes(1);
   });
 
   it('failed clear keeps existing outputs and does not restart the stream', async () => {
@@ -157,6 +189,44 @@ describe('Dashboard session controls', () => {
     expect(screen.getByText('Second session transcript')).toBeTruthy();
     expect(screen.queryByText('Old session cleared')).toBeNull();
     expect(streams).toHaveLength(2);
+  });
+
+  it('/thinking metadata hides existing and new reasoning, and live restores retained data', async () => {
+    const ta = await selectFirst();
+    const thinking = (id: number, text: string) => streams[0]!.enqueue(new TextEncoder().encode(
+      `id: ${id}\ndata: ${JSON.stringify({ record: { kind: 'thinking', text }, replay: true })}\n\n`,
+    ));
+    act(() => thinking(1, 'Existing reasoning'));
+    await screen.findByText('Existing reasoning');
+    response = { blocks: [], control: { kind: 'continue' }, session: { thinkingUi: 'off' } };
+    await command(ta, '/thinking off');
+    expect(screen.queryByText('Existing reasoning')).toBeNull();
+    act(() => thinking(2, 'Reasoning while hidden'));
+    await act(async () => {});
+    expect(screen.queryByText('Reasoning while hidden')).toBeNull();
+
+    // Other controls must not reset the display preference.
+    response = { blocks: [], control: { kind: 'continue' }, session: { name: 'Still hidden' } };
+    await command(ta, '/name Still hidden');
+    expect(screen.queryByText('Existing reasoning')).toBeNull();
+    response = { blocks: [], control: { kind: 'continue' }, session: { thinkingUi: 'live' } };
+    await command(ta, '/thinking live');
+    expect(screen.getByText('Existing reasoning')).toBeTruthy();
+    expect(screen.getByText('Reasoning while hidden')).toBeTruthy();
+    expect(streams).toHaveLength(1);
+  });
+
+  it('/thinking display preference remains scoped to its session', async () => {
+    const ta = await selectFirst();
+    response = { blocks: [], control: { kind: 'continue' }, session: { thinkingUi: 'off' } };
+    await command(ta, '/thinking off');
+    await act(async () => fireEvent.click(screen.getAllByText('Second session')[0]!.closest('button')!));
+    act(() => streams[1]!.enqueue(new TextEncoder().encode('id: 1\ndata: {"record":{"kind":"thinking","text":"Second reasoning"},"replay":true}\n\n')));
+    await screen.findByText('Second reasoning');
+    await act(async () => fireEvent.click(screen.getAllByText('First session')[0]!.closest('button')!));
+    act(() => streams[2]!.enqueue(new TextEncoder().encode('id: 1\ndata: {"record":{"kind":"thinking","text":"First hidden reasoning"},"replay":true}\n\n')));
+    await act(async () => {});
+    expect(screen.queryByText('First hidden reasoning')).toBeNull();
   });
 
   it('/name metadata updates sidebar title without parsing command output', async () => {

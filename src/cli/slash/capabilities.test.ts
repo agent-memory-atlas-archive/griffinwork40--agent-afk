@@ -75,7 +75,7 @@ describe('positive surface capabilities', () => {
     const cmd = command('/editor');
     register(cmd);
     await dispatch('/editor', {} as SlashContext);
-    await dispatch('/editor', { capabilities: new Set(['tty']) } as SlashContext);
+    await dispatch('/editor', { capabilities: new Set(['tty']) } as unknown as SlashContext);
     expect(cmd.handler).toHaveBeenCalledTimes(2);
   });
 

@@ -132,14 +132,14 @@ describe('setSessionModel', () => {
     expect(setModel).toHaveBeenCalledWith('haiku');
   });
 
-  it('updates stats only after successful provider switch and preserves case-sensitive wire IDs', async () => {
+  it('updates stats after provider success and preserves legacy full-ID lowercasing', async () => {
     const stats = createSessionStats('sonnet');
     const setModel = vi.fn(async () => { expect(stats.model).toBe('sonnet'); });
-    expect(await setSessionModel({ setModel }, stats, '  org/Qwen-Model  ')).toEqual({ ok: true, model: 'org/Qwen-Model' });
-    expect(setModel).toHaveBeenCalledWith('org/Qwen-Model');
-    expect(stats.model).toBe('org/Qwen-Model');
+    expect(await setSessionModel({ setModel }, stats, '  org/Qwen-Model  ')).toEqual({ ok: true, model: 'org/qwen-model' });
+    expect(setModel).toHaveBeenCalledWith('org/qwen-model');
+    expect(stats.model).toBe('org/qwen-model');
     await expect(setSessionModel({ setModel: vi.fn().mockRejectedValue(new Error('offline')) }, stats, 'haiku')).rejects.toThrow('offline');
-    expect(stats.model).toBe('org/Qwen-Model');
+    expect(stats.model).toBe('org/qwen-model');
   });
 });
 

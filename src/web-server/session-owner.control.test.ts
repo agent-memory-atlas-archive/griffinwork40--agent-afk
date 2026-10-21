@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { LedgerLifecycle } from '../agent/session/ledger-lifecycle.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSessionControl } from './session-owner.control.js';
@@ -66,6 +67,48 @@ describe('WebSessionControl', () => {
     expect(saveSession).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'fresh-provider', totalTurns: 0 }), 'stable-web');
     await s.control.close();
     expect(readFileSync(getSessionLedgerPath('stable-web'), 'utf8')).not.toContain('old answer');
+  });
+
+  it('same-id provider is the sole writer after repeated resets (real LedgerLifecycle)', async () => {
+    const s = setup();
+    const ledger = new LedgerLifecycle();
+    const ensure = () => ledger.ensure({ sessionId: 'stable-web', fallbackModel: 'sonnet', depth: undefined, parentSessionId: undefined, tracePath: undefined, getMetadata: () => ({ model: 'sonnet' }) });
+    s.fake.reset.mockImplementation(async () => { await ledger.seal('reset'); });
+    s.fake.sendMessageStream = async function* () {
+      ensure();
+      ledger.recordUser('provider question');
+      const event = { type: 'message' as const, message: { role: 'assistant' as const, content: 'new answer' } };
+      ledger.recordEvent(event);
+      yield event;
+      const done = { type: 'done' as const, metadata: {} };
+      ledger.recordEvent(done);
+      yield done;
+    };
+    ensure();
+    ledger.recordUser('old question');
+    await ledger.seal('reset');
+    const originalInode = statSync(getSessionLedgerPath('stable-web')).ino;
+    await s.control.execute(command('/clear'), s.ctx, '');
+    expect(statSync(getSessionLedgerPath('stable-web')).ino).not.toBe(originalInode);
+    for await (const _ of s.session.sendMessageStream('wrapper question')) { /* drain */ }
+    await s.control.execute(command('/clear'), s.ctx, '');
+    for await (const _ of s.session.sendMessageStream('wrapper question')) { /* drain */ }
+    await ledger.seal('close');
+    await s.control.close();
+    const records = readFileSync(getSessionLedgerPath('stable-web'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    expect(records.filter((r) => r.kind === 'user')).toEqual([expect.objectContaining({ text: 'provider question' })]);
+    expect(records.filter((r) => r.kind === 'assistant')).toHaveLength(1);
+    expect(records.filter((r) => r.kind === 'closed')).toHaveLength(1);
+    expect(saveSession).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'stable-web' }), 'stable-web');
+  });
+
+  it('returns the actual thinking mode as authoritative response metadata', async () => {
+    const s = setup();
+    const response = await s.control.execute(command('/thinking', async (ctx) => {
+      setSessionThinking(ctx.stats, 'off');
+      return 'continue';
+    }), s.ctx, 'off');
+    expect(response.session?.thinkingUi).toBe('off');
   });
 
   it('does not clear accounting or emit success when reset rejects', async () => {

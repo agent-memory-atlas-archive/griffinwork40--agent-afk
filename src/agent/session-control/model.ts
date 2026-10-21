@@ -14,11 +14,10 @@ export async function setSessionModel(
   stats: SessionStats,
   target: string,
 ): Promise<SetSessionModelResult> {
-  // Aliases are case-insensitive; full wire IDs (e.g. HuggingFace names)
-  // retain their spelling instead of being damaged by surface normalization.
-  const trimmed = target.trim();
-  const lower = trimmed.toLowerCase();
-  const model = MODEL_ALIASES_HINT.includes(lower) ? lower : trimmed;
+  // Preserve the REPL's historical normalization for aliases AND full IDs.
+  // Tradeoff: case-sensitive wire IDs (e.g. HuggingFace names) are lowercased;
+  // changing that binding behavior requires a separate compatibility decision.
+  const model = target.trim().toLowerCase();
   if (!isValidModelArg(model)) {
     return { ok: false, message: `Unknown model: ${model}. Aliases: ${MODEL_ALIASES_HINT.join(', ')}  (or a full model id)` };
   }

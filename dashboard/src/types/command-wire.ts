@@ -22,8 +22,11 @@ export interface CommandResponse {
   blocks: CommandOutputBlock[];
   control: CommandControl;
   /** Authoritative session metadata after a successful control operation. */
-  session?: { model?: string; name?: string };
+  session?: { model?: string; name?: string; thinkingUi?: ThinkingUiMode };
 }
+
+/** Display-only preference; hiding thinking never removes transcript data. */
+export type ThinkingUiMode = 'summary' | 'live' | 'digest' | 'off';
 
 /** Normalised SlashResult plus explicit successful conversation reset. */
 export type CommandControl =

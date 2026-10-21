@@ -70,6 +70,7 @@ export interface UseSseStreamResult {
   events: unknown[];
   status: StreamStatus;
   error: string | null;
+  generation: number;
 }
 
 /**
@@ -81,9 +82,12 @@ export interface UseSseStreamResult {
 export function useSseStream(
   sessionId: string | null,
   revision = 0,
+  onReset?: () => void,
 ): UseSseStreamResult {
   const streamKey = `${sessionId ?? ''}:${revision}`;
-  const [snapshot, setSnapshot] = useState<{ key: string; events: unknown[] }>({ key: streamKey, events: [] });
+  const [snapshot, setSnapshot] = useState<{ key: string; events: unknown[]; generation: number }>({ key: streamKey, events: [], generation: 0 });
+  const onResetRef = useRef(onReset);
+  onResetRef.current = onReset;
   const [status, setStatus] = useState<StreamStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +104,7 @@ export function useSseStream(
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     if (sessionId === null) {
       // No session selected — stay silent, don't mark as closed.
-      setSnapshot({ key: streamKey, events: [] });
+      setSnapshot({ key: streamKey, events: [], generation: 0 });
       setStatus('connecting');
       setError(null);
       return;
@@ -110,7 +114,7 @@ export function useSseStream(
     const sid: string = sessionId;
 
     // Reset state for the new session.
-    setSnapshot({ key: streamKey, events: [] });
+    setSnapshot({ key: streamKey, events: [], generation: 0 });
     setError(null);
     lastEventIdRef.current = undefined;
     attemptRef.current = 0;
@@ -192,7 +196,15 @@ export function useSseStream(
               break outer;
             }
 
-            setSnapshot((prev) => ({ key: streamKey, events: [...prev.events, payload] }));
+            if (typeof payload === 'object' && payload !== null &&
+                (payload as { reset?: unknown }).reset === true) {
+              // Reset is nonterminal; IDs are opaque and generation-qualified.
+              lastEventIdRef.current = frame.id;
+              onResetRef.current?.();
+              setSnapshot((prev) => ({ key: streamKey, events: [], generation: prev.generation + 1 }));
+              continue;
+            }
+            setSnapshot((prev) => ({ ...prev, key: streamKey, events: [...prev.events, payload] }));
           }
         }
       } catch (err) {
@@ -227,5 +239,6 @@ export function useSseStream(
     };
   }, [sessionId, revision, streamKey]);
 
-  return { events: snapshot.key === streamKey ? snapshot.events : [], status, error };
+  return { events: snapshot.key === streamKey ? snapshot.events : [], status, error,
+    generation: snapshot.key === streamKey ? snapshot.generation : 0 };
 }

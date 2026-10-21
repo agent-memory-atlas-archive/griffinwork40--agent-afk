@@ -22,8 +22,8 @@ export interface CommandOutputBlock {
 export interface CommandResponse {
   blocks: CommandOutputBlock[];
   control: CommandControl;
-  /** Authoritative owner metadata after model/name commands. */
-  session?: { model?: string; name?: string };
+  /** Authoritative owner metadata after successful session controls. */
+  session?: { model?: string; name?: string; thinkingUi?: 'summary' | 'live' | 'digest' | 'off' };
 }
 
 /** Normalised `SlashResult` for the wire. All 6 variants represented. */

@@ -32,6 +32,7 @@ interface ComposerProps {
   currentModel?: string;
   /** Called with command output to insert a client-local transcript item. */
   onCommandOutput?: (input: string, response: CommandResponse) => void;
+  onCommandStart?: (input: string) => void;
   /** Called with a toast message (e.g. gated command reason). */
   onToast?: (message: string) => void;
 }
@@ -108,6 +109,7 @@ export function Composer({
   onModelSelect,
   currentModel,
   onCommandOutput,
+  onCommandStart,
   onToast,
 }: ComposerProps) {
   const [text, setText] = useState('');
@@ -175,6 +177,7 @@ export function Composer({
    */
   const submitCommand = useCallback(async (input: string): Promise<boolean> => {
     const lifetime = lifetimeRef.current;
+    onCommandStart?.(input);
     const response = await apiFetch<CommandResponse>(
       `/api/sessions/${sessionId}/commands`,
       { method: 'POST', body: JSON.stringify({ input }) },
@@ -203,7 +206,7 @@ export function Composer({
       onToast?.('Session ended in REPL terms — no effect on web (Stage 4)');
     }
     return true;
-  }, [sessionId, onCommandOutput, onModelSelect, onToast, submitPrompt]);
+  }, [sessionId, onCommandStart, onCommandOutput, onModelSelect, onToast, submitPrompt]);
 
   const selectModel = useCallback(async (modelId: string) => {
     if (disabled || submitting || isBusy || modelId === currentModel) return;

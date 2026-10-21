@@ -16,6 +16,14 @@ S4 session lifecycle, S5 Telegram adoption, UX = dashboard-native work).
 
 Baseline measured 2026-10-21 on main @ 1c846bee0.
 
+Stage 1 update: `/clear`, `/model <name>`, `/name`, `/thinking`, `/fast`, and `/compact`
+now execute canonical session controls on web. `/model` without arguments prints current
+model and available aliases as text; the terminal picker remains REPL-only. Clear also resets
+the browser transcript and command outputs across connected tabs. Usage/tokens/context/MCP
+reads share the canonical service and remain text output. Capability requirements replace
+the Stage 0 flat gate list. Rows below retain future UX targets; no pickers, fork/resume or
+Telegram adoption were added in Stage 1.
+
 ## Slash commands (58 built-in)
 
 | Command | REPL class | Web now | Target | Web form |

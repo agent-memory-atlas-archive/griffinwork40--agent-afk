@@ -1,6 +1,31 @@
 # Web Command Layer — Architecture
 
-> Stage 0 of the Web↔CLI Parity Command Layer (PATH_B: surface-agnostic command layer, staged).
+> Stages 0–1 of the Web↔CLI Parity Command Layer (surface-agnostic, staged).
+
+## Stage 1: capabilities and canonical session controls
+
+Command availability is derived from `SlashCommand.requires` and the surface's positive
+capability set (`src/cli/slash/capabilities.ts`). Only rewind/pickers, fork/resume and exit
+retain explicit lifecycle-stage deferrals; GET `/api/commands` keeps its existing wire shape.
+The REPL declares actual TTY availability; web advertises session control, not terminal access.
+
+`src/agent/session-control/` owns reset, compaction hooks, model/name/preferences and shared
+usage/token/context/MCP reads. Busy admission stays with callers. REPL handlers retain their
+formatting and terminal progress adapters; web captures text progress without ora.
+
+`session-owner.control.ts` binds these operations to live owner stats, autosave, and the
+provider's fast-mode controller. Clear resets conversation/stats/trusted-skill ledger while
+retaining model, permission and thinking preference. Telegram's replacement-session behavior
+is deliberately not adopted; Telegram migration remains Stage 5.
+
+Successful clear returns `control: {kind:'clear'}`. Model/name/thinking commands may return
+`session` metadata. The dashboard clears old client-local command output and conversation
+state, retains the clear confirmation, and applies authoritative model/name/display changes.
+Ledger replacement is atomic; generation-qualified opaque SSE cursors and `{reset:true}`
+frames rebase both existing tabs and reconnecting clients, including repeated clears.
+
+The sections below describe the original Stage 0 foundation; its flat gate-list description
+is historical and superseded by the capability derivation above.
 
 ## Overview
 

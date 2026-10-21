@@ -53,10 +53,10 @@ export interface UseTranscriptResult {
   clear: () => void;
 }
 
-export function useTranscript(sessionId: string | null): UseTranscriptResult {
+export function useTranscript(sessionId: string | null, onReset?: () => void): UseTranscriptResult {
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revision = sessionId ? revisions[sessionId] ?? 0 : 0;
-  const { events, status, error } = useSseStream(sessionId, revision);
+  const { events, status, error, generation } = useSseStream(sessionId, revision, onReset);
 
   const [items, setItems] = useState<TranscriptItem[]>([]);
   const [totals, setTotals] = useState<SessionTotals>(EMPTY_TOTALS);
@@ -87,7 +87,7 @@ export function useTranscript(sessionId: string | null): UseTranscriptResult {
     setTotals(EMPTY_TOTALS);
     setTurnActive(false);
     setLiveTurns(0);
-  }, [sessionId, revision]);
+  }, [sessionId, revision, generation]);
 
   // Feed new SSE events into the transcript incrementally. We track how many
   // events we have processed via a ref to avoid depending on items/totals as
@@ -168,7 +168,7 @@ export function useTranscript(sessionId: string | null): UseTranscriptResult {
     if (liveTurnsDelta > 0) {
       setLiveTurns((prev) => prev + liveTurnsDelta);
     }
-  }, [events]);
+  }, [events, generation]);
 
   return { items, totals, status, error, turnActive, liveTurns, clear };
 }

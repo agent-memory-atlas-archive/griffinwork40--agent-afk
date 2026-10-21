@@ -22,7 +22,7 @@ import { useQueue } from './hooks/use-queue';
 import { useCommandOutputs } from './hooks/use-command-outputs';
 import { SessionContent } from './components/session-content';
 import { apiFetch } from './lib/api';
-import type { CommandResponse } from './types/command-wire';
+import type { CommandResponse, ThinkingUiMode } from './types/command-wire';
 
 export function App() {
   return (
@@ -34,7 +34,7 @@ export function App() {
 
 function Dashboard() {
   const { sessions: serverSessions, loading } = useSessions();
-  const [sessionUpdates, setSessionUpdates] = useState<Record<string, { model?: string; title?: string }>>({});
+  const [sessionUpdates, setSessionUpdates] = useState<Record<string, { model?: string; title?: string; thinkingUi?: ThinkingUiMode }>>({});
   const sessions = serverSessions.map((session) => ({ ...session, ...sessionUpdates[session.id] }));
   const { approvals, pendingSessionIds } = usePendingApprovals();
   const { toast } = useToast();
@@ -45,11 +45,22 @@ function Dashboard() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId);
-  const { items, totals, status, turnActive, liveTurns, clear: clearTranscript } = useTranscript(selectedSessionId);
+  const resetEpochs = useRef<Record<string, number>>({});
+  const clearStartedAt = useRef<Record<string, number>>({});
+  const pendingClearReset = useRef<Record<string, boolean>>({});
+  const { items, totals, status, turnActive, liveTurns } = useTranscript(selectedSessionId, () => {
+    if (!selectedSessionId) return;
+    resetEpochs.current[selectedSessionId] = (resetEpochs.current[selectedSessionId] ?? 0) + 1;
+    clearCmdItems(selectedSessionId, pendingClearReset.current[selectedSessionId]);
+    pendingClearReset.current[selectedSessionId] = false;
+    queue.clear();
+    prevTurnsRef.current = 0;
+    abortRef.current?.abort();
+  });
   const { containerRef, scrollToBottom, isPinned, showScrollButton } = useScrollPin();
 
   // Per-session client-local command output items (not persisted; see use-command-outputs).
-  const { itemsFor: cmdItemsFor, addItem: addCmdItem } = useCommandOutputs();
+  const { itemsFor: cmdItemsFor, addItem: addCmdItem, clearItems: clearCmdItems } = useCommandOutputs();
   const cmdItems = cmdItemsFor(selectedSessionId);
 
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
@@ -76,7 +87,9 @@ function Dashboard() {
     if (response.control.kind === 'clear') {
       queue.clear();
       prevTurnsRef.current = 0;
-      clearTranscript();
+      // Preserve this confirmation only if its SSE boundary is still pending.
+      pendingClearReset.current[selectedSessionId] =
+        clearStartedAt.current[selectedSessionId] === (resetEpochs.current[selectedSessionId] ?? 0);
     }
     addCmdItem(selectedSessionId, input, response, items.length);
     const metadata = response.session;
@@ -87,6 +100,7 @@ function Dashboard() {
           ...prev[selectedSessionId],
           ...(metadata.model !== undefined ? { model: metadata.model } : {}),
           ...(metadata.name !== undefined ? { title: metadata.name } : {}),
+          ...(metadata.thinkingUi !== undefined ? { thinkingUi: metadata.thinkingUi } : {}),
         },
       }));
     }
@@ -238,6 +252,7 @@ function Dashboard() {
                   totals={totals}
                   status={status}
                   turnActive={turnActive}
+                  thinkingUi={selectedSession?.thinkingUi}
                 />
               )}
               {activeNav === 'memory' && <MemoryView />}
@@ -261,6 +276,11 @@ function Dashboard() {
                   queue={queue}
                   onModelSelect={setSelectedModel}
                   currentModel={currentModel}
+                  onCommandStart={(input) => {
+                    if (/^\/clear(?:\s|$)/.test(input)) {
+                      clearStartedAt.current[selectedSession.id] = resetEpochs.current[selectedSession.id] ?? 0;
+                    }
+                  }}
                   onCommandOutput={handleCommandOutput}
                   onToast={(msg) => toast(msg, 'info')}
                 />
