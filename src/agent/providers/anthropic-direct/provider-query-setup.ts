@@ -193,6 +193,16 @@ export function setUpQuerySession(
     skillExecutor: ctx.skillExecutor ?? undefined,
     runtimeStateSource,
     userSystem,
+    // Dynamic agent-type listing injected into the volatile system-prompt tail
+    // rather than the tool description, preserving prefix-cache stability across
+    // sessions that differ only in their agent sets (#4217).
+    // Gate on the agent tool being both advertised (toolDefs: executor wired and
+    // past the operator tool-toggle filter) and granted by this provider's
+    // permissions, the same #4060 grant answer the workspace section uses, so
+    // the prompt never lists agent types for a tool the model cannot call.
+    agentTypeListing: toolDefs.some((t) => t.name === 'agent') && (ctx.grantsTool?.('agent') ?? true)
+      ? (ctx.subagentExecutor?.describeAgentTypeListing?.() ?? '')
+      : '',
   });
 
   // Dump prompt debug info if AFK_DUMP_PROMPT is set (wired via --dump-prompt CLI flag).
