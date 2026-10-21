@@ -173,8 +173,18 @@ export function mergeCard(
   }
 
   const mergedEvidence = mergeEvidence(existing.evidence, detection.evidence);
-  const firstSeen = minIso(existing.firstSeen, detection.observedAt);
-  const lastSeen = maxIso(existing.lastSeen, detection.observedAt);
+  const evidenceAdded = mergedEvidence.length > existing.evidence.length;
+  // Only advance the time window when new evidence was actually added.
+  // A merged-noop (same sessions re-detected in the same scan window) must NOT
+  // bump lastSeen — doing so would cause `cards list --regressed` to flag cards
+  // triaged as resolved/deferred even when no new failures occurred, because the
+  // regression predicate compares lastSeen against the latest triage-note timestamp.
+  const firstSeen = evidenceAdded
+    ? minIso(existing.firstSeen, detection.observedAt)
+    : existing.firstSeen;
+  const lastSeen = evidenceAdded
+    ? maxIso(existing.lastSeen, detection.observedAt)
+    : existing.lastSeen;
   // Escalate-only, EXCEPT across a detector version change — see
   // reconcileSeverity. A v1 card's severity was computed by different
   // arithmetic and must not pin the v2 detection's verdict.
