@@ -176,6 +176,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
           getProviderSessionId: (id: string) => options.owner!.getProviderSessionId(id),
           reserveTurn: (id: string) => options.owner!.reserveTurn(id),
           releaseTurn: (id: string) => options.owner!.releaseTurn(id),
+          getSession: (id: string) => options.owner!.getSession(id),
         }
       : {}),
   };

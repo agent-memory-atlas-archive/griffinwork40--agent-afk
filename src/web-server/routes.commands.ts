@@ -5,27 +5,35 @@
  * Ordering (Amendment A2):
  *   1. Validate session id
  *   2. Require owned
- *   3. Parse body
- *   4. isBusy → 409
- *   5. reserveTurn (synchronous)
- *   6. try { registry + gate + ctx + handler } finally { releaseTurn }
+ *   3. Require turn-accounting present (501 if absent — no isBusy/reserveTurn)
+ *   4. Parse body
+ *   5. isBusy → 409  (no await between this check and reserveTurn)
+ *   6. reserveTurn (synchronous)
+ *   7. try { registry + gate + ctx + handler } finally { releaseTurn }
  */
 
 import type { ServerResponse } from 'node:http';
 import { sendJson, requireValidSessionId } from './routes.js';
 import type { RouteContext } from './routes.js';
+import type { AgentSession } from '../agent/session/agent-session.js';
 import type { SlashResult } from '../cli/slash/types.js';
 import type { CommandControl } from './shared/command-wire.js';
 import { ensureSlashRegistry } from './slash-registry.js';
 import { parse, lookup, suggest } from '../cli/slash/registry.js';
 import { isGated, gateReason } from './command-gate.js';
 import { BufferingWriter } from './writer.buffer.js';
-import { getStats, buildSessionRef } from './session-owner.slash.js';
+import { getStats, buildSessionRef, buildOptionalSessionRef } from './session-owner.slash.js';
 import { createWebSlashContext } from './slash-context.web.js';
 
-/** Poll owner.getSession up to 2s (40 × 50ms) before giving up. */
+/**
+ * Poll owner.getSession up to 2s (40 × 50ms) before giving up.
+ * The poll exists because a session may be created and stored in the owner
+ * a few milliseconds after the route receives the request (creation is async).
+ * Tests that want immediate failure should mock getSession to return undefined
+ * and use vi.useFakeTimers, or rely on the 503 path directly.
+ */
 async function waitForSessionReady(
-  ctx: RouteContext & { getSession?: (id: string) => unknown },
+  ctx: RouteContext,
   id: string,
 ): Promise<boolean> {
   for (let i = 0; i < 40; i++) {
@@ -68,15 +76,31 @@ export async function handleCommand(
     return;
   }
 
-  // 3. Parse body
-  if (typeof body !== 'object' || body === null || !('input' in body) || typeof (body as Record<string, unknown>)['input'] !== 'string') {
+  // 3. Require turn-accounting — without it we cannot guarantee serialization.
+  // Contract: isBusy/reserveTurn/releaseTurn must all be present. An owner
+  // that omits any of them is misconfigured; 501 surfaces this clearly.
+  if (!ctx.isBusy || !ctx.reserveTurn || !ctx.releaseTurn) {
+    sendJson(res, 501, {
+      error: 'commands_not_supported',
+      message: 'turn accounting (isBusy/reserveTurn/releaseTurn) is not configured on this server',
+    });
+    return;
+  }
+
+  // 4. Parse body
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('input' in body) ||
+    typeof (body as Record<string, unknown>)['input'] !== 'string'
+  ) {
     sendJson(res, 400, { error: 'bad_request', message: 'body must be { input: string }' });
     return;
   }
   const input = (body as Record<string, unknown>)['input'] as string;
   const cwd = ctx.getSessionCwd?.(sessionId) ?? process.cwd();
 
-  // 4. isBusy check
+  // 5. isBusy check — no await between here and reserveTurn (step 6).
   if (ctx.isBusy(sessionId)) {
     sendJson(res, 409, {
       error: 'session_busy',
@@ -85,17 +109,15 @@ export async function handleCommand(
     return;
   }
 
-  // 5. Reserve turn synchronously
-  ctx.reserveTurn?.(sessionId);
-
-  const ctxWithGet = ctx as RouteContext & { getSession?: (id: string) => unknown };
+  // 6. Reserve turn synchronously (no await between isBusy and this call).
+  ctx.reserveTurn(sessionId);
 
   try {
-    // Ensure registry is initialized (static import, idempotent memo).
+    // Ensure registry is initialized (idempotent memo).
     await ensureSlashRegistry();
 
     // Wait for session to be ready (poll up to 2s).
-    if (ctxWithGet.getSession && !(await waitForSessionReady(ctxWithGet, sessionId))) {
+    if (ctx.getSession && !(await waitForSessionReady(ctx, sessionId))) {
       sendJson(res, 503, {
         error: 'session_not_ready',
         message: 'session is not yet ready — retry in a moment',
@@ -121,9 +143,7 @@ export async function handleCommand(
       return;
     }
 
-    // Check gate list.
-    // Gated: release via finally (below) then return 409.
-    // Spec A2 shows explicit releaseTurn here but finally is equivalent and safer.
+    // Check gate list — returns 409 with human-readable reason.
     if (isGated(cmd.name)) {
       sendJson(res, 409, {
         error: 'command_gated',
@@ -133,15 +153,30 @@ export async function handleCommand(
       return;
     }
 
-    // Build context.
+    // Build SlashContext — session must be available if getSession is wired.
     const stats = getStats(sessionId);
     if (!stats) {
       sendJson(res, 503, { error: 'session_not_ready', message: 'session stats not initialized' });
       return;
     }
 
-    const session = ctxWithGet.getSession?.(sessionId) as import('../agent/session/agent-session.js').AgentSession | undefined;
-    const sessionRef = buildSessionRef(session);
+    // Invariant: session is looked up via the typed RouteContext.getSession —
+    // no cast to a wider intersection type. When getSession is wired, we require
+    // a defined session before building SlashContext (503 otherwise). When it is
+    // absent (attach-only / tests without a wired owner), we accept undefined via
+    // buildOptionalSessionRef — callers must not use ctx.session.current there.
+    const session: AgentSession | undefined = ctx.getSession?.(sessionId);
+    if (ctx.getSession && session === undefined) {
+      sendJson(res, 503, {
+        error: 'session_not_ready',
+        message: 'session object is not available — retry in a moment',
+      });
+      return;
+    }
+
+    const sessionRef = session !== undefined
+      ? buildSessionRef(session)
+      : buildOptionalSessionRef(undefined);
     const writer = new BufferingWriter();
     const slashCtx = createWebSlashContext(sessionRef, stats, writer, cwd);
 
@@ -155,8 +190,10 @@ export async function handleCommand(
     const message = err instanceof Error ? err.message : String(err);
     sendJson(res, 500, { error: 'command_execution_failed', message });
   } finally {
-    // releaseTurn fires for ALL return paths inside the try block (including
-    // gated 409, session_not_ready 503, and thrown exceptions).
-    ctx.releaseTurn?.(sessionId);
+    // Invariant: releaseTurn fires for ALL return paths inside the try block
+    // (including gated 409, session_not_ready 503, and thrown exceptions).
+    // The 501/400/409 pre-try early returns do not call reserveTurn, so they
+    // must NOT call releaseTurn either — this finally only runs after step 6.
+    ctx.releaseTurn(sessionId);
   }
 }

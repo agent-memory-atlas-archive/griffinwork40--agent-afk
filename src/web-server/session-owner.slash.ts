@@ -56,13 +56,31 @@ export function onTurnDrained(
 /**
  * Build a SessionRef from an already-looked-up AgentSession.
  *
- * Returns `{ current: session }` for a known session, or
- * `{ current: undefined }` if session is undefined/null (unknown id).
- * The `as` cast is intentional: the web slash context accepts an undefined
- * current and guards appropriately.
+ * Callers in routes.commands.ts guard against undefined before calling this
+ * when getSession is wired, so `session` is always defined there. When
+ * getSession is absent (tests, attach-only mode), the caller may pass
+ * undefined and the SlashContext will have no live session — acceptable for
+ * read-only handlers that never touch ctx.session.current.
+ *
+ * Invariant: never use `as` cast — SessionRef is `{ current: AgentSession }`
+ * (not optional). We satisfy the type by only calling this with a defined
+ * session, or accepting the TS error and suppressing it consciously below.
  */
-export function buildSessionRef(session: AgentSession | undefined): SessionRef {
-  return { current: session } as SessionRef;
+export function buildSessionRef(session: AgentSession): SessionRef {
+  return { current: session };
+}
+
+/**
+ * Build a SessionRef from an optional session lookup result.
+ * Used in contexts where a session may not be available (e.g. tests).
+ * The caller is responsible for ensuring the handler does not dereference
+ * ctx.session.current when it may be absent.
+ */
+export function buildOptionalSessionRef(session: AgentSession | undefined): SessionRef {
+  // SessionRef.current is AgentSession (non-optional in the type), but we
+  // need to support the undefined case for test contexts. The cast is
+  // confined to this one function rather than scattered across callers.
+  return { current: session } as unknown as SessionRef;
 }
 
 /** Test seam: clear all stats. */

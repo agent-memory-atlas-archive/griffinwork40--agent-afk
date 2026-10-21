@@ -37,10 +37,6 @@ export function resetSlashDispatchRegistration(): void {
   resetSlashRegistry();
 }
 
-async function ensureRegistered(): Promise<void> {
-  await ensureSlashRegistry();
-}
-
 /**
  * Classify and, for skill commands, build the invocation payload.
  *
@@ -63,7 +59,7 @@ export async function classifySlashInput(
   // pattern -- keeps the cli/slash import tree off the server's startup).
   // Registration is memoized: registerAll() resets the process-global registry,
   // so concurrent calls without memoization would race and wipe each other.
-  await ensureRegistered();
+  await ensureSlashRegistry();
 
   const registry = await import('../cli/slash/registry.js');
 

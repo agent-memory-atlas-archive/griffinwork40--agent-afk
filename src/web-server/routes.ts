@@ -54,6 +54,11 @@ export interface RouteContext {
   reserveTurn?: (sessionId: string) => void;
   releaseTurn?: (sessionId: string) => void;
   /**
+   * Look up a live AgentSession by id. Absent in attach-only mode.
+   * Used by the command route to build a SessionRef without unsafe casts.
+   */
+  getSession?: (id: string) => import('../agent/session/agent-session.js').AgentSession | undefined;
+  /**
    * Start a new session in this process. Absent when the server was started
    * without an owner, in which case the surface is attach-only.
    */
@@ -408,9 +413,15 @@ async function dispatchSlashForWeb(
       return true;
 
     case 'native':
-      // Native command — caller routes to /api/sessions/:id/commands instead.
-      // No turn was queued; nothing to release.
-      return false;
+      // Native command — must be routed to /api/sessions/:id/commands, not
+      // forwarded to the model as raw text. Release the reservation and
+      // return a 422 that tells the client which endpoint to use instead.
+      ctx.releaseTurn?.(sessionId);
+      sendJson(res, 422, {
+        error: 'native_command',
+        message: `"${text}" is a native command — use POST /api/sessions/${sessionId}/commands instead`,
+      });
+      return true;
   }
 }
 

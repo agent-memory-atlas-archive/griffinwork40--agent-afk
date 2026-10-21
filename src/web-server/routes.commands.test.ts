@@ -15,6 +15,7 @@ let mockIsGated: ReturnType<typeof vi.fn>;
 let mockGateReason: ReturnType<typeof vi.fn>;
 let mockGetStats: ReturnType<typeof vi.fn>;
 let mockBuildSessionRef: ReturnType<typeof vi.fn>;
+let mockBuildOptionalSessionRef: ReturnType<typeof vi.fn>;
 let mockCreateWebSlashContext: ReturnType<typeof vi.fn>;
 
 vi.mock('./slash-registry.js', () => ({
@@ -32,6 +33,7 @@ vi.mock('./command-gate.js', () => ({
 vi.mock('./session-owner.slash.js', () => ({
   getStats: (...args: unknown[]) => mockGetStats(...args),
   buildSessionRef: (...args: unknown[]) => mockBuildSessionRef(...args),
+  buildOptionalSessionRef: (...args: unknown[]) => mockBuildOptionalSessionRef(...args),
 }));
 vi.mock('./slash-context.web.js', () => ({
   createWebSlashContext: (...args: unknown[]) => mockCreateWebSlashContext(...args),
@@ -96,6 +98,7 @@ beforeEach(() => {
   mockGateReason = vi.fn().mockReturnValue(undefined);
   mockGetStats = vi.fn().mockReturnValue(FAKE_STATS);
   mockBuildSessionRef = vi.fn().mockReturnValue(FAKE_REF);
+  mockBuildOptionalSessionRef = vi.fn().mockReturnValue(FAKE_REF);
   mockCreateWebSlashContext = vi.fn().mockReturnValue(FAKE_CTX);
   FAKE_CMD.handler = vi.fn().mockResolvedValue('continue');
 });
@@ -116,6 +119,23 @@ describe('handleCommand', () => {
     expect((json().body as { error: string }).error).toBe('session_not_owned');
   });
 
+  it('501 when turn accounting (reserveTurn/releaseTurn) is absent', async () => {
+    // Contract: commands route requires isBusy+reserveTurn+releaseTurn to
+    // guarantee turn serialization. Missing any → 501 commands_not_supported.
+    const ctx = makeCtx({ reserveTurn: undefined, releaseTurn: undefined });
+    const { res, json } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
+    expect(json().status).toBe(501);
+    expect((json().body as { error: string }).error).toBe('commands_not_supported');
+  });
+
+  it('501 when only releaseTurn is absent', async () => {
+    const ctx = makeCtx({ releaseTurn: undefined });
+    const { res, json } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
+    expect(json().status).toBe(501);
+  });
+
   it('400 for missing input field', async () => {
     const { res, json } = makeRes();
     await handleCommand(makeCtx(), res, SESSION_ID, {});
@@ -129,6 +149,14 @@ describe('handleCommand', () => {
     await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
     expect(json().status).toBe(409);
     expect((json().body as { error: string }).error).toBe('session_busy');
+  });
+
+  it('busy check does not call reserveTurn', async () => {
+    const ctx = makeCtx({ isBusy: vi.fn().mockReturnValue(true) });
+    const { res } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
+    expect(ctx.reserveTurn).not.toHaveBeenCalled();
+    expect(ctx.releaseTurn).not.toHaveBeenCalled();
   });
 
   it('404 for unknown command with no suggestion', async () => {
@@ -150,7 +178,7 @@ describe('handleCommand', () => {
     expect((json().body as { suggestion: string }).suggestion).toBe('/help');
   });
 
-  it('409 for gated command', async () => {
+  it('409 for gated command with reason', async () => {
     mockIsGated.mockReturnValue(true);
     mockGateReason.mockReturnValue('requires terminal readline');
     const { res, json } = makeRes();
@@ -158,6 +186,22 @@ describe('handleCommand', () => {
     expect(json().status).toBe(409);
     expect((json().body as { error: string }).error).toBe('command_gated');
     expect((json().body as { reason: string }).reason).toBe('requires terminal readline');
+  });
+
+  it('503 when stats not initialized', async () => {
+    mockGetStats.mockReturnValue(undefined);
+    const { res, json } = makeRes();
+    await handleCommand(makeCtx(), res, SESSION_ID, { input: '/help' });
+    expect(json().status).toBe(503);
+  });
+
+  it('503 when getSession is wired but returns undefined (session not ready)', async () => {
+    // getSession present but returns undefined → session not available yet
+    const ctx = makeCtx({ getSession: vi.fn().mockReturnValue(undefined) });
+    const { res, json } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
+    expect(json().status).toBe(503);
+    expect((json().body as { error: string }).error).toBe('session_not_ready');
   });
 
   it('500 when handler throws', async () => {
@@ -168,12 +212,21 @@ describe('handleCommand', () => {
     expect((json().body as { error: string }).error).toBe('command_execution_failed');
   });
 
-  it('always calls releaseTurn even on error', async () => {
+  it('always calls releaseTurn even when handler throws', async () => {
     FAKE_CMD.handler = vi.fn().mockRejectedValue(new Error('boom'));
     const ctx = makeCtx();
     const { res } = makeRes();
     await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
-    expect(ctx.releaseTurn).toHaveBeenCalled();
+    expect(ctx.releaseTurn).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it('always calls releaseTurn on gated command', async () => {
+    mockIsGated.mockReturnValue(true);
+    mockGateReason.mockReturnValue('reason');
+    const ctx = makeCtx();
+    const { res } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/clear' });
+    expect(ctx.releaseTurn).toHaveBeenCalledWith(SESSION_ID);
   });
 
   it('happy path returns 200 with blocks and control', async () => {
@@ -185,15 +238,35 @@ describe('handleCommand', () => {
     expect(body.control.kind).toBe('continue');
   });
 
-  it('503 when stats not initialized', async () => {
-    mockGetStats.mockReturnValue(undefined);
-    const { res, json } = makeRes();
-    await handleCommand(makeCtx(), res, SESSION_ID, { input: '/help' });
-    expect(json().status).toBe(503);
+  it('happy path: reserveTurn called before handler, releaseTurn after', async () => {
+    const order: string[] = [];
+    const ctx = makeCtx({
+      reserveTurn: vi.fn().mockImplementation(() => { order.push('reserve'); }),
+      releaseTurn: vi.fn().mockImplementation(() => { order.push('release'); }),
+    });
+    FAKE_CMD.handler = vi.fn().mockImplementation(async () => { order.push('handler'); return 'continue'; });
+    const { res } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
+    expect(order).toEqual(['reserve', 'handler', 'release']);
   });
 });
 
-describe('normalizeSlashResult', () => {
+// --- Auth test: POST to /commands without valid Origin/cookie must be rejected
+// This is enforced at the server dispatch layer (server.ts bearer+Origin checks),
+// not inside handleCommand itself. The server.test.ts integration tests cover the
+// full auth flow. Here we confirm the handler itself does NOT enforce auth —
+// auth is a server-level concern, consistent with how handlePrompt is tested.
+describe('handleCommand — no server-level auth enforcement in unit tests', () => {
+  it('handler itself does not check Origin (server dispatch layer does)', async () => {
+    // handleCommand trusts that server.ts already enforced Origin+bearer.
+    // If it reaches handleCommand, it proceeds normally.
+    const { res, json } = makeRes();
+    await handleCommand(makeCtx(), res, SESSION_ID, { input: '/help' });
+    expect(json().status).toBe(200);
+  });
+});
+
+describe('normalizeSlashResult — all 6 SlashResult variants', () => {
   it("'continue' → { kind: 'continue' }", () => {
     expect(normalizeSlashResult('continue')).toEqual({ kind: 'continue' });
   });
@@ -203,13 +276,13 @@ describe('normalizeSlashResult', () => {
   it("'forward' → { kind: 'forward' }", () => {
     expect(normalizeSlashResult('forward')).toEqual({ kind: 'forward' });
   });
-  it('rerun object', () => {
+  it('{ rerun } → { kind: rerun, input }', () => {
     expect(normalizeSlashResult({ rerun: 'my cmd' })).toEqual({ kind: 'rerun', input: 'my cmd' });
   });
-  it('submit object', () => {
+  it('{ kind: submit } → { kind: submit, message }', () => {
     expect(normalizeSlashResult({ kind: 'submit', message: 'hello' })).toEqual({ kind: 'submit', message: 'hello' });
   });
-  it('prefill object', () => {
+  it('{ kind: prefill } → { kind: prefill, message }', () => {
     expect(normalizeSlashResult({ kind: 'prefill', message: 'world' })).toEqual({ kind: 'prefill', message: 'world' });
   });
 });
