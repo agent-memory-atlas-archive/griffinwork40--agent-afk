@@ -13,33 +13,35 @@
  * Value: human-readable reason shown in the 409 response.
  */
 const GATE_MAP: ReadonlyMap<string, string> = new Map([
-  // Terminal-UI commands — require readline/compositor machinery
-  ['/clear',       'requires terminal readline (not available on web)'],
-  ['/compact',     'requires terminal readline (not available on web)'],
-  ['/copy',        'copies to the system clipboard (not available on web)'],
-  ['/editor',      'requires a local $EDITOR process (not available on web)'],
-  ['/exit',        'exits the REPL process — no equivalent on web'],
-  ['/fast',        'toggles fast-mode state on the local REPL session'],
-  ['/font-size',   'controls terminal font size (not available on web)'],
-  ['/fork',        'forks the terminal session (not available on web)'],
-  ['/ghost',       'toggles terminal ghost-text suggestions (not available on web)'],
-  ['/keys',        'shows terminal keybindings (not available on web)'],
-  ['/model',       'switches REPL model mid-session (use web session settings instead)'],
-  ['/quit',        'exits the REPL process — no equivalent on web'],
-  ['/reauth',      'triggers interactive re-authentication in the terminal'],
-  ['/resume',      'resumes a session in the terminal REPL (not available on web)'],
-  ['/rewind',      'rewinds terminal REPL history (not available on web)'],
-  ['/sh',          'opens an interactive shell (not available on web)'],
-  ['/suggestions', 'manages terminal input history (not available on web)'],
-  ['/tasks:view',  'requires terminal TUI (not available on web)'],
-  ['/theme',       'changes terminal color theme (not available on web)'],
-  ['/thinking',    'controls terminal thinking-display mode (not available on web)'],
-  // Stage 0 additions from A5 — require plan/AFK/session-management machinery
-  ['/afk',         'enables AFK (autonomous) mode on the local REPL session'],
-  ['/init',        'initializes a new agent project via interactive prompts'],
-  ['/name',        'sets session name in the local REPL session store'],
-  ['/plan',        'toggles plan mode on the local REPL session'],
-  ['/retry',       'retries the last turn in the terminal REPL'],
+  // Session control: needs the shared session-control service (Stage 1).
+  ['/clear',       'not on the web yet: session control is coming; start a new session instead'],
+  ['/compact',     'not on the web yet: session control is coming; use the REPL for now'],
+  ['/model',       'not on the web yet: pick the model when creating a session'],
+  ['/fast',        'not on the web yet: session control is coming; use the REPL for now'],
+  ['/thinking',    'not on the web yet: session control is coming; use the REPL for now'],
+  ['/plan',        'not on the web yet: permission-mode control is coming; use the REPL for now'],
+  ['/afk',         'not on the web yet: permission-mode control is coming; use the REPL for now'],
+  ['/name',        'not on the web yet: session rename is coming; use the REPL for now'],
+  ['/retry',       'not on the web yet: retry is coming; resend your last message instead'],
+  ['/reauth',      'not on the web yet: re-authentication runs in the REPL'],
+  ['/init',        'not on the web yet: /init writes AFK.md through the REPL console'],
+  // Interactive pickers: need choice requests (Stage 3).
+  ['/rewind',      'not on the web yet: needs an interactive picker; use the REPL for now'],
+  // Session lifecycle: needs web session lifecycle (Stage 4).
+  ['/fork',        'not on the web yet: forking a session is coming; use the REPL for now'],
+  ['/resume',      'not on the web yet: open past sessions from the sidebar (read-only for now)'],
+  ['/exit',        'not applicable on the web: close the tab or start a new session'],
+  ['/quit',        'not applicable on the web: close the tab or start a new session'],
+  // Terminal-only affordances with a browser-native equivalent.
+  ['/editor',      'not applicable on the web: the composer is already a full editor'],
+  ['/copy',        'not applicable on the web: use the copy buttons on messages and code'],
+  ['/font-size',   'not applicable on the web: use browser zoom'],
+  ['/theme',       'not applicable on the web: the dashboard follows your system theme'],
+  ['/ghost',       'not applicable on the web: terminal ghost-text only'],
+  ['/suggestions', 'not applicable on the web: terminal input history only'],
+  ['/keys',        'not applicable on the web: terminal keybindings only'],
+  ['/sh',          'not on the web yet: shell jobs are listed in the Jobs view'],
+  ['/tasks:view',  'not on the web yet: open subagents from the transcript instead'],
 ]);
 
 /**
