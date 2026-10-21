@@ -34,12 +34,12 @@ Baseline measured 2026-10-21 on main @ 1c846bee0.
 | /name | portable | GATED | S1 | inline rename in sidebar; requires session-control service |
 | /fork | portable | GATED | S4 | new owned session + navigate; browser clipboard |
 | /changelog | portable | TEXT | S0 | text |
-| /bgsub, /bgsub:status, /bgsub:join, /bgsub:cancel | portable | TEXT | S0 + UX | jobs view (cancel route deferred — A3) |
+| /bgsub, /bgsub:status, /bgsub:join, /bgsub:cancel | portable | TEXT | S0 + UX | jobs view (cancel route deferred) |
 | /tasks | partial | TEXT | S0 (list) → UX | subagent tree already in transcript; list as text |
 | /tasks:view | tty-only | TEXT | UX | open subagent card in the transcript spine |
 | /tasks:cancel | portable | TEXT | S0 | button on subagent card |
 | /sh | portable | GATED | S1 | background process list in jobs view |
-| /init | portable | GATED | S0 | requires interactive stdin; gated pending TTY-free refactor |
+| /init | portable | GATED | S1 | writes through its own console writer instead of the command output; gated until it uses ctx.out |
 | /stats | portable | TEXT | S0 → S2 | table |
 | /font-size | portable | GATED | N/A | edits VS Code/Cursor terminal settings; browser zoom covers web |
 | /allow-dir | portable | TEXT | S0 | text; later a settings section |
@@ -111,7 +111,7 @@ Skill commands (plugin, user, builtin, marketplace): **DONE** via `classifySlash
 | Memory | DONE | |
 | Schedules | DONE | |
 | Handoffs | DONE | |
-| Background jobs | PARTIAL — list/detail DONE; cancel DEFERRED (disabled button with tooltip: "Cancel from the owning session with /bgsub:cancel &lt;id&gt;"; needs cross-process channel — A3) | S1 |
+| Background jobs | PARTIAL — list/detail DONE; cancel DEFERRED (disabled button with tooltip: "Cancel from the owning session with /bgsub:cancel <id>"; needs cross-process channel) | S1 |
 | Settings | READ-ONLY | S1 + UX (editable) |
 | Usage / quota | MISSING | S2 + UX |
 | Trace viewer | MISSING | UX |

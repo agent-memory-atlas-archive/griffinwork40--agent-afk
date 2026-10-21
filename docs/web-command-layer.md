@@ -68,7 +68,7 @@ POST /api/sessions/:id/commands
 }
 ```
 
-### Control variants (A6)
+### Control variants
 
 | `control.kind` | Dashboard action |
 |---|---|
@@ -88,7 +88,7 @@ capabilities absent on the web surface (compositor, ledger, TTY, etc.).
 > **Invariant:** Stage 1 replaces the flat gate list with `requires: SurfaceCapability[]`
 > per command, enabling fine-grained capability negotiation.
 
-## Command Output — Client-Local Items (A7)
+## Command Output — Client-Local Items
 
 `command-output` transcript items are **client-local**: they are never persisted to the
 session journal or SSE stream. Each item lives only in the React component tree for the
@@ -109,10 +109,10 @@ the autosave internals.
 
 ## Known Limitations (Stage 0)
 
-- **No cancel route** (A3): background job cancel requires a cross-process signal channel.
+- **No cancel route**: background job cancel requires a cross-process signal channel.
   The cancel button in the bg-jobs view is disabled with a tooltip directing the operator to
   use `/bgsub:cancel <id>` from the owning session.
-- **Command output is client-local** (A7): not persisted; lost on reload.
+- **Command output is client-local**: not persisted; lost on reload.
 - **Session readiness poll**: `waitForSessionReady` polls `owner.getSession(id)` every 50ms
   up to 2s. If the session is not ready, it returns 503 `session_not_ready`. Stage 1 will
   replace this with a readiness event from `SessionOwner`.
