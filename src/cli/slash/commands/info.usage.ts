@@ -1,6 +1,7 @@
 import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
-import { fetchSubscriptionUsage, type UsageWindow } from '../../../agent/subscription-usage.js';
+import type { UsageWindow } from '../../../agent/subscription-usage.js';
+import { readSubscriptionUsage } from '../../../agent/session-control/index.js';
 import { writeKeyValue } from '../output-blocks.js';
 import type { SlashCommand } from '../types.js';
 
@@ -17,7 +18,7 @@ export const usageCmd: SlashCommand = {
   hint: 'When you want to know how close you are to hitting your Claude subscription\'s rolling usage limits — distinct from /cost, which is session-local spend.',
   async handler(ctx) {
     const { out } = ctx;
-    const result = await fetchSubscriptionUsage();
+    const result = await readSubscriptionUsage();
     out.line();
     if (result.kind === 'unavailable') {
       out.line(palette.bold('Subscription usage'));

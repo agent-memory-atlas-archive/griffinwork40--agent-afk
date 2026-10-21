@@ -16,6 +16,14 @@ S4 session lifecycle, S5 Telegram adoption, UX = dashboard-native work).
 
 Baseline measured 2026-10-21 on main @ 1c846bee0.
 
+Stage 1 update: `/clear`, `/model <name>`, `/name`, `/thinking`, `/fast`, and `/compact`
+now execute canonical session controls on web. `/model` without arguments prints current
+model and available aliases as text; the terminal picker remains REPL-only. Clear also resets
+the browser transcript and command outputs across connected tabs. Usage/tokens/context/MCP
+reads share the canonical service; Stage 2 renders usage/tokens/MCP through structured blocks. Capability requirements replace
+the Stage 0 flat gate list. Rows below retain future UX targets; no pickers, fork/resume or
+Telegram adoption were added in Stage 1.
+
 ## Slash commands (58 built-in)
 
 | Command | REPL class | Web now | Target | Web form |
@@ -32,7 +40,7 @@ Baseline measured 2026-10-21 on main @ 1c846bee0.
 | /usage | portable | DONE | S2; dedicated view UX | quota keyValue panel (5h/7d windows); unavailable warning |
 | /todo | portable | TEXT | S0 + UX | todo panel above composer |
 | /goal | portable | TEXT | S0 + UX | goal chip in session header |
-| /name | portable | GATED | S1 | inline rename in sidebar; requires session-control service |
+| /name | portable | DONE | S1 | canonical rename updates sidebar and session title |
 | /fork | portable | GATED | S4 | new owned session + navigate; browser clipboard |
 | /changelog | portable | TEXT | S0 | text |
 | /bgsub, /bgsub:status, /bgsub:join, /bgsub:cancel | portable | TEXT | S0 + UX | jobs view (cancel route deferred) |
@@ -59,15 +67,15 @@ Baseline measured 2026-10-21 on main @ 1c846bee0.
 | /handoffs, /handoffs:answer | portable | TEXT | DONE (view) | handoffs view exists; command form S0 |
 | /keys | portable | GATED | UX | web keyboard-shortcut sheet (?) |
 | /exit, /quit | session-control | GATED | S4 | close session tab |
-| /clear | session-control | GATED | S1 | reset button + command |
-| /compact | session-control | GATED | S1 → S3 | command with live progress |
+| /clear | session-control | DONE | S1 | resets conversation and command outputs across tabs; retains confirmation |
+| /compact | session-control | DONE | S1 → S3 | canonical compaction with buffered progress; live progress deferred |
 | /plan | session-control | GATED | S1 | mode toggle in composer; requires session-control service |
 | /afk | session-control | GATED | S1 | mode toggle in composer; requires session-control service |
-| /thinking | session-control | GATED | S1 | thinking display toggle |
-| /fast | session-control | GATED | S1 | toggle in composer |
+| /thinking | session-control | DONE | S1 | authoritative per-session thinking display preference |
+| /fast | session-control | DONE | S1 | canonical command backed by live provider fast controller |
 | /theme | session-control | GATED | UX | dashboard light/dark/auto theme |
 | /retry | session-control | GATED | S1 | retry action on last message; requires session-control service |
-| /model | partial | GATED | S1 (arg) → S3 (picker) | composer model selector (wired to the session) |
+| /model | partial | DONE (arg/read) | S1 → S3 (picker) | authoritative selector/header/sidebar updates; bare command lists aliases |
 | /resume | partial | GATED | S3 / S4 | picker, not a plain listing; intentionally not migrated in S2 |
 | /transcript | partial | TEXT | S0 | text; transcript view already exists |
 | /afk-md | partial | TEXT | S0 (show/reload/add) | `user`/`project` edit subcommands → UX editor |
@@ -97,7 +105,7 @@ Skill commands (plugin, user, builtin, marketplace): **DONE** via `classifySlash
 | Multi-line input, history ↑/↓ | PARTIAL | UX | Shift+Enter exists; add history |
 | Permission-mode cycle (Shift+Tab) | MISSING | S1 | mode switcher in composer |
 | Status line (model, context %, cost, mode, quota) | PARTIAL | UX | session header meter |
-| Model selector | DONE (create) | S0 | wired to create; mid-session switch S1 |
+| Model selector | DONE | S1 | create and authoritative mid-session switching |
 | Peer inbox delivery / idle wake | N/A | | REPL-owned sessions; web sessions read peers via panel |
 | Resume / continue a stored session | MISSING | S4 | |
 | Retry / edit a sent message | MISSING | S1 / S3 | |

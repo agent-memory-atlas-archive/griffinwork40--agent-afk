@@ -10,7 +10,7 @@ import ora from 'ora';
 import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
 import { list } from '../registry.js';
-import { resetStats } from '../session-stats.js';
+import { clearConversation, compactConversation } from '../../../agent/session-control/index.js';
 import { REPL_SPINNER_OPTIONS } from '../../commands/interactive/shared.js';
 import { HookBlockedError, AbortError } from '../../../utils/errors.js';
 import { renderSelector } from '../../input/selectors.js';
@@ -39,13 +39,8 @@ const clearCmd: SlashCommand = {
   hint: 'When the current thread has drifted off-topic or you want a clean slate without restarting the session.',
   async handler(ctx) {
     try {
-      // We tear down and rebuild the SDK conversation rather than forwarding
-      // the literal string `/clear` to the provider — providers treat that
-      // as a normal user-text turn, so the model retains prior context.
-      await ctx.session.current.reset();
+      await clearConversation(ctx.session.current, ctx.stats, ctx.ledger);
       ctx.ui.clearScreen();
-      resetStats(ctx.stats);
-      ctx.ledger?.clear();
       ctx.out.success('Conversation history cleared.');
     } catch (err) {
       ctx.out.error(err instanceof Error ? err.message : 'Unknown error');
@@ -64,8 +59,8 @@ const compactCmd: SlashCommand = {
     // ora's imperative cursor writes race the compositor's frame repaints on
     // the same physical rows (see terminal-compositor.ts:~800), which is why
     // a user typing during compaction couldn't see their own keystrokes.
-    // Non-TTY surfaces (Telegram, daemon, tests) have no compositor to race
-    // with, so they keep the original bare-ora behavior unchanged.
+    // Explicit non-TTY surfaces receive text progress; legacy contexts without
+    // capability declarations retain their original bare-ora fallback.
     const compositor = ctx.getCompositor?.() ?? null;
     let spinner: ReturnType<typeof ora> | null = null;
     let spinnerActive = false;
@@ -82,51 +77,25 @@ const compactCmd: SlashCommand = {
       spinnerActive = false;
     };
     try {
-      // Invariant: fire PreCompact before compaction so registered handlers can
-      // block or observe the operation. block -> HookBlockedError -> skip.
-      const session = ctx.session.current;
-      const hookRegistry = session.hookRegistry;
-      if (hookRegistry) {
-        await hookRegistry.dispatch({
-          event: 'PreCompact',
-          sessionId: session.sessionId,
-          trigger: 'manual',
-        });
-      }
-      // Do not announce or animate compaction until PreCompact hooks have
-      // allowed it. The compositor notice is durable scrollback, so emitting it
-      // before dispatch would falsely claim summarization began when a hook
-      // blocks the operation.
-      if (compositor) {
-        // The in-frame spinner carries no caller-supplied label — it rotates
-        // work-derived/flavour verbs (see input/work-derived-verb.ts), and there
-        // is no 'compact' tool category to map onto. Commit the intent line above
-        // the frame instead, so the operator still learns WHAT is running; unlike
-        // a spinner label it also survives into scrollback next to the result.
-        ctx.out.info('Summarizing earlier turns...');
-        compositor.setSpinner({ enabled: true });
-        spinnerActive = true;
-      } else {
-        spinner = ora({
-          text: palette.meta('Summarizing earlier turns...'),
-          ...REPL_SPINNER_OPTIONS,
-        }).start();
-        spinnerActive = true;
-      }
-      // Report in PROMPTS, not raw API messages: `messagesBefore/After` count
-      // every assistant tool_use and user tool_result message (~2 per tool
-      // round), so a 12-prompt session reads as "Compacted 247 → 5 messages".
-      // Snapshot the genuine user-prompt count before and after compaction the
-      // same way /rewind does (fix #3109), so the two commands stay consistent.
-      // Coupling note: `listRewindTargets()` runs while the compaction spinner
-      // is already armed (inside the PreCompact guard window), so it sees the
-      // pre-compaction history — this is intentional. If `compact()` is ever
-      // refactored to call `listRewindTargets()` internally, the before/after
-      // snapshot split here will need revisiting.
-      const promptsBefore = session.listRewindTargets().length;
-      const result = await session.compact();
-      const promptsAfter = session.listRewindTargets().length;
-      stopSpinner();
+      const result = await compactConversation(ctx.session.current, (phase) => {
+        if (phase === 'end') { stopSpinner(); return; }
+        // Progress starts only after PreCompact permits it. Explicit non-TTY
+        // surfaces capture text; legacy REPL contexts keep their ora fallback.
+        if (compositor) {
+          ctx.out.info('Summarizing earlier turns...');
+          compositor.setSpinner({ enabled: true });
+          spinnerActive = true;
+        } else if (ctx.capabilities && !ctx.capabilities.has('tty')) {
+          ctx.out.info('Summarizing earlier turns...');
+        } else {
+          spinner = ora({
+            text: palette.meta('Summarizing earlier turns...'),
+            ...REPL_SPINNER_OPTIONS,
+          }).start();
+          spinnerActive = true;
+        }
+      });
+      const { promptsBefore, promptsAfter } = result;
       if (!result.compacted) {
         const reason = result.reason ?? 'unknown';
         if (reason === 'aborted') {

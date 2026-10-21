@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { promises as fs } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fetchSubscriptionUsage } from '../../../agent/subscription-usage.js';
+import * as sessionControl from '../../../agent/session-control/index.js';
 import { runSweep } from '../../../agent/worktree/worktree-sweep.js';
 import { readOauthPending } from '../../../agent/mcp/oauth.js';
 import { infoCommands } from './info.js';
@@ -75,9 +76,13 @@ function context(): { ctx: SlashContext; bytes: () => string } {
   } as unknown as SlashContext, bytes: () => output };
 }
 
-// Golden snapshots captured BEFORE migration, after comparing handler sources to
-// git show HEAD (4766e627f). The original source receipts are in __fixtures__/stage2-original.
-// Both modes exercise the production console Writer; ANSI bytes are not stripped.
+// Golden snapshots captured BEFORE Stage2 migration against 4766e627f. During
+// Stage1 fan-in, core/info/info.mcp receipts were advanced verbatim to Stage1
+// 848207a334c63f31f154ddcce8fce44b9c9bb076 (pre-structured migration). Its canonical
+// controls/read services intentionally replace inline logic, while these read/help
+// console scenarios retain the same bytes. No snapshots were regenerated at fan-in.
+// Original source receipts are in __fixtures__/stage2-original; diff/worktree stay
+// at 4766e627f. Both modes exercise production Writer; ANSI bytes are not stripped.
 describe.each([0, 1] as const)('original console bytes (color=%i)', (level) => {
   it.each(cases)('%s', async (scenario) => {
     chalk.level = level;
@@ -90,6 +95,62 @@ describe.each([0, 1] as const)('original console bytes (color=%i)', (level) => {
     await command.handler(ctx, scenario === 'mcp-auth' ? 'auth' : scenario === 'worktree' ? 'list' : '');
     if (level === 1) expect(bytes()).toContain('\u001b[');
     expect(bytes()).toMatchSnapshot();
+  });
+});
+
+describe('Stage1 canonical read services survive structured migration', () => {
+  it('/usage renders the canonical subscription reader result', async () => {
+    const read = vi.spyOn(sessionControl, 'readSubscriptionUsage').mockResolvedValue({
+      kind: 'ok', fiveHour: { utilization: 0.73 },
+    } as never);
+    const { ctx } = context();
+    const blocks: OutputBlock[] = [];
+    ctx.out.block = (block) => { blocks.push(block); };
+    await infoCommands.find((cmd) => cmd.name === '/usage')!.handler(ctx, '');
+    expect(read).toHaveBeenCalledOnce();
+    expect(blocks[0]).toMatchObject({ kind: 'keyValue', entries: [{ key: '5-hour', value: '73%' }] });
+  });
+
+  it('/tokens renders the canonical local DTO rather than recalculating stats', async () => {
+    const read = vi.spyOn(sessionControl, 'readTokenUsage').mockResolvedValue({
+      kind: 'local', input: 2000, output: 500, cache: 9000, total: 2500,
+      contextUsed: 17000, contextLimit: 100000, percentage: 17, model: 'haiku',
+    });
+    const { ctx } = context();
+    const blocks: OutputBlock[] = [];
+    ctx.out.block = (block) => { blocks.push(block); };
+    await infoCommands.find((cmd) => cmd.name === '/tokens')!.handler(ctx, '');
+    expect(read).toHaveBeenCalledExactlyOnceWith(ctx.session.current, ctx.stats);
+    expect(ctx.session.current.getContextUsage).not.toHaveBeenCalled();
+    expect(blocks[0]).toMatchObject({ kind: 'keyValue', entries: expect.arrayContaining([
+      { key: 'input', value: '2k' }, { key: 'total', value: '2.5k' },
+      { key: 'context', value: '17% of 100k  (haiku)' },
+    ]) });
+  });
+
+  it('/mcp renders the canonical server reader result', async () => {
+    const read = vi.spyOn(sessionControl, 'readMcpStatus').mockResolvedValue([
+      { name: 'canonical-server', status: 'connected' },
+    ] as never);
+    const { ctx } = context();
+    const blocks: OutputBlock[] = [];
+    ctx.out.block = (block) => { blocks.push(block); };
+    await infoCommands.find((cmd) => cmd.name === '/mcp')!.handler(ctx, '');
+    expect(read).toHaveBeenCalledExactlyOnceWith(ctx.session.current);
+    expect(ctx.session.current.waitForInitialization).not.toHaveBeenCalled();
+    expect(blocks[0]).toMatchObject({ kind: 'table', rows: [['canonical-server', 'connected']] });
+  });
+
+  it('/mcp auth renders canonical pending OAuth links', async () => {
+    const read = vi.spyOn(sessionControl, 'readMcpOauthPending').mockResolvedValue({
+      canonical: { authorizationUrl: 'https://example.test/canonical', timestamp: 60000 },
+    } as never);
+    const { ctx } = context();
+    const blocks: OutputBlock[] = [];
+    ctx.out.block = (block) => { blocks.push(block); };
+    await infoCommands.find((cmd) => cmd.name === '/mcp')!.handler(ctx, 'auth');
+    expect(read).toHaveBeenCalledOnce();
+    expect(blocks[0]).toMatchObject({ kind: 'link', label: 'Authorize canonical', url: 'https://example.test/canonical' });
   });
 });
 

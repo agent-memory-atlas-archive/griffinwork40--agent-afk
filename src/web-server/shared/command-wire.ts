@@ -24,11 +24,14 @@ export type CommandOutputBlock = { text: string; ansi: string } & (
 export interface CommandResponse {
   blocks: CommandOutputBlock[];
   control: CommandControl;
+  /** Authoritative owner metadata after successful session controls. */
+  session?: { model?: string; name?: string; thinkingUi?: 'summary' | 'live' | 'digest' | 'off' };
 }
 
 /** Normalised `SlashResult` for the wire. All 6 variants represented. */
 export type CommandControl =
   | { kind: 'continue' }
+  | { kind: 'clear' }
   | { kind: 'exit' }
   | { kind: 'forward' }
   | { kind: 'rerun'; input: string }

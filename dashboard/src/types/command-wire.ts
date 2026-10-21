@@ -26,11 +26,17 @@ export type CommandOutputBlock = CommandOutputBase & (
 export interface CommandResponse {
   blocks: CommandOutputBlock[];
   control: CommandControl;
+  /** Authoritative session metadata after a successful control operation. */
+  session?: { model?: string; name?: string; thinkingUi?: ThinkingUiMode };
 }
 
-/** Normalised SlashResult for the wire. All 6 variants represented. */
+/** Display-only preference; hiding thinking never removes transcript data. */
+export type ThinkingUiMode = 'summary' | 'live' | 'digest' | 'off';
+
+/** Normalised SlashResult plus explicit successful conversation reset. */
 export type CommandControl =
   | { kind: 'continue' }
+  | { kind: 'clear' }
   | { kind: 'exit' }
   | { kind: 'forward' }
   | { kind: 'rerun'; input: string }

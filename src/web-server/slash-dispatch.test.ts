@@ -92,11 +92,11 @@ describe('classifySlashInput', () => {
 
   it('returns repl-only for terminal-only commands', async () => {
     // Fix 5: REPL_ONLY is now checked after lookup using the resolved cmd.name.
-    // For /clear, lookup must return a cmd with name: '/clear'.
-    mockParse.mockReturnValue({ name: '/clear', args: '' });
-    mockLookup.mockReturnValue({ name: '/clear', summary: 'clear', handler: vi.fn() });
-    const result = await classifySlashInput('/clear', '/tmp', undefined);
-    expect(result).toEqual({ kind: 'repl-only', command: '/clear' });
+    // /clear is now native; /editor still requires a terminal.
+    mockParse.mockReturnValue({ name: '/editor', args: '' });
+    mockLookup.mockReturnValue({ name: '/editor', summary: 'editor', handler: vi.fn() });
+    const result = await classifySlashInput('/editor', '/tmp', undefined);
+    expect(result).toEqual({ kind: 'repl-only', command: '/editor' });
   });
 
   it('returns repl-only for /exit', async () => {

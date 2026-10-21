@@ -2,7 +2,7 @@ import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
 import { formatTokens } from '../../format-utils.js';
 import { cacheHitRate } from '../../commands/trace-usage-format.js';
-import { contextLimitFor } from '../../model-limits.js';
+import { readTokenUsage, type LocalTokenUsage } from '../../../agent/session-control/index.js';
 import { writeKeyValue, writeTable } from '../output-blocks.js';
 import type { SlashCommand } from '../types.js';
 
@@ -136,22 +136,9 @@ function renderSdkBreakdown(
 /** Render token usage from local SessionStats when SDK data unavailable. */
 function renderLocalFallback(
   out: import('../types.js').Writer,
-  stats: import('../types.js').SessionStats,
+  usage: LocalTokenUsage,
 ): void {
-  const sumInput = stats.turnTokens.reduce((s, t) => s + t.input, 0);
-  const sumOutput = stats.turnTokens.reduce((s, t) => s + t.output, 0);
-  const sumCache = stats.turnTokens.reduce((s, t) => s + t.cache, 0);
-  const total = sumInput + sumOutput;
-  const limit = contextLimitFor(stats.model);
-  // Context fill = the LAST turn's footprint, not a sum across turns. Each
-  // turn's `cache` is the whole prior conversation read from cache, so summing
-  // it across turns multiplies the conversation by the turn count and can blow
-  // past 100%. The latest turn's footprint already reflects the full window.
-  const lastTurn = stats.turnTokens[stats.turnTokens.length - 1];
-  const contextUsed = lastTurn
-    ? lastTurn.footprint ?? lastTurn.input + lastTurn.output + lastTurn.cache
-    : 0;
-  const pct = limit > 0 ? Math.round((contextUsed / limit) * 100) : 0;
+  const { input: sumInput, output: sumOutput, cache: sumCache, total, contextLimit: limit, percentage: pct } = usage;
 
   writeKeyValue(out, {
     title: 'Token usage (local stats — SDK breakdown unavailable)',
@@ -160,7 +147,7 @@ function renderLocalFallback(
       { key: 'output', value: formatTokens(sumOutput) },
       { key: 'cache read', value: formatTokens(sumCache) },
       { key: 'total', value: formatTokens(total) },
-      { key: 'context', value: `${pct}% of ${formatTokens(limit)}  (${stats.model})` },
+      { key: 'context', value: `${pct}% of ${formatTokens(limit)}  (${usage.model})` },
     ],
   }, () => {
     out.line();
@@ -170,7 +157,7 @@ function renderLocalFallback(
     out.line(`  output      ${palette.meta(formatTokens(sumOutput))}`);
     out.line(`  cache read  ${palette.meta(formatTokens(sumCache))}`);
     out.line(`  total       ${palette.success(formatTokens(total))}`);
-    out.line(`  context     ${palette.meta(`${pct}% of ${formatTokens(limit)}  (${stats.model})`)}`);
+    out.line(`  context     ${palette.meta(`${pct}% of ${formatTokens(limit)}  (${usage.model})`)}`);
     out.line();
   });
 }
@@ -181,15 +168,9 @@ export const tokensCmd: SlashCommand = {
   summary: 'Show token usage (SDK breakdown with local-stats fallback)',
   hint: 'When you want to know how full the context window is — input/output/cache breakdown plus % of the model\'s limit used.',
   async handler(ctx) {
-    try {
-      const usage = await ctx.session.current.getContextUsage();
-      renderSdkBreakdown(ctx.out, usage);
-    } catch {
-      // SDK subprocess may not be up yet (init timing) or the call may
-      // fail under unusual conditions. Fall back to the locally-tracked
-      // stats so the user still sees something useful.
-      renderLocalFallback(ctx.out, ctx.stats);
-    }
+    const result = await readTokenUsage(ctx.session.current, ctx.stats);
+    if (result.kind === 'sdk') renderSdkBreakdown(ctx.out, result.usage);
+    else renderLocalFallback(ctx.out, result);
     return 'continue';
   },
 };

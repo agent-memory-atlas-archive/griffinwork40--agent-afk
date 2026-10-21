@@ -1,4 +1,5 @@
 import type { SlashContext } from '../../slash/types.js';
+import { webCapabilities, type SurfaceCapability } from '../../slash/capabilities.js';
 import type { SessionRef } from '../../../agent/session-ref.js';
 import type { SessionStats } from '../../slash/types.js';
 import type { StatusLine } from '../../status-line.js';
@@ -49,7 +50,17 @@ export function createReplSlashContext(a: {
    *  `undefined` means unconstrained — the indicator shows just `turn N`. */
   maxTurns?: number;
 }): SlashContext {
+  // Start with the shared session-control declaration and add the facilities
+  // the REPL owner wires (including its shell registry and submit consumer).
+  const capabilities = new Set<SurfaceCapability>([
+    ...webCapabilities(), 'permissionMode', 'conversationRetry',
+    'hostCredentials', 'shellJobs', 'consoleOutput',
+  ]);
+  // Piped REPLs retain owner facilities, but cannot promise terminal input and
+  // display. InputSurface uses the same two-stream terminal check.
+  if (process.stdin.isTTY && process.stdout.isTTY) capabilities.add('tty');
   const slashCtx: SlashContext = {
+    capabilities,
     session: a.sessionRef,
     stats: a.stats,
     out: a.writer,

@@ -1,6 +1,31 @@
 # Web Command Layer — Architecture
 
-> Stages 0 and 2 of the Web↔CLI Parity Command Layer (PATH_B: surface-agnostic command layer, staged).
+> Stages 0–2 of the Web↔CLI Parity Command Layer (PATH_B: surface-agnostic command layer, staged).
+
+## Stage 1: capabilities and canonical session controls
+
+Command availability is derived from `SlashCommand.requires` and the surface's positive
+capability set (`src/cli/slash/capabilities.ts`). Only rewind/pickers, fork/resume and exit
+retain explicit lifecycle-stage deferrals; GET `/api/commands` keeps its existing wire shape.
+The REPL declares actual TTY availability; web advertises session control, not terminal access.
+
+`src/agent/session-control/` owns reset, compaction hooks, model/name/preferences and shared
+usage/token/context/MCP reads. Busy admission stays with callers. REPL handlers retain their
+formatting and terminal progress adapters; web captures text progress without ora.
+
+`session-owner.control.ts` binds these operations to live owner stats, autosave, and the
+provider's fast-mode controller. Clear resets conversation/stats/trusted-skill ledger while
+retaining model, permission and thinking preference. Telegram's replacement-session behavior
+is deliberately not adopted; Telegram migration remains Stage 5.
+
+Successful clear returns `control: {kind:'clear'}`. Model/name/thinking commands may return
+`session` metadata. The dashboard clears old client-local command output and conversation
+state, retains the clear confirmation, and applies authoritative model/name/display changes.
+Ledger replacement is atomic; generation-qualified opaque SSE cursors and `{reset:true}`
+frames rebase both existing tabs and reconnecting clients, including repeated clears.
+
+Stage 2 builds on these canonical reads and controls: handlers obtain data from the
+session-control service, then use structured block helpers without changing REPL rendering.
 
 ## Overview
 
@@ -26,10 +51,10 @@ Browser composer
                  isGated(name)?        ← command-gate.ts (single source of truth)
                  BufferingWriter       ← captures all handler output
                  createWebSlashContext()
-                 cmd.handler(ctx, args)
+                 owner.executeSessionControl(cmd, ctx, args) ← canonical handler + persistence
                  writer.toOutputBlocks()
                  normalizeSlashResult()
-                 → 200 { blocks, control }
+                 → 200 { blocks, control, session? }
                } finally { releaseTurn() }
 ```
 
@@ -38,7 +63,7 @@ Browser composer
 | Module | Role |
 |---|---|
 | `src/web-server/slash-registry.ts` | Shared `ensureSlashRegistry()` memo — one registry init for both `routes.ts` and `slash-dispatch.ts` |
-| `src/web-server/command-gate.ts` | Canonical gate list; `isGated(name)` + `gateReason(name)`; **single source of truth** for Stage 0 |
+| `src/web-server/command-gate.ts` | Capability-derived admission plus explicit lifecycle deferrals; `isGated(name)` + `gateReason(name)` |
 | `src/web-server/writer.buffer.ts` | `BufferingWriter` — captures ordered text/structured output; `toOutputBlocks()` returns snapshots |
 | `src/web-server/session-owner.slash.ts` | Per-session `SessionStats` side-car; `buildSessionRef()` |
 | `src/web-server/slash-context.web.ts` | `createWebSlashContext()` — `SlashContext` adapter for web |
@@ -108,8 +133,10 @@ Migrated handlers: `/help` (same flat registry order as REPL), `/usage`, `/token
 (and `/ctx`), `/mcp` (including auth links), `/diff`, `/worktree list`.
 `/info` did not exist in the baseline; Stage 2 adds a read-only local-stat summary.
 `/resume` is a picker/session swap and remains deferred, not a plain listing.
-Twenty original plain/ANSI golden cases in `output-parity.test.ts` prove the
-migrated console paths are byte-identical; `/info` has its own exact-output test.
+Twenty plain/ANSI golden cases in `output-parity.test.ts` prove the migrated console
+paths match the pre-structured handlers. Core/info/MCP fixtures are pinned to Stage 1's
+canonical-service handlers; diff/worktree retain the common baseline. Existing snapshots
+remain unchanged; `/info` has its own exact-output test.
 Renderer tests cover all kinds, unknown fallback, safety and clipboard behavior.
 
 ### Control variants
@@ -117,20 +144,20 @@ Renderer tests cover all kinds, unknown fallback, safety and clipboard behavior.
 | `control.kind` | Dashboard action |
 |---|---|
 | `continue` | no-op |
+| `clear` | reset transcript/queue and replace command outputs with the clear confirmation; reconnect without an old cursor |
 | `exit` | show inline notice (no effect on web in Stage 0) |
 | `forward` | re-POST original input to `/prompt` |
 | `rerun` | re-POST `control.input` to `/commands` |
 | `submit` | submit `control.message` as a new prompt |
 | `prefill` | set composer text to `control.message` without submitting |
 
-## Gate List (Stage 0)
+## Capability admission
 
-Commands in `command-gate.ts` return HTTP 409 `command_gated` with a human-readable reason.
-The gate covers all commands that require terminal machinery, session-lifecycle operations, or
-capabilities absent on the web surface (compositor, ledger, TTY, etc.).
-
-> **Invariant:** Stage 1 replaces the flat gate list with `requires: SurfaceCapability[]`
-> per command, enabling fine-grained capability negotiation.
+Commands rejected by `command-gate.ts` return HTTP 409 `command_gated` with a human-readable
+reason. `requires: SurfaceCapability[]` and the web capability set replace the Stage 0 flat
+list. Terminal-only requirements remain unavailable; deferred pickers, fork/resume and exit
+retain explicit lifecycle gates. The registry enforces requirements for explicitly declared
+surfaces while preserving compatibility with older contexts.
 
 ## Command Output — Client-Local Items
 
@@ -151,15 +178,15 @@ after each turn drains in `session-owner.autosave.ts`. This allows slash handler
 `ctx.stats` (e.g. `/cost`, `/tokens`) to return accurate data without coupling the route to
 the autosave internals.
 
-## Known Limitations (Stage 0)
+## Known limitations after Stage 2
 
 - **No cancel route**: background job cancel requires a cross-process signal channel.
   The cancel button in the bg-jobs view is disabled with a tooltip directing the operator to
   use `/bgsub:cancel <id>` from the owning session.
 - **Command output is client-local**: not persisted; lost on reload.
 - **Session readiness poll**: `waitForSessionReady` polls `owner.getSession(id)` every 50ms
-  up to 2s. If the session is not ready, it returns 503 `session_not_ready`. Stage 1 will
-  replace this with a readiness event from `SessionOwner`.
+  up to 2s. If the session is not ready, it returns 503 `session_not_ready`; an owner
+  readiness event remains future work.
 - **Dynamic imports on hot path**: `ensureSlashRegistry` and registry imports are dynamic to
   keep the `cli/slash` tree off the server's startup path. These will be hoisted to
   module-top once the route is opt-in (server.ts already routes lazily).

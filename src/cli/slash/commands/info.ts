@@ -17,11 +17,8 @@ import { formatCost, formatTokens } from '../../format-utils.js';
 import { MODEL_CONTEXT_LIMITS } from '../../model-limits.js';
 import { renderDebugBanner } from '../../debug-banner.js';
 import { isModelAvailable } from '../../../agent/auth/model-availability.js';
-import {
-  MODEL_ALIASES_HINT,
-  unconfiguredSlotError,
-} from '../../../agent/session/model-slots.js';
-import { isValidModelArg } from '../../../agent/session/model-validate.js';
+import { MODEL_ALIASES_HINT } from '../../../agent/session/model-slots.js';
+import { setSessionModel } from '../../../agent/session-control/index.js';
 import { runPicker } from '../../render/picker.js';
 import { historyCmd } from './info.history.js';
 import { mcpCmd } from './info.mcp.js';
@@ -29,7 +26,6 @@ import { usageCmd } from './info.usage.js';
 import { tokensCmd } from './info.tokens.js';
 import { infoCmd } from './info.session.js';
 import type { SlashCommand, SlashContext } from '../types.js';
-import type { AgentModelInput } from '../../../agent/types.js';
 import { errorMessage } from '../../../utils/errors.js';
 
 const costCmd: SlashCommand = {
@@ -67,25 +63,9 @@ const costCmd: SlashCommand = {
  * Writes all user-facing output via ctx.out; never throws.
  */
 async function switchModel(ctx: SlashContext, target: string): Promise<void> {
-  // Accept slot tier names / configured custom names, the built-in identity
-  // aliases (claude-*, grok-*, gpt-*, org/model HF ids, …). Bare unknown
-  // strings (e.g. typos) are rejected — they'd silently fall through to a
-  // provider and produce an unhelpful API error at turn time.
-  if (!isValidModelArg(target)) {
-    ctx.out.warn(`Unknown model: ${target}. Aliases: ${MODEL_ALIASES_HINT.join(', ')}  (or a full model id)`);
-    return;
-  }
-  // Reject an unconfigured capability tier (e.g. an empty `local` slot) at the
-  // point of selection — otherwise the empty id reaches the provider as an
-  // opaque empty-model error or a silent cloud fallback.
-  const unconfigured = unconfiguredSlotError(target);
-  if (unconfigured) {
-    ctx.out.warn(unconfigured);
-    return;
-  }
   try {
-    await ctx.session.current.setModel(target as AgentModelInput);
-    ctx.stats.model = target as AgentModelInput;
+    const result = await setSessionModel(ctx.session.current, ctx.stats, target);
+    if (!result.ok) { ctx.out.warn(result.message); return; }
     ctx.ui.repaintStatusLine();
     ctx.out.success(`Model switched to ${palette.brand(target)}`);
   } catch (err) {
@@ -99,7 +79,7 @@ const modelCmd: SlashCommand = {
   summary: 'Switch the active model mid-session',
   hint: 'Switch the capability tier (local/small/medium/large — or your configured names) or pass a full model id. Bare `/model` opens an interactive picker on a TTY. Upgrade to large for a hard problem, downshift to small for cheap iteration — context carries over. Also accepts HuggingFace-style ids (e.g. mlx-community/Qwen3-30B-A3B-4bit).',
   async handler(ctx, args) {
-    const target = args.trim().toLowerCase();
+    const target = args.trim();
     if (target) {
       await switchModel(ctx, target);
       return 'continue';

@@ -15,20 +15,16 @@ import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
 import { formatCost, formatTokens } from '../../format-utils.js';
 import { cacheHitRate } from '../../commands/trace-usage-format.js';
-import { contextLimitFor, MODEL_CONTEXT_LIMITS } from '../../model-limits.js';
+import { MODEL_CONTEXT_LIMITS } from '../../model-limits.js';
 import { renderDebugBanner } from '../../debug-banner.js';
 import { isModelAvailable } from '../../../agent/auth/model-availability.js';
-import { fetchSubscriptionUsage, type UsageWindow } from '../../../agent/subscription-usage.js';
-import {
-  MODEL_ALIASES_HINT,
-  unconfiguredSlotError,
-} from '../../../agent/session/model-slots.js';
-import { isValidModelArg } from '../../../agent/session/model-validate.js';
+import type { UsageWindow } from '../../../agent/subscription-usage.js';
+import { MODEL_ALIASES_HINT } from '../../../agent/session/model-slots.js';
+import { readSubscriptionUsage, readTokenUsage, setSessionModel, type LocalTokenUsage } from '../../../agent/session-control/index.js';
 import { runPicker } from '../../render/picker.js';
 import { historyCmd } from './info.history.js';
 import { mcpCmd } from './info.mcp.js';
 import type { SlashCommand, SlashContext } from '../types.js';
-import type { AgentModelInput } from '../../../agent/types.js';
 import { errorMessage } from '../../../utils/errors.js';
 
 const costCmd: SlashCommand = {
@@ -73,7 +69,7 @@ const usageCmd: SlashCommand = {
   hint: 'When you want to know how close you are to hitting your Claude subscription\'s rolling usage limits — distinct from /cost, which is session-local spend.',
   async handler(ctx) {
     const { out } = ctx;
-    const result = await fetchSubscriptionUsage();
+    const result = await readSubscriptionUsage();
     out.line();
     if (result.kind === 'unavailable') {
       out.line(palette.bold('Subscription usage'));
@@ -196,22 +192,9 @@ function renderSdkBreakdown(
 /** Render token usage from local SessionStats when SDK data unavailable. */
 function renderLocalFallback(
   out: import('../types.js').Writer,
-  stats: import('../types.js').SessionStats,
+  usage: LocalTokenUsage,
 ): void {
-  const sumInput = stats.turnTokens.reduce((s, t) => s + t.input, 0);
-  const sumOutput = stats.turnTokens.reduce((s, t) => s + t.output, 0);
-  const sumCache = stats.turnTokens.reduce((s, t) => s + t.cache, 0);
-  const total = sumInput + sumOutput;
-  const limit = contextLimitFor(stats.model);
-  // Context fill = the LAST turn's footprint, not a sum across turns. Each
-  // turn's `cache` is the whole prior conversation read from cache, so summing
-  // it across turns multiplies the conversation by the turn count and can blow
-  // past 100%. The latest turn's footprint already reflects the full window.
-  const lastTurn = stats.turnTokens[stats.turnTokens.length - 1];
-  const contextUsed = lastTurn
-    ? lastTurn.footprint ?? lastTurn.input + lastTurn.output + lastTurn.cache
-    : 0;
-  const pct = limit > 0 ? Math.round((contextUsed / limit) * 100) : 0;
+  const { input: sumInput, output: sumOutput, cache: sumCache, total, contextLimit: limit, percentage: pct } = usage;
 
   out.line();
   out.line(palette.bold('Token usage') + palette.dim('  (local stats — SDK breakdown unavailable)'));
@@ -220,7 +203,7 @@ function renderLocalFallback(
   out.line(`  output      ${palette.meta(formatTokens(sumOutput))}`);
   out.line(`  cache read  ${palette.meta(formatTokens(sumCache))}`);
   out.line(`  total       ${palette.success(formatTokens(total))}`);
-  out.line(`  context     ${palette.meta(`${pct}% of ${formatTokens(limit)}  (${stats.model})`)}`);
+  out.line(`  context     ${palette.meta(`${pct}% of ${formatTokens(limit)}  (${usage.model})`)}`);
   out.line();
 }
 
@@ -230,15 +213,9 @@ const tokensCmd: SlashCommand = {
   summary: 'Show token usage (SDK breakdown with local-stats fallback)',
   hint: 'When you want to know how full the context window is — input/output/cache breakdown plus % of the model\'s limit used.',
   async handler(ctx) {
-    try {
-      const usage = await ctx.session.current.getContextUsage();
-      renderSdkBreakdown(ctx.out, usage);
-    } catch {
-      // SDK subprocess may not be up yet (init timing) or the call may
-      // fail under unusual conditions. Fall back to the locally-tracked
-      // stats so the user still sees something useful.
-      renderLocalFallback(ctx.out, ctx.stats);
-    }
+    const result = await readTokenUsage(ctx.session.current, ctx.stats);
+    if (result.kind === 'sdk') renderSdkBreakdown(ctx.out, result.usage);
+    else renderLocalFallback(ctx.out, result);
     return 'continue';
   },
 };
@@ -249,25 +226,9 @@ const tokensCmd: SlashCommand = {
  * Writes all user-facing output via ctx.out; never throws.
  */
 async function switchModel(ctx: SlashContext, target: string): Promise<void> {
-  // Accept slot tier names / configured custom names, the built-in identity
-  // aliases (claude-*, grok-*, gpt-*, org/model HF ids, …). Bare unknown
-  // strings (e.g. typos) are rejected — they'd silently fall through to a
-  // provider and produce an unhelpful API error at turn time.
-  if (!isValidModelArg(target)) {
-    ctx.out.warn(`Unknown model: ${target}. Aliases: ${MODEL_ALIASES_HINT.join(', ')}  (or a full model id)`);
-    return;
-  }
-  // Reject an unconfigured capability tier (e.g. an empty `local` slot) at the
-  // point of selection — otherwise the empty id reaches the provider as an
-  // opaque empty-model error or a silent cloud fallback.
-  const unconfigured = unconfiguredSlotError(target);
-  if (unconfigured) {
-    ctx.out.warn(unconfigured);
-    return;
-  }
   try {
-    await ctx.session.current.setModel(target as AgentModelInput);
-    ctx.stats.model = target as AgentModelInput;
+    const result = await setSessionModel(ctx.session.current, ctx.stats, target);
+    if (!result.ok) { ctx.out.warn(result.message); return; }
     ctx.ui.repaintStatusLine();
     ctx.out.success(`Model switched to ${palette.brand(target)}`);
   } catch (err) {
@@ -281,7 +242,7 @@ const modelCmd: SlashCommand = {
   summary: 'Switch the active model mid-session',
   hint: 'Switch the capability tier (local/small/medium/large — or your configured names) or pass a full model id. Bare `/model` opens an interactive picker on a TTY. Upgrade to large for a hard problem, downshift to small for cheap iteration — context carries over. Also accepts HuggingFace-style ids (e.g. mlx-community/Qwen3-30B-A3B-4bit).',
   async handler(ctx, args) {
-    const target = args.trim().toLowerCase();
+    const target = args.trim();
     if (target) {
       await switchModel(ctx, target);
       return 'continue';

@@ -180,12 +180,15 @@ export async function handleCommand(
     const writer = new BufferingWriter();
     const slashCtx = createWebSlashContext(sessionRef, stats, writer, cwd);
 
-    // Execute handler.
-    const result = await cmd.handler(slashCtx, parsed.args ?? '');
+    // The owner wraps canonical handlers with persistent accounting and a
+    // provider-backed fast controller. This route alone owns the reservation.
+    const execution = ctx.executeSessionControl
+      ? await ctx.executeSessionControl(sessionId, cmd, slashCtx, parsed.args ?? '')
+      : { result: await cmd.handler(slashCtx, parsed.args ?? '') };
     const blocks = writer.toOutputBlocks();
-    const control = normalizeSlashResult(result);
+    const control = execution.control ?? normalizeSlashResult(execution.result);
 
-    sendJson(res, 200, { blocks, control });
+    sendJson(res, 200, { blocks, control, ...(execution.session ? { session: execution.session } : {}) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     sendJson(res, 500, { error: 'command_execution_failed', message });
