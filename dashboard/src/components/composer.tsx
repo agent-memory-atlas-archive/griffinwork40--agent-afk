@@ -116,7 +116,12 @@ export function Composer({
     });
   }, [sessionId]);
 
-  const submitCommand = useCallback(async (input: string): Promise<void> => {
+  /**
+   * POST to /commands and handle the A6 control result.
+   * Returns true if the caller should clear the composer text (normal case),
+   * false when the control itself manages the text (e.g. prefill).
+   */
+  const submitCommand = useCallback(async (input: string): Promise<boolean> => {
     const response = await apiFetch<CommandResponse>(
       `/api/sessions/${sessionId}/commands`,
       { method: 'POST', body: JSON.stringify({ input }) },
@@ -129,6 +134,7 @@ export function Composer({
       // no-op
     } else if (control.kind === 'prefill') {
       setText(control.message);
+      return false; // caller must NOT clear — we just set the text
     } else if (control.kind === 'submit') {
       await submitPrompt(control.message);
     } else if (control.kind === 'rerun') {
@@ -139,6 +145,7 @@ export function Composer({
     } else if (control.kind === 'exit') {
       onToast?.('Session ended in REPL terms — no effect on web (Stage 4)');
     }
+    return true;
   }, [sessionId, onCommandOutput, onToast, submitPrompt]);
 
   const submit = useCallback(async () => {
@@ -159,8 +166,8 @@ export function Composer({
               return;
             }
             // Native, web: ok — route to /commands
-            await submitCommand(trimmed);
-            setText('');
+            const shouldClear = await submitCommand(trimmed);
+            if (shouldClear) setText('');
             return;
           }
           // kind === 'skill' — fall through to prompt route

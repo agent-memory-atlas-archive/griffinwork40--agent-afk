@@ -4,8 +4,8 @@ import type { SlashCommand } from '@/types/api';
 import { SlashAutocomplete } from './slash-autocomplete';
 
 const COMMANDS: SlashCommand[] = [
-  { name: '/afk', summary: 'Start an AFK session' },
-  { name: '/review', summary: 'Review the current changes' },
+  { name: '/afk', summary: 'Start an AFK session', kind: 'skill', web: 'ok' },
+  { name: '/review', summary: 'Review the current changes', kind: 'skill', web: 'ok' },
 ];
 
 beforeAll(() => {
@@ -31,7 +31,7 @@ describe('SlashAutocomplete', () => {
     render(
       <SlashAutocomplete
         query="af"
-        commands={[{ name: 'afk', summary: 'Start an AFK session' }]}
+        commands={[{ name: 'afk', summary: 'Start an AFK session', kind: 'skill', web: 'ok' }]}
         onSelect={vi.fn()}
         visible
       />,
