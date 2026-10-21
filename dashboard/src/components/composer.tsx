@@ -55,6 +55,13 @@ async function fetchCommands(): Promise<SlashCommand[]> {
  * Normalise a command name to always include the leading slash.
  * Server data already has it; test fixtures may or may not.
  */
+/** True when the typed first token already names the active suggestion. */
+function isActiveSuggestionExact(text: string, activeName: string | undefined): boolean {
+  if (activeName === undefined) return false;
+  const token = text.trimStart().split(/\s+/)[0] ?? '';
+  return normaliseName(token) === normaliseName(activeName);
+}
+
 function normaliseName(name: string): string {
   return name.startsWith('/') ? name : `/${name}`;
 }
@@ -258,6 +265,7 @@ export function Composer({
           if (cmd) selectCommand(cmd.name);
         },
         () => setText((t) => t), // keep text, just close (slashQuery will become null)
+        isActiveSuggestionExact(text, acFiltered[acActiveIdx]?.name),
       );
       if (consumed) { e.preventDefault(); return; }
 

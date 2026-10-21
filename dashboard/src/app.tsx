@@ -4,7 +4,6 @@ import { Sidebar } from './components/sidebar';
 import type { NavItem } from './components/sidebar';
 import { CommandPalette } from './components/command-palette';
 import { KeyboardShortcuts } from './components/keyboard-shortcuts';
-import { TranscriptView } from './components/transcript-view';
 import { SessionMeter } from './components/session-meter';
 import { MemoryView } from './components/memory-view';
 import { SchedulesView } from './components/schedules-view';
@@ -12,7 +11,6 @@ import { BgJobsView } from './components/bg-jobs-view';
 import { HandoffsView } from './components/handoffs-view';
 import { SettingsView } from './components/settings-view';
 import { Composer } from './components/composer';
-import { CommandOutput } from './components/command-output';
 import { ApprovalCards } from './components/approval-cards';
 import { MobileSidebar, HamburgerButton } from './components/mobile-sidebar';
 import { ToastProvider, useToast } from './components/toast';
@@ -22,6 +20,7 @@ import { useTranscript } from './hooks/use-transcript';
 import { useScrollPin } from './hooks/use-scroll-pin';
 import { useQueue } from './hooks/use-queue';
 import { useCommandOutputs } from './hooks/use-command-outputs';
+import { SessionContent } from './components/session-content';
 import { apiFetch } from './lib/api';
 
 export function App() {
@@ -46,8 +45,9 @@ function Dashboard() {
   const { items, totals, status, turnActive, liveTurns } = useTranscript(selectedSessionId);
   const { containerRef, scrollToBottom, isPinned, showScrollButton } = useScrollPin();
 
-  // Per-session client-local command output items (not persisted, cleared on session switch)
-  const { items: cmdItems, addItem: addCmdItem, clear: clearCmdItems } = useCommandOutputs();
+  // Per-session client-local command output items (not persisted; see use-command-outputs).
+  const { itemsFor: cmdItemsFor, addItem: addCmdItem } = useCommandOutputs();
+  const cmdItems = cmdItemsFor(selectedSessionId);
 
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
   useEffect(() => {
@@ -103,9 +103,8 @@ function Dashboard() {
     abortRef.current?.abort();
     abortRef.current = null;
     queue.clear();
-    clearCmdItems();
     prevTurnsRef.current = 0;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- queue/clearCmdItems identity stable; selectedSessionId is the real dep
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- queue identity stable; selectedSessionId is the real dep
   }, [selectedSessionId]);
 
   // Flush the queue when a live turn completes.
@@ -229,7 +228,8 @@ function Dashboard() {
                   queue={queue}
                   onModelSelect={setSelectedModel}
                   currentModel={selectedModel}
-                  onCommandOutput={addCmdItem}
+                  onCommandOutput={(input, response) =>
+                    addCmdItem(selectedSession.id, input, response, items.length)}
                   onToast={(msg) => toast(msg, 'info')}
                 />
               </div>
@@ -245,122 +245,6 @@ function Dashboard() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-import type { SessionSummary } from './types/api';
-import type { TranscriptItem } from '@/lib/ledger-adapter';
-import type { SessionTotals } from './components/session-meter';
-import type { CommandOutputItem } from './hooks/use-command-outputs';
-
-function SessionContent({
-  loading,
-  sessions,
-  selectedSession,
-  items,
-  cmdItems,
-  totals,
-  status,
-  turnActive,
-}: {
-  loading: boolean;
-  sessions: SessionSummary[];
-  selectedSession: SessionSummary | undefined;
-  items: TranscriptItem[];
-  cmdItems: CommandOutputItem[];
-  totals: SessionTotals;
-  status: string;
-  turnActive: boolean;
-}) {
-  if (loading && !sessions.length) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-          <div className="size-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          <span className="text-sm">Loading sessions...</span>
-        </div>
-      </div>
-    );
-  }
-  if (!loading && sessions.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        <p className="text-sm">
-          No sessions found. Start one with{' '}
-          <code className="rounded bg-secondary px-1 font-mono">afk web</code>
-        </p>
-      </div>
-    );
-  }
-  if (selectedSession && (items.length > 0 || cmdItems.length > 0)) {
-    return (
-      <TranscriptWithCommands
-        sessionId={selectedSession.id}
-        items={items}
-        cmdItems={cmdItems}
-        totals={totals}
-        turnActive={turnActive}
-      />
-    );
-  }
-  if (selectedSession) {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        <div className="flex flex-col items-center gap-2">
-          {status === 'connecting' || status === 'reconnecting' ? (
-            <>
-              <div className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              <span className="text-sm">Connecting to session...</span>
-            </>
-          ) : selectedSession.mode === 'live' ? (
-            <span className="text-sm">New session. Send a message to start.</span>
-          ) : (
-            <span className="text-sm">No transcript data</span>
-          )}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-full items-center justify-center text-muted-foreground">
-      <p className="text-sm">Select a session from the sidebar</p>
-    </div>
-  );
-}
-
-/**
- * Renders SSE transcript items interleaved with client-local command output
- * items in insertion order. Command outputs appear after the transcript items
- * that were visible when the command ran (they are appended in real time).
- */
-function TranscriptWithCommands({
-  sessionId,
-  items,
-  cmdItems,
-  totals,
-  turnActive,
-}: {
-  sessionId: string;
-  items: TranscriptItem[];
-  cmdItems: CommandOutputItem[];
-  totals: SessionTotals;
-  turnActive: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-0 max-w-4xl mx-auto w-full px-1">
-      <TranscriptView
-        sessionId={sessionId}
-        items={items}
-        totals={totals}
-        turnActive={turnActive}
-      />
-      {cmdItems.length > 0 && (
-        <div className="flex flex-col gap-3 py-3 px-2" role="status" aria-label="Command outputs">
-          {cmdItems.map((ci) => (
-            <CommandOutput key={ci.key} input={ci.input} blocks={ci.response.blocks} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function StreamStatusDot({ status }: { status: string }) {
   if (status === 'open') {
