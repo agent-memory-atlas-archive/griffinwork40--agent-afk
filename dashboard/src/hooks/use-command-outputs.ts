@@ -35,8 +35,14 @@ export function useCommandOutputs(): UseCommandOutputsResult {
 
   const addItem = useCallback(
     (sessionId: string, input: string, response: CommandResponse, afterCount: number) => {
-      const item: CommandOutputItem = { key: ++nextKey, input, response, afterCount };
-      setBySession((prev) => ({ ...prev, [sessionId]: [...(prev[sessionId] ?? EMPTY), item] }));
+      const cleared = response.control.kind === 'clear';
+      const item: CommandOutputItem = {
+        key: ++nextKey, input, response, afterCount: cleared ? 0 : afterCount,
+      };
+      // Keep the clear confirmation, but discard all previous local outputs.
+      setBySession((prev) => ({
+        ...prev, [sessionId]: [...(cleared ? EMPTY : prev[sessionId] ?? EMPTY), item],
+      }));
     },
     [],
   );

@@ -22,6 +22,7 @@ import { useQueue } from './hooks/use-queue';
 import { useCommandOutputs } from './hooks/use-command-outputs';
 import { SessionContent } from './components/session-content';
 import { apiFetch } from './lib/api';
+import type { CommandResponse } from './types/command-wire';
 
 export function App() {
   return (
@@ -32,7 +33,9 @@ export function App() {
 }
 
 function Dashboard() {
-  const { sessions, loading } = useSessions();
+  const { sessions: serverSessions, loading } = useSessions();
+  const [sessionUpdates, setSessionUpdates] = useState<Record<string, { model?: string; title?: string }>>({});
+  const sessions = serverSessions.map((session) => ({ ...session, ...sessionUpdates[session.id] }));
   const { approvals, pendingSessionIds } = usePendingApprovals();
   const { toast } = useToast();
 
@@ -42,7 +45,7 @@ function Dashboard() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId);
-  const { items, totals, status, turnActive, liveTurns } = useTranscript(selectedSessionId);
+  const { items, totals, status, turnActive, liveTurns, clear: clearTranscript } = useTranscript(selectedSessionId);
   const { containerRef, scrollToBottom, isPinned, showScrollButton } = useScrollPin();
 
   // Per-session client-local command output items (not persisted; see use-command-outputs).
@@ -66,6 +69,28 @@ function Dashboard() {
 
   const isBusy = turnActive;
   const [selectedModel, setSelectedModel] = useState('sonnet');
+  const currentModel = selectedSession?.model ?? selectedModel;
+
+  const handleCommandOutput = (input: string, response: CommandResponse) => {
+    if (!selectedSessionId) return;
+    if (response.control.kind === 'clear') {
+      queue.clear();
+      prevTurnsRef.current = 0;
+      clearTranscript();
+    }
+    addCmdItem(selectedSessionId, input, response, items.length);
+    const metadata = response.session;
+    if (metadata) {
+      setSessionUpdates((prev) => ({
+        ...prev,
+        [selectedSessionId]: {
+          ...prev[selectedSessionId],
+          ...(metadata.model !== undefined ? { model: metadata.model } : {}),
+          ...(metadata.name !== undefined ? { title: metadata.name } : {}),
+        },
+      }));
+    }
+  };
 
   const handleNewSession = useCallback(async () => {
     try {
@@ -161,7 +186,14 @@ function Dashboard() {
               {activeNav === 'settings' && 'Settings'}
             </h1>
             {activeNav === 'sessions' && selectedSession && (
-              <StreamStatusDot status={status} />
+              <>
+                <StreamStatusDot status={status} />
+                {selectedSession.model && (
+                  <span className="text-xs font-mono text-muted-foreground" title="Session model">
+                    {selectedSession.model}
+                  </span>
+                )}
+              </>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -222,14 +254,14 @@ function Dashboard() {
                   <ApprovalCards approvals={approvals} />
                 )}
                 <Composer
+                  key={selectedSession.id}
                   sessionId={selectedSession.id}
                   sessionMode={selectedSession.mode}
                   isBusy={isBusy}
                   queue={queue}
                   onModelSelect={setSelectedModel}
-                  currentModel={selectedModel}
-                  onCommandOutput={(input, response) =>
-                    addCmdItem(selectedSession.id, input, response, items.length)}
+                  currentModel={currentModel}
+                  onCommandOutput={handleCommandOutput}
                   onToast={(msg) => toast(msg, 'info')}
                 />
               </div>

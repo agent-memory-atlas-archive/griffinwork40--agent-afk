@@ -8,6 +8,8 @@
  */
 
 import type { SessionRef } from '../../agent/session-ref.js';
+import type { SurfaceCapability } from './capabilities.js';
+export type { SurfaceCapability } from './capabilities.js';
 import type { ElicitationHandler } from '../../agent/elicitation-router.js';
 import type { AgentModelInput } from '../../agent/types.js';
 import type { TraceActor } from '../../agent/session/session-identity.js';
@@ -202,6 +204,8 @@ export interface UiSurface {
 
 /** What the handler sees when invoked. */
 export interface SlashContext {
+  /** Explicit surface support. Absent on legacy contexts during migration. */
+  capabilities?: ReadonlySet<SurfaceCapability>;
   session: SessionRef;
   stats: SessionStats;
   out: Writer;
@@ -336,6 +340,8 @@ export type SlashResult =
 
 /** A registered slash command. */
 export interface SlashCommand {
+  /** Positive surface requirements; omitted/empty means portable. */
+  requires?: readonly SurfaceCapability[];
   /** Canonical name, including leading slash, e.g. "/cost". */
   name: string;
   /** Optional aliases, each with leading slash. */

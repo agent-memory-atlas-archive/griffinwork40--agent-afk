@@ -22,11 +22,14 @@ export interface CommandOutputBlock {
 export interface CommandResponse {
   blocks: CommandOutputBlock[];
   control: CommandControl;
+  /** Authoritative owner metadata after model/name commands. */
+  session?: { model?: string; name?: string };
 }
 
 /** Normalised `SlashResult` for the wire. All 6 variants represented. */
 export type CommandControl =
   | { kind: 'continue' }
+  | { kind: 'clear' }
   | { kind: 'exit' }
   | { kind: 'forward' }
   | { kind: 'rerun'; input: string }

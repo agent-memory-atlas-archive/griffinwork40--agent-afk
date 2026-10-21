@@ -58,6 +58,13 @@ export interface RouteContext {
    * Used by the command route to build a SessionRef without unsafe casts.
    */
   getSession?: (id: string) => import('../agent/session/agent-session.js').AgentSession | undefined;
+  /** Owner accounting/fast-mode adapter; route owns reservation exactly once. */
+  executeSessionControl?: (
+    id: string,
+    command: import('../cli/slash/types.js').SlashCommand,
+    context: import('../cli/slash/types.js').SlashContext,
+    args: string,
+  ) => Promise<import('./session-owner.control.js').SessionControlResult>;
   /**
    * Start a new session in this process. Absent when the server was started
    * without an owner, in which case the surface is attach-only.

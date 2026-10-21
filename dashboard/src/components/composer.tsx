@@ -26,7 +26,7 @@ interface ComposerProps {
   isBusy: boolean;
   /** Queue for mid-run message management. */
   queue?: UseQueueResult;
-  /** Called when the operator picks a model from the selector. */
+  /** Called with the authoritative model after a successful /model response. */
   onModelSelect?: (modelId: string) => void;
   /** Currently selected model id (shown in the selector). */
   currentModel?: string;
@@ -115,6 +115,12 @@ export function Composer({
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [acActiveIdx, setAcActiveIdx] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lifetimeRef = useRef({ active: true });
+  useEffect(() => {
+    const lifetime = { active: true };
+    lifetimeRef.current = lifetime;
+    return () => { lifetime.active = false; };
+  }, [sessionId]);
 
   const disabled = sessionMode === 'readonly';
   const slashQuery = getSlashQuery(text);
@@ -168,11 +174,16 @@ export function Composer({
    * false when the control itself manages the text (e.g. prefill).
    */
   const submitCommand = useCallback(async (input: string): Promise<boolean> => {
+    const lifetime = lifetimeRef.current;
     const response = await apiFetch<CommandResponse>(
       `/api/sessions/${sessionId}/commands`,
       { method: 'POST', body: JSON.stringify({ input }) },
     );
+    // Navigating away must not clear the newly selected session/queue when a
+    // delayed response from the old composer eventually arrives.
+    if (!lifetime.active) return false;
     onCommandOutput?.(input, response);
+    if (response.session?.model) onModelSelect?.(response.session.model);
 
     // A6 control handling
     const { control } = response;
@@ -192,7 +203,19 @@ export function Composer({
       onToast?.('Session ended in REPL terms — no effect on web (Stage 4)');
     }
     return true;
-  }, [sessionId, onCommandOutput, onToast, submitPrompt]);
+  }, [sessionId, onCommandOutput, onModelSelect, onToast, submitPrompt]);
+
+  const selectModel = useCallback(async (modelId: string) => {
+    if (disabled || submitting || isBusy || modelId === currentModel) return;
+    setSubmitting(true);
+    try {
+      await submitCommand(`/model ${modelId}`);
+    } catch (err) {
+      onToast?.(commandErrorMessage(err, '/model'));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [disabled, submitting, isBusy, currentModel, submitCommand, onToast]);
 
   const submit = useCallback(async () => {
     const trimmed = text.trim();
@@ -331,8 +354,9 @@ export function Composer({
             <AtFilePopover onInsert={insertAtCursor} />
             {onModelSelect && (
               <ModelSelector
-                onSelect={onModelSelect}
+                onSelect={(model) => void selectModel(model)}
                 current={currentModel}
+                disabled={disabled || submitting || isBusy}
               />
             )}
           </div>

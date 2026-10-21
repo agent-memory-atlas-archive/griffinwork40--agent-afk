@@ -14,6 +14,7 @@ import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
 import { errorMessage } from '../../../utils/errors.js';
 import type { SlashCommand } from '../types.js';
+import { readMcpStatus, readMcpOauthPending } from '../../../agent/session-control/index.js';
 
 export const mcpCmd: SlashCommand = {
   name: '/mcp',
@@ -25,8 +26,7 @@ export const mcpCmd: SlashCommand = {
     // unless the operator asks for OAuth surfacing.
     if (sub === 'auth') {
       try {
-        const { readOauthPending } = await import('../../../agent/mcp/oauth.js');
-        const pending = readOauthPending();
+        const pending = await readMcpOauthPending();
         if (Object.keys(pending).length === 0) {
           ctx.out.info('No MCP servers are waiting for OAuth.');
           return 'continue';
@@ -108,8 +108,7 @@ export const mcpCmd: SlashCommand = {
     }
 
     try {
-      const meta = await ctx.session.current.waitForInitialization();
-      const servers = meta.mcpServers ?? [];
+      const servers = await readMcpStatus(ctx.session.current);
       if (servers.length === 0) {
         ctx.out.info('No MCP servers connected.');
         return 'continue';

@@ -242,6 +242,58 @@ describe('handleCommand', () => {
     expect(body.control.kind).toBe('continue');
   });
 
+  it.each(['/clear', '/model', '/name', '/thinking', '/fast', '/compact'])('routes %s through owner adapter with exactly one reservation', async (name) => {
+    const cmd = { ...FAKE_CMD, name };
+    mockLookup.mockReturnValue(cmd);
+    mockParse.mockReturnValue({ name, args: 'value' });
+    const executeSessionControl = vi.fn().mockResolvedValue({
+      result: 'continue',
+      ...(name === '/clear' ? { control: { kind: 'clear' } } : {}),
+      ...(name === '/model' ? { session: { model: 'opus' } } : {}),
+    });
+    const ctx = makeCtx({ executeSessionControl });
+    const { res, json } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: `${name} value` });
+    expect(json().status).toBe(200);
+    expect(executeSessionControl).toHaveBeenCalledWith(SESSION_ID, cmd, FAKE_CTX, 'value');
+    expect(cmd.handler).not.toHaveBeenCalled();
+    expect(ctx.reserveTurn).toHaveBeenCalledExactlyOnceWith(SESSION_ID);
+    expect(ctx.releaseTurn).toHaveBeenCalledExactlyOnceWith(SESSION_ID);
+    expect(json().body).toMatchObject({ control: { kind: name === '/clear' ? 'clear' : 'continue' } });
+    if (name === '/model') expect(json().body).toMatchObject({ session: { model: 'opus' } });
+  });
+
+  it('failed clear never emits a clear control and releases once', async () => {
+    const ctx = makeCtx({ executeSessionControl: vi.fn().mockRejectedValue(new Error('reset failed')) });
+    const { res, json } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/clear' });
+    expect(json()).toMatchObject({ status: 500, body: { error: 'command_execution_failed' } });
+    expect(json().body).not.toHaveProperty('control');
+    expect(ctx.releaseTurn).toHaveBeenCalledExactlyOnceWith(SESSION_ID);
+  });
+
+  it('blocks a concurrent command while owner control is awaiting provider', async () => {
+    let finish!: (result: { result: 'continue' }) => void;
+    let busy = false;
+    const executeSessionControl = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const ctx = makeCtx({
+      isBusy: vi.fn(() => busy),
+      reserveTurn: vi.fn(() => { busy = true; }),
+      releaseTurn: vi.fn(() => { busy = false; }),
+      executeSessionControl,
+    });
+    const first = makeRes();
+    const pending = handleCommand(ctx, first.res, SESSION_ID, { input: '/compact' });
+    await vi.waitFor(() => expect(executeSessionControl).toHaveBeenCalledOnce());
+    const second = makeRes();
+    await handleCommand(ctx, second.res, SESSION_ID, { input: '/clear' });
+    expect(second.json().status).toBe(409);
+    finish({ result: 'continue' });
+    await pending;
+    expect(ctx.reserveTurn).toHaveBeenCalledOnce();
+    expect(ctx.releaseTurn).toHaveBeenCalledOnce();
+  });
+
   it('happy path: reserveTurn called before handler, releaseTurn after', async () => {
     const order: string[] = [];
     const ctx = makeCtx({
