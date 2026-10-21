@@ -7,6 +7,7 @@
  * to keep looping, exit, or re-run another command.
  */
 
+import type { OutputBlock } from './output-blocks.js';
 import type { SessionRef } from '../../agent/session-ref.js';
 import type { ElicitationHandler } from '../../agent/elicitation-router.js';
 import type { AgentModelInput } from '../../agent/types.js';
@@ -186,6 +187,8 @@ export interface SessionStats {
 
 /** Minimal console writer passed to handlers — thin wrapper around chalk output. */
 export interface Writer {
+  /** Optional structured output; terminal writers retain their existing renderers. */
+  block?(block: OutputBlock): void;
   line(text?: string): void;
   raw(text: string): void;
   success(text: string): void;

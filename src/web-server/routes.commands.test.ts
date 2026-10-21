@@ -42,15 +42,8 @@ vi.mock('./session-owner.slash.js', () => ({
 vi.mock('./slash-context.web.js', () => ({
   createWebSlashContext: (...args: unknown[]) => mockCreateWebSlashContext(...args),
 }));
-vi.mock('./writer.buffer.js', () => ({
-  BufferingWriter: class {
-    fn = vi.fn();
-    rawFn = vi.fn();
-    getChunks = vi.fn().mockReturnValue([]);
-    asWriterInterface = vi.fn().mockReturnValue({});
-    toOutputBlock = vi.fn().mockReturnValue({ ansi: 'output', text: 'output' });
-  },
-}));
+import type { BufferingWriter } from './writer.buffer.js';
+import type { Writer } from '../cli/slash/types.js';
 
 import { handleCommand, normalizeSlashResult } from './routes.commands.js';
 
@@ -238,8 +231,28 @@ describe('handleCommand', () => {
     await handleCommand(makeCtx(), res, SESSION_ID, { input: '/help' });
     expect(json().status).toBe(200);
     const body = json().body as { blocks: unknown[]; control: { kind: string } };
-    expect(body.blocks).toHaveLength(1);
+    expect(body.blocks).toEqual([]);
     expect(body.control.kind).toBe('continue');
+  });
+
+  it('serializes ordered structured output via the real buffer writer', async () => {
+    mockCreateWebSlashContext.mockImplementation((_ref, _stats, writer) => ({
+      out: (writer as BufferingWriter).asWriterInterface(),
+    }));
+    FAKE_CMD.handler = vi.fn().mockImplementation(async ({ out }: { out: Writer }) => {
+      out.raw('before');
+      out.line(' line');
+      out.block!({ kind: 'table', columns: ['Name'], rows: [['AFK']], text: 'Name\nAFK\n', ansi: 'Name\nAFK\n' });
+      out.raw('after');
+      return 'continue';
+    });
+    const { res, json } = makeRes();
+    await handleCommand(makeCtx(), res, SESSION_ID, { input: '/help' });
+    expect(json()).toEqual({ status: 200, body: { blocks: [
+      { kind: 'text', text: 'before line\n', ansi: 'before line\n' },
+      { kind: 'table', columns: ['Name'], rows: [['AFK']], text: 'Name\nAFK\n', ansi: 'Name\nAFK\n' },
+      { kind: 'text', text: 'after', ansi: 'after' },
+    ], control: { kind: 'continue' } } });
   });
 
   it('happy path: reserveTurn called before handler, releaseTurn after', async () => {

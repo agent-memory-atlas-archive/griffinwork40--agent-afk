@@ -10,6 +10,7 @@ import ora from 'ora';
 import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
 import { list } from '../registry.js';
+import { writeList } from '../output-blocks.js';
 import { resetStats } from '../session-stats.js';
 import { REPL_SPINNER_OPTIONS } from '../../commands/interactive/shared.js';
 import { HookBlockedError, AbortError } from '../../../utils/errors.js';
@@ -249,16 +250,21 @@ const helpCmd: SlashCommand = {
     const cmds = list();
     const maxName = cmds.reduce((m, c) => Math.max(m, c.name.length), 0) + 2;
 
-    ctx.out.line();
-    ctx.out.line(palette.bold(palette.brand('Commands')));
-    ctx.out.line(divider());
+    writeList(ctx.out, {
+      title: 'Commands',
+      items: cmds.map((cmd) => ({ text: cmd.usage ?? cmd.name, description: cmd.summary })),
+    }, () => {
+      ctx.out.line();
+      ctx.out.line(palette.bold(palette.brand('Commands')));
+      ctx.out.line(divider());
 
-    for (const cmd of cmds) {
-      const name = cmd.usage ?? cmd.name;
-      const padding = ' '.repeat(Math.max(0, maxName - name.length));
-      ctx.out.line(`  ${palette.warning(name)}${padding} ${palette.dim(cmd.summary)}`);
-    }
-    ctx.out.line();
+      for (const cmd of cmds) {
+        const name = cmd.usage ?? cmd.name;
+        const padding = ' '.repeat(Math.max(0, maxName - name.length));
+        ctx.out.line(`  ${palette.warning(name)}${padding} ${palette.dim(cmd.summary)}`);
+      }
+      ctx.out.line();
+    });
     ctx.out.line(palette.dim('  Tip: Ctrl+C interrupts a running turn; a second press exits.'));
     ctx.out.line(palette.dim('  Hidden: /keys for keybindings · @ to attach files · !cmd to run shell · Shift+Tab to change mode'));
     ctx.out.line();

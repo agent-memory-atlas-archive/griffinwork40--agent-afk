@@ -22,6 +22,7 @@ import { divider } from '../../render.js';
 import { sanitizeForDisplay } from '../../../utils/terminal-sanitize.js';
 import { env } from '../../../config/env.js';
 import type { SlashCommand } from '../types.js';
+import { writeDiff } from '../output-blocks.js';
 
 /**
  * Maximum diff body lines rendered before eliding. Enough to show a typical
@@ -262,15 +263,20 @@ export const diffCmd: SlashCommand = {
       return 'continue';
     }
 
-    // Header label
-    out.line();
-    const modeLabel = staged ? 'Staged changes' : 'Uncommitted changes';
-    const fileLabel = file ? `  ${palette.dim(`— ${sanitizeForDisplay(file)}`)}` : '';
-    out.line(palette.bold(`${modeLabel}${fileLabel}`));
-    out.line(divider());
+    writeDiff(out, {
+      diff: result.stdout,
+      ...(file ? { fileName: file } : {}),
+    }, () => {
+      // Header label
+      out.line();
+      const modeLabel = staged ? 'Staged changes' : 'Uncommitted changes';
+      const fileLabel = file ? `  ${palette.dim(`— ${sanitizeForDisplay(file)}`)}` : '';
+      out.line(palette.bold(`${modeLabel}${fileLabel}`));
+      out.line(divider());
 
-    const parsed = parseDiff(result.stdout);
-    renderParsedDiff(out, parsed);
+      const parsed = parseDiff(result.stdout);
+      renderParsedDiff(out, parsed);
+    });
 
     return 'continue';
   },

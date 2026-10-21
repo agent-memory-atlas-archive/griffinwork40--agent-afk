@@ -182,10 +182,10 @@ export async function handleCommand(
 
     // Execute handler.
     const result = await cmd.handler(slashCtx, parsed.args ?? '');
-    const block = writer.toOutputBlock();
+    const blocks = writer.toOutputBlocks();
     const control = normalizeSlashResult(result);
 
-    sendJson(res, 200, { blocks: [block], control });
+    sendJson(res, 200, { blocks, control });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     sendJson(res, 500, { error: 'command_execution_failed', message });

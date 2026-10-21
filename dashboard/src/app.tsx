@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Plus, ArrowDown } from 'lucide-react';
 import { Sidebar } from './components/sidebar';
-import type { NavItem } from './components/sidebar';
+import { getNavItem } from './lib/nav-registry';
 import { CommandPalette } from './components/command-palette';
 import { KeyboardShortcuts } from './components/keyboard-shortcuts';
 import { SessionMeter } from './components/session-meter';
@@ -36,7 +36,7 @@ function Dashboard() {
   const { approvals, pendingSessionIds } = usePendingApprovals();
   const { toast } = useToast();
 
-  const [activeNav, setActiveNav] = useState<NavItem>('sessions');
+  const [activeNav, setActiveNav] = useState('sessions');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -55,7 +55,8 @@ function Dashboard() {
   }, [items.length, cmdItems.length, isPinned, scrollToBottom]);
 
   const handleNavigate = (nav: string) => {
-    setActiveNav(nav as NavItem);
+    if (!getNavItem(nav)) return;
+    setActiveNav(nav);
     setMobileSidebarOpen(false);
   };
 
@@ -153,12 +154,7 @@ function Dashboard() {
               onClick={() => setMobileSidebarOpen(true)}
             />
             <h1 className="text-sm font-medium text-muted-foreground">
-              {activeNav === 'sessions' && 'Sessions'}
-              {activeNav === 'memory' && 'Memory'}
-              {activeNav === 'schedules' && 'Schedules'}
-              {activeNav === 'jobs' && 'Background Jobs'}
-              {activeNav === 'handoffs' && 'Pending Handoffs'}
-              {activeNav === 'settings' && 'Settings'}
+              {getNavItem(activeNav)?.title}
             </h1>
             {activeNav === 'sessions' && selectedSession && (
               <StreamStatusDot status={status} />
