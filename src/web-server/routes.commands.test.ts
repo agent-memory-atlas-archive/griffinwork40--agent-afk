@@ -3,20 +3,24 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
+
+/** Untyped call-through mock; the precise signature is irrelevant to these tests. */
+type AnyMock = Mock<(...args: unknown[]) => unknown>;
 import type { ServerResponse } from 'node:http';
 
 // --- mocks ---
 
-let mockEnsureSlashRegistry: ReturnType<typeof vi.fn>;
-let mockParse: ReturnType<typeof vi.fn>;
-let mockLookup: ReturnType<typeof vi.fn>;
-let mockSuggest: ReturnType<typeof vi.fn>;
-let mockIsGated: ReturnType<typeof vi.fn>;
-let mockGateReason: ReturnType<typeof vi.fn>;
-let mockGetStats: ReturnType<typeof vi.fn>;
-let mockBuildSessionRef: ReturnType<typeof vi.fn>;
-let mockBuildOptionalSessionRef: ReturnType<typeof vi.fn>;
-let mockCreateWebSlashContext: ReturnType<typeof vi.fn>;
+let mockEnsureSlashRegistry: AnyMock;
+let mockParse: AnyMock;
+let mockLookup: AnyMock;
+let mockSuggest: AnyMock;
+let mockIsGated: AnyMock;
+let mockGateReason: AnyMock;
+let mockGetStats: AnyMock;
+let mockBuildSessionRef: AnyMock;
+let mockBuildOptionalSessionRef: AnyMock;
+let mockCreateWebSlashContext: AnyMock;
 
 vi.mock('./slash-registry.js', () => ({
   ensureSlashRegistry: (...args: unknown[]) => mockEnsureSlashRegistry(...args),

@@ -7,18 +7,22 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
+
+/** Untyped call-through mock; the precise signature is irrelevant to these tests. */
+type AnyMock = Mock<(...args: unknown[]) => unknown>;
 
 // Stubs set per-test.
-let mockParse: ReturnType<typeof vi.fn>;
-let mockLookup: ReturnType<typeof vi.fn>;
-let mockSuggest: ReturnType<typeof vi.fn>;
-let mockRegisterAll: ReturnType<typeof vi.fn>;
-let mockRegisterPluginSkillsForWeb: ReturnType<typeof vi.fn>;
-let mockBuildSkillInvocationMessage: ReturnType<typeof vi.fn>;
-let mockGetPreflight: ReturnType<typeof vi.fn>;
-let mockRunPreflight: ReturnType<typeof vi.fn>;
-let mockGetSkillPreflightDir: ReturnType<typeof vi.fn>;
-let mockGetSkill: ReturnType<typeof vi.fn>;
+let mockParse: AnyMock;
+let mockLookup: AnyMock;
+let mockSuggest: AnyMock;
+let mockRegisterAll: AnyMock;
+let mockRegisterPluginSkillsForWeb: AnyMock;
+let mockBuildSkillInvocationMessage: AnyMock;
+let mockGetPreflight: AnyMock;
+let mockRunPreflight: AnyMock;
+let mockGetSkillPreflightDir: AnyMock;
+let mockGetSkill: AnyMock;
 
 vi.mock('../cli/slash/index.js', () => ({
   registerAll: (...args: unknown[]) => mockRegisterAll(...args),

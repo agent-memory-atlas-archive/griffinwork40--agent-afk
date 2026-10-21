@@ -31,7 +31,6 @@
     "noEmit": true
   },
   "include": [
-    "src",
-    "vitest.config.ts"
+    "src"
   ]
 }

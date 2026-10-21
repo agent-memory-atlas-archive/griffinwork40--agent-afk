@@ -3,9 +3,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 
-let mockCreateSessionStats: ReturnType<typeof vi.fn>;
-let mockRecordTurn: ReturnType<typeof vi.fn>;
+/** Untyped call-through mock; the precise signature is irrelevant to these tests. */
+type AnyMock = Mock<(...args: unknown[]) => unknown>;
+
+let mockCreateSessionStats: AnyMock;
+let mockRecordTurn: AnyMock;
 
 vi.mock('../cli/slash/session-stats.js', () => ({
   createSessionStats: (...args: unknown[]) => mockCreateSessionStats(...args),
@@ -84,7 +88,8 @@ describe('buildSessionRef', () => {
   });
 
   it('returns { current: undefined } for an unknown id (undefined session)', () => {
-    const ref = buildSessionRef(undefined);
+    // Runtime tolerates a missing session (map lookup miss); the type does not.
+    const ref = buildSessionRef(undefined as unknown as Parameters<typeof buildSessionRef>[0]);
     expect(ref.current).toBeUndefined();
   });
 });

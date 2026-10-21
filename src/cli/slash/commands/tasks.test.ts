@@ -11,6 +11,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
+
+/** Untyped call-through mock; the precise signature is irrelevant to these tests. */
+type AnyMock = Mock<(...args: unknown[]) => unknown>;
 import * as os from 'node:os';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -55,6 +59,7 @@ function makeStats(): SessionStats {
     totalCostUsd: 0,
     totalTokens: 0,
     totalDurationMs: 0,
+    unpricedTurns: 0,
     sessionStartTime: Date.now(),
     turnCosts: [],
     turnTokens: [],
@@ -255,7 +260,7 @@ describe('/tasks slash commands', () => {
       const h = makeHandle('sub-done-2', 'succeeded');
       const manager = makeManager([], [{ id: 'sub-done-2', handle: h }]);
       // Make get() return the handle
-      (manager as unknown as { get: ReturnType<typeof vi.fn> }).get
+      (manager as unknown as { get: AnyMock }).get
         = vi.fn().mockImplementation((id: string) =>
           id === 'sub-done-2' ? h : undefined,
         );
@@ -299,7 +304,7 @@ describe('/tasks slash commands', () => {
         const ctx: SlashContext = {
           session: { current: {} } as unknown as SlashContext['session'],
           stats: {
-            totalTurns: 0, totalCostUsd: 0, totalTokens: 0, totalDurationMs: 0,
+            totalTurns: 0, totalCostUsd: 0, totalTokens: 0, totalDurationMs: 0, unpricedTurns: 0,
             sessionStartTime: Date.now(), turnCosts: [], turnTokens: [], turns: [],
             model: 'sonnet', permissionMode: 'default',
           },

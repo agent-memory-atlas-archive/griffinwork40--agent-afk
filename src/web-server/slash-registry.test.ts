@@ -3,9 +3,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 
-let mockRegisterAll: ReturnType<typeof vi.fn>;
-let mockRegisterPluginSkillsForWeb: ReturnType<typeof vi.fn>;
+/** Untyped call-through mock; the precise signature is irrelevant to these tests. */
+type AnyMock = Mock<(...args: unknown[]) => unknown>;
+
+let mockRegisterAll: AnyMock;
+let mockRegisterPluginSkillsForWeb: AnyMock;
 
 vi.mock('../cli/slash/index.js', () => ({
   registerAll: (...args: unknown[]) => mockRegisterAll(...args),

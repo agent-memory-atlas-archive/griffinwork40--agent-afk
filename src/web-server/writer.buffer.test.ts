@@ -3,10 +3,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
+
+/** Untyped call-through mock; the precise signature is irrelevant to these tests. */
+type AnyMock = Mock<(...args: unknown[]) => unknown>;
 import { stripVTControlCharacters } from 'node:util';
 
 // Mock writer.ts to avoid palette / bounded-line deps
-let mockCreateConsoleWriter: ReturnType<typeof vi.fn>;
+let mockCreateConsoleWriter: AnyMock;
 vi.mock('../cli/slash/writer.js', () => ({
   createConsoleWriter: (...args: unknown[]) => mockCreateConsoleWriter(...args),
 }));
