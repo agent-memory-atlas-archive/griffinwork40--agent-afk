@@ -65,7 +65,7 @@ function Dashboard() {
 
   const handleNewSession = useCallback(async () => {
     try {
-      const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST' });
+      const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) });
       setSelectedSessionId(result.session.id);
     } catch {
       // best-effort

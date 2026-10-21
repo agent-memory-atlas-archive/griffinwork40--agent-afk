@@ -13,6 +13,7 @@ import {
   slashCommandMatchesQuery,
 } from '@/lib/slash-command';
 import type { SlashCommand } from '@/types/api';
+import type { CommandResponse } from '@/types/command-wire';
 import { SlashAutocomplete, handleAutocompleteKey } from './slash-autocomplete';
 import { AtFilePopover } from './at-file-popover';
 import { ModelSelector } from './model-selector';
@@ -29,6 +30,10 @@ interface ComposerProps {
   onModelSelect?: (modelId: string) => void;
   /** Currently selected model id (shown in the selector). */
   currentModel?: string;
+  /** Called with command output to insert a client-local transcript item. */
+  onCommandOutput?: (input: string, response: CommandResponse) => void;
+  /** Called with a toast message (e.g. gated command reason). */
+  onToast?: (message: string) => void;
 }
 
 /** Cached slash commands — cleared on page focus to pick up new skills. */
@@ -60,6 +65,8 @@ export function Composer({
   queue,
   onModelSelect,
   currentModel,
+  onCommandOutput,
+  onToast,
 }: ComposerProps) {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -102,22 +109,72 @@ export function Composer({
     }
   }, [slashQuery]);
 
+  const submitPrompt = useCallback(async (trimmed: string) => {
+    await apiFetch(`/api/sessions/${sessionId}/prompt`, {
+      method: 'POST',
+      body: JSON.stringify({ text: trimmed }),
+    });
+  }, [sessionId]);
+
+  const submitCommand = useCallback(async (input: string): Promise<void> => {
+    const response = await apiFetch<CommandResponse>(
+      `/api/sessions/${sessionId}/commands`,
+      { method: 'POST', body: JSON.stringify({ input }) },
+    );
+    onCommandOutput?.(input, response);
+
+    // A6 control handling
+    const { control } = response;
+    if (control.kind === 'continue') {
+      // no-op
+    } else if (control.kind === 'prefill') {
+      setText(control.message);
+    } else if (control.kind === 'submit') {
+      await submitPrompt(control.message);
+    } else if (control.kind === 'rerun') {
+      // Re-POST to /commands with the rerun string
+      await submitCommand(control.input);
+    } else if (control.kind === 'forward') {
+      await submitPrompt(input);
+    } else if (control.kind === 'exit') {
+      onToast?.('Session ended in REPL terms — no effect on web (Stage 4)');
+    }
+  }, [sessionId, onCommandOutput, onToast, submitPrompt]);
+
   const submit = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed || submitting || disabled) return;
     setSubmitting(true);
     try {
-      await apiFetch(`/api/sessions/${sessionId}/prompt`, {
-        method: 'POST',
-        body: JSON.stringify({ text: trimmed }),
-      });
+      // Check if this is a slash command
+      if (trimmed.startsWith('/')) {
+        const cmds = await fetchCommands();
+        // Parse the command name (first token)
+        const token = trimmed.split(/\s+/)[0]!;
+        const cmd = cmds.find((c) => `/${c.name}` === token || c.name === token.replace(/^\//, ''));
+        if (cmd) {
+          if (cmd.kind === 'native') {
+            if (cmd.web === 'gated') {
+              onToast?.(cmd.gateReason ?? `${cmd.name} is not available on the web surface`);
+              return;
+            }
+            // Native, web: ok — route to /commands
+            await submitCommand(trimmed);
+            setText('');
+            return;
+          }
+          // kind === 'skill' — fall through to prompt route
+        }
+      }
+      // Plain text or skill command — send to /prompt
+      await submitPrompt(trimmed);
       setText('');
     } catch {
       // Leave text intact so user can retry
     } finally {
       setSubmitting(false);
     }
-  }, [text, submitting, disabled, sessionId]);
+  }, [text, submitting, disabled, sessionId, submitPrompt, submitCommand, onToast]);
 
   const interrupt = useCallback(async () => {
     try {

@@ -83,6 +83,30 @@ function ApprovalCard({
         </button>
       </div>
 
+      {type === 'number' && (
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            disabled={busy}
+            className={cn(
+              'flex-1 rounded border border-input bg-background px-2 py-1 text-sm',
+              'focus:outline-none focus:ring-1 focus:ring-ring',
+            )}
+          />
+          <ActionButton
+            onClick={() => {
+              const n = Number(inputValue);
+              if (!isNaN(n)) void answer('accept', { number: n });
+            }}
+            disabled={busy || inputValue === '' || isNaN(Number(inputValue))}
+            label="Submit"
+            variant="primary"
+          />
+        </div>
+      )}
+
       {type === 'text' && (
         <div className="flex gap-2">
           <input
