@@ -111,7 +111,7 @@ Skill commands (plugin, user, builtin, marketplace): **DONE** via `classifySlash
 | Memory | DONE | |
 | Schedules | DONE | |
 | Handoffs | DONE | |
-| Background jobs | PARTIAL (cancel deferred; needs cross-process channel — A3) | S0 |
+| Background jobs | PARTIAL — list/detail DONE; cancel DEFERRED (disabled button with tooltip: "Cancel from the owning session with /bgsub:cancel &lt;id&gt;"; needs cross-process channel — A3) | S1 |
 | Settings | READ-ONLY | S1 + UX (editable) |
 | Usage / quota | MISSING | S2 + UX |
 | Trace viewer | MISSING | UX |

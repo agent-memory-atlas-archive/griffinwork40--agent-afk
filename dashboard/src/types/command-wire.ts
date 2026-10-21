@@ -7,6 +7,8 @@
 
 /** A single output block produced by a command handler. */
 export interface CommandOutputBlock {
+  /** Block kind — drives the renderer registry lookup. Defaults to 'text'. */
+  kind?: string;
   /** ANSI-escaped text as emitted by the handler (may contain SGR sequences). */
   ansi: string;
   /** Plain-text version with all VT control characters stripped. */

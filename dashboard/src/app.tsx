@@ -70,7 +70,7 @@ function Dashboard() {
     } catch {
       // best-effort
     }
-  }, []);
+  }, [selectedModel]);
 
   // Abort controller ref: abort in-flight POSTs when the session changes.
   const abortRef = useRef<AbortController | null>(null);

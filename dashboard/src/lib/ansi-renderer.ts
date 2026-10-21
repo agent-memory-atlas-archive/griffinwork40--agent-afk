@@ -167,9 +167,14 @@ function _parseAnsi(ansi: string): ReactElement[] {
   let key = 0;
   let style = emptyStyle();
 
-  // Split on CSI (ESC[) and OSC 8 sequences
-  // We process the string character by character via regex match iteration
-  const RE = /\x1b\[([0-9;]*)m|\x1b\]8;;([^\x07]*)\x07([^\x1b]*)\x1b\]8;;\x07|\x1b[^m]/g;
+  // Matches (in priority order):
+  //   1. SGR:   ESC [ <params> m
+  //   2. OSC 8: ESC ] 8 ; ; <url> BEL <text> ESC ] 8 ; ; BEL   (BEL or ST terminator)
+  //   3. Any other CSI sequence: ESC [ ... <final byte 0x40-0x7E>
+  //   4. Any other OSC sequence: ESC ] ... BEL-or-ST
+  //   5. Other 2-byte ESC sequences
+  const RE =
+    /\x1b\[([0-9;]*)m|\x1b\]8;;([^\x07\x1b]*)(?:\x07|\x1b\\)([^\x1b]*)(?:\x1b\]8;;(?:\x07|\x1b\\))?|\x1b\[[0-9;]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b./g;
 
   let lastIndex = 0;
 
@@ -190,9 +195,9 @@ function _parseAnsi(ansi: string): ReactElement[] {
       applySgr(params, style);
     } else if (oscUrl !== undefined && oscText !== undefined) {
       // OSC 8 hyperlink
-      if (/^https?:\/\//.test(oscUrl) && oscText) {
+      if (/^https?:\/\//i.test(oscUrl) && oscText) {
         elements.push(
-          createElement('a', { key: key++, href: oscUrl, rel: 'noopener noreferrer' }, oscText),
+          createElement('a', { key: key++, href: oscUrl, rel: 'noopener noreferrer', target: '_blank' }, oscText),
         );
       } else if (oscText) {
         elements.push(buildSpan(oscText, style, key++));
