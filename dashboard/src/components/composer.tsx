@@ -7,7 +7,7 @@ import {
 } from 'react';
 import { Send, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import {
   formatSlashCommandName,
   slashCommandMatchesQuery,
@@ -51,10 +51,45 @@ async function fetchCommands(): Promise<SlashCommand[]> {
   return commandsCache;
 }
 
+/**
+ * Normalise a command name to always include the leading slash.
+ * Server data already has it; test fixtures may or may not.
+ */
+function normaliseName(name: string): string {
+  return name.startsWith('/') ? name : `/${name}`;
+}
+
+/** Look up a slash token (e.g. "/cost") against the command list. */
+function findCommand(cmds: SlashCommand[], token: string): SlashCommand | undefined {
+  const needle = normaliseName(token);
+  return cmds.find((c) => normaliseName(c.name) === needle);
+}
+
 function getSlashQuery(text: string): string | null {
   if (!text.startsWith('/')) return null;
   const space = text.indexOf(' ');
   return space === -1 ? text.slice(1) : null; // only before first space
+}
+
+/** Human-readable error message from a failed /commands POST. */
+function commandErrorMessage(err: unknown, token: string): string {
+  if (!(err instanceof ApiError)) return String(err);
+  const body = err.body;
+  const errorCode = typeof body?.error === 'string' ? body.error : '';
+  if (errorCode === 'command_gated') {
+    const reason = typeof body?.reason === 'string' ? body.reason : '';
+    return reason || (typeof body?.message === 'string' ? body.message : err.message);
+  }
+  if (errorCode === 'unknown_command') {
+    const suggestion = typeof body?.suggestion === 'string' ? body.suggestion : '';
+    return suggestion
+      ? `Unknown command ${token}. Did you mean ${suggestion}?`
+      : `Unknown command ${token}.`;
+  }
+  if (errorCode === 'session_busy') {
+    return 'Session is busy — try again when the turn finishes.';
+  }
+  return typeof body?.message === 'string' ? body.message : err.message;
 }
 
 /** Main prompt composer — textarea + send/stop controls. */
@@ -76,7 +111,7 @@ export function Composer({
 
   const disabled = sessionMode === 'readonly';
   const slashQuery = getSlashQuery(text);
-  const acVisible = slashQuery !== null && commands.length > 0;
+  const acVisible = slashQuery !== null && (commands?.length ?? 0) > 0;
   const acFiltered = acVisible
     ? commands
         .filter((c) => slashCommandMatchesQuery(c.name, slashQuery))
@@ -105,7 +140,11 @@ export function Composer({
   // Fetch commands when user first types '/'
   useEffect(() => {
     if (slashQuery !== null) {
-      fetchCommands().then(setCommands).catch(() => undefined);
+      let cancelled = false;
+      fetchCommands()
+        .then((cmds) => { if (!cancelled) setCommands(cmds ?? []); })
+        .catch(() => undefined);
+      return () => { cancelled = true; };
     }
   }, [slashQuery]);
 
@@ -153,27 +192,36 @@ export function Composer({
     if (!trimmed || submitting || disabled) return;
     setSubmitting(true);
     try {
-      // Check if this is a slash command
       if (trimmed.startsWith('/')) {
         const cmds = await fetchCommands();
-        // Parse the command name (first token)
         const token = trimmed.split(/\s+/)[0]!;
-        const cmd = cmds.find((c) => `/${c.name}` === token || c.name === token.replace(/^\//, ''));
-        if (cmd) {
-          if (cmd.kind === 'native') {
-            if (cmd.web === 'gated') {
-              onToast?.(cmd.gateReason ?? `${cmd.name} is not available on the web surface`);
-              return;
-            }
-            // Native, web: ok — route to /commands
-            const shouldClear = await submitCommand(trimmed);
-            if (shouldClear) setText('');
-            return;
-          }
-          // kind === 'skill' — fall through to prompt route
+        const cmd = findCommand(cmds, token);
+
+        if (cmd?.kind === 'skill') {
+          // Skill commands always go to /prompt
+          await submitPrompt(trimmed);
+          setText('');
+          return;
         }
+
+        if (cmd?.kind === 'native' && cmd.web === 'gated') {
+          // Show gate reason locally — no network call
+          onToast?.(cmd.gateReason ?? `${normaliseName(cmd.name)} is not available on the web surface`);
+          return;
+        }
+
+        // Known native ok, alias, or unknown — let the server resolve it
+        try {
+          const shouldClear = await submitCommand(trimmed);
+          if (shouldClear) setText('');
+        } catch (err) {
+          onToast?.(commandErrorMessage(err, token));
+          // Leave text intact so user can retry
+        }
+        return;
       }
-      // Plain text or skill command — send to /prompt
+
+      // Plain text — send to /prompt
       await submitPrompt(trimmed);
       setText('');
     } catch {
@@ -181,7 +229,7 @@ export function Composer({
     } finally {
       setSubmitting(false);
     }
-  }, [text, submitting, disabled, sessionId, submitPrompt, submitCommand, onToast]);
+  }, [text, submitting, disabled, submitPrompt, submitCommand, onToast]);
 
   const interrupt = useCallback(async () => {
     try {
