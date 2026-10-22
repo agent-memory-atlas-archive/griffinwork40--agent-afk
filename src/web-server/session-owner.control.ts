@@ -7,6 +7,7 @@ import { clearConversation } from '../agent/session-control/index.js';
 import { FastModeController } from '../agent/fast-mode.js';
 import { resolveModelId } from '../agent/session/model-resolution.js';
 import { SessionLedgerWriter } from '../agent/session-ledger.js';
+import { archiveSessionLedger } from './ledger-archive.js';
 import { getSessionLedgerDir, getSessionLedgerPath } from '../paths.js';
 import { recordTurn } from '../cli/slash/session-stats.js';
 import { saveSession } from '../cli/session-store.js';
@@ -100,6 +101,7 @@ export class WebSessionControl {
 
   /** Reset can retain its memoized provider id. Atomically replace the stable
    * ledger so tailers can detect a generation even if it outgrows their offset.
+   * The previous ledger is archived first (ledger-archive.ts), never overwritten.
    * When ids match the provider remains the sole writer. Only distinct provider
    * ids need a second, browser-owned projection.
    */
@@ -109,6 +111,7 @@ export class WebSessionControl {
     const path = getSessionLedgerPath(this.id);
     const temporary = `${path}.${randomUUID()}.reset`;
     writeFileSync(temporary, JSON.stringify({ v: 1, ts: Date.now(), kind: 'meta', sessionId: this.id, model: String(this.stats.model), ...(this.stats.cwd ? { cwd: this.stats.cwd } : {}) }) + '\n', { mode: 0o600 });
+    archiveSessionLedger(this.id); // never destroy the durable tool-call record
     renameSync(temporary, path);
     this.projection = this.session.sessionId !== this.id ? new SessionLedgerWriter(this.id) : undefined;
     if (this.bound) return;
