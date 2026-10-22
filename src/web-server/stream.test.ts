@@ -28,6 +28,7 @@ import * as path from 'path';
 import { startWebServer, type WebServerHandle } from './server.js';
 import { getSessionsDir } from '../paths.js';
 import { parseSseChunk } from './sse-protocol.js';
+import { ledgerGeneration } from '../agent/session-ledger-reader.js';
 
 let tmpDir: string;
 let origAfkHome: string | undefined;
@@ -62,7 +63,7 @@ function appendRecord(text: string, sessionId = SESSION): void {
 
 function eventId(position: number): string {
   const stat = fs.statSync(ledgerPath());
-  return `${stat.dev}-${stat.ino}:${position}`;
+  return `${ledgerGeneration(stat)}:${position}`;
 }
 
 interface Frame {

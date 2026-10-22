@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getSessionLedgerDir, getSessionLedgerPath } from '../paths.js';
-import { tailLedger } from './session-ledger-reader.js';
+import { ledgerGeneration, tailLedger } from './session-ledger-reader.js';
 import type { LedgerRecord } from './session-ledger.js';
 
 const id = 'reset-reader';
@@ -56,5 +56,19 @@ describe('tailLedger generation resets', () => {
       await vi.waitFor(() => expect(seen).toHaveLength(2));
       expect(seen[1]).toMatchObject({ text: 'x' });
     } finally { abort.abort(); await reading; }
+  });
+});
+
+describe('ledgerGeneration', () => {
+  it('separates replacements that reuse a freed inode (Linux) by birth time', () => {
+    const first = ledgerGeneration({ dev: 1, ino: 42, birthtimeMs: 1_000.4 });
+    const reused = ledgerGeneration({ dev: 1, ino: 42, birthtimeMs: 1_600.9 });
+    expect(first).not.toBe(reused);
+    expect(first).toBe('1-42-1000');
+  });
+  it('is stable for one file and degrades to dev+ino when birth time is unavailable', () => {
+    const stat = { dev: 7, ino: 9, birthtimeMs: 0 };
+    expect(ledgerGeneration(stat)).toBe(ledgerGeneration({ ...stat }));
+    expect(ledgerGeneration(stat)).toBe('7-9-0');
   });
 });

@@ -83,6 +83,18 @@ const POLL_INTERVAL_MS = 250;
  *   fallback — on macOS watch events are coalesced/dropped under load, so
  *   the poll floor is load-bearing, not belt-and-braces.
  */
+/**
+ * Identity of one ledger file generation (a `/clear` or `/rewind` replaces the
+ * file). `dev`+`ino` alone is not enough: Linux filesystems reuse a freed inode
+ * immediately, so a replacement can inherit the inode of an earlier generation
+ * and SSE cursors (`<generation>:<position>`) from different generations would
+ * collide. Birth time separates them; filesystems that report no birth time
+ * (birthtimeMs 0) degrade to the previous dev+ino identity.
+ */
+export function ledgerGeneration(stat: { dev: number; ino: number; birthtimeMs: number }): string {
+  return `${stat.dev}-${stat.ino}-${Math.trunc(stat.birthtimeMs)}`;
+}
+
 export async function* tailLedger(
   sessionId: string,
   opts?: {
@@ -109,7 +121,7 @@ export async function* tailLedger(
     try {
       fd = await fsp.open(ledgerPath, 'r');
       const stat = await fd.stat();
-      const currentGeneration = `${stat.dev}-${stat.ino}`;
+      const currentGeneration = ledgerGeneration(stat);
       if (generation !== currentGeneration || stat.size < fileOffset) {
         fileOffset = 0;
         lineReader = new IncrementalLineReader();
@@ -145,7 +157,7 @@ export async function* tailLedger(
     try {
       const stat = await fsp.stat(ledgerPath);
       fileOffset = stat.size;
-      generation = `${stat.dev}-${stat.ino}`;
+      generation = ledgerGeneration(stat);
       opts?.onGeneration?.(generation);
     } catch {
       // File doesn't exist yet — start from 0 and wait for it to appear.

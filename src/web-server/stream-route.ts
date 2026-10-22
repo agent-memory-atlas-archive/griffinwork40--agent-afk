@@ -33,7 +33,7 @@ export async function handleStream(
 
   // Old unqualified cursors cannot identify a generation. Safely replay rather
   // than silently dropping records after a clear (legacy upgrade only).
-  const cursor = /^(\d+-\d+):(\d+)$/.exec(header(req, 'last-event-id') ?? '');
+  const cursor = /^(\d+-\d+(?:-\d+)?):(\d+)$/.exec(header(req, 'last-event-id') ?? '');
   const cursorGeneration = cursor?.[1];
   const cursorPosition = Number(cursor?.[2] ?? 0);
   let generation: string | undefined;
