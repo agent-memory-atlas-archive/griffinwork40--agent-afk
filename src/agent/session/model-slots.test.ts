@@ -231,6 +231,14 @@ describe('OpenAI family aliases (sol/luna/astra/terra)', () => {
   });
 });
 
+describe('MODEL_ALIASES_HINT contains all DIRECT_MODEL_ALIASES keys (cross-check)', () => {
+  it('every key in DIRECT_MODEL_ALIASES appears in MODEL_ALIASES_HINT', () => {
+    for (const key of Object.keys(DIRECT_MODEL_ALIASES)) {
+      expect(MODEL_ALIASES_HINT, `missing DIRECT_MODEL_ALIASES key: ${key}`).toContain(key);
+    }
+  });
+});
+
 describe('OPENAI_MODEL_HINTS', () => {
   it('contains the curated OpenAI wire ids', () => {
     expect(OPENAI_MODEL_HINTS).toContain('gpt-5.6-sol');

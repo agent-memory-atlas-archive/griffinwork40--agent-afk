@@ -70,7 +70,7 @@ export const agentTool: AnthropicToolDef = {
           'to right-size cost vs. capability — `haiku` (cheapest/fastest), `sonnet` ' +
           '(general-use), `opus` (most capable). Append `_1m` (e.g. `sonnet_1m`) for ' +
           '1M-context variants. OpenAI family aliases: `sol`, `luna`, `astra`, `terra` ' +
-          '(resolve to the latest flagship in each family). Full model IDs are also accepted.',
+          '(pinned to a concrete flagship in each family). Full model IDs are also accepted.',
       },
       max_turns: {
         type: 'number',
