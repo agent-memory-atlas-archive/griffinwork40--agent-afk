@@ -313,11 +313,19 @@ export type SessionPhaseName =
   | 'subagent_model_fallback'
   // The round-cap delivery notice (roundDeliveryNotice) could not be injected
   // into any valid message position — the tail message shape did not allow it
-  // (e.g. anthropic: tail was not a user message; openai: tail tool message
-  // had neither string nor array content). PURE OBSERVABILITY — the notice was
+  // (e.g. anthropic: tail was not a user message; openai: no string-content
+  // tool message to carry it). PURE OBSERVABILITY — the notice was
   // silently dropped before this event existed; now a trace row is written so
   // operators can detect the gap. `metadata` carries `provider` and `round`.
-  | 'round_cap_notice_dropped';
+  | 'round_cap_notice_dropped'
+  // A subagent-continuation chain's post-result bookkeeping (settling) ended
+  // degraded (tools/subagent/continuation-dispatch.ts settleTerminal): the
+  // child journal flush timed out or failed (the link does not advance), the
+  // write-capable chain's workspace checkpoint is unavailable (the next
+  // continuation is refused fail-closed), or an unexpected error forced the
+  // fallback record. In-flight still clears. `metadata`: `chainId`, `childId`,
+  // `reason` ('flush_timeout' | 'checkpoint_unavailable' | 'error').
+  | 'continuation_settle_degraded';
 
 export interface SessionPhasePayload {
   /** Which lifecycle milestone this record marks. */
