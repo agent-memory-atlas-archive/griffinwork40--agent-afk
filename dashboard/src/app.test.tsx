@@ -57,11 +57,20 @@ vi.mock('./hooks/use-queue', () => ({
   }),
 }));
 
-const MODELS_RESPONSE = { models: [] };
+const MODELS_RESPONSE = {
+  models: [
+    { id: 'haiku',  label: 'haiku · Claude Haiku 5.5' },
+    { id: 'sonnet', label: 'sonnet · Claude Sonnet 4.6' },
+    { id: 'medium', label: 'medium · Claude Sonnet 4.6' },
+    { id: 'opus',   label: 'opus · Claude Opus 5.5' },
+  ],
+  default: 'haiku',
+};
 const COMMANDS_RESPONSE = {
   commands: [
     { name: '/cost',   summary: 'Show cost',  kind: 'native', web: 'ok' },
     { name: '/clear',  summary: 'Clear',       kind: 'native', web: 'gated', gateReason: 'Not available on web' },
+    { name: '/model',  summary: 'Switch model', kind: 'native', web: 'ok' },
     { name: '/review', summary: 'Review',      kind: 'skill',  web: 'ok' },
   ],
 };
@@ -214,6 +223,48 @@ describe('App integration — /review routes to /prompt (skill)', () => {
                ((c[1] as { body?: string })?.body ?? '').includes('/review'),
       );
       expect(promptCall).toBeTruthy();
+    }, { timeout: 3000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression: /model command response updates the ModelSelector value
+//
+// C2 enriches ChoiceDialog labels with resolved model names
+// (e.g. "medium · Claude Sonnet 4.6"), making bare /sonnet/i match the wrong
+// option. This test reproduces the *client-side* half: after the server
+// returns session.model:'sonnet', the <select aria-label="Model"> must reflect
+// that value — not stay on the default 'haiku' or show an unrelated alias.
+// ---------------------------------------------------------------------------
+
+describe('App regression — /model response updates ModelSelector', () => {
+  it('select value matches session.model from command response', async () => {
+    const cmdResponse = {
+      blocks: [{ kind: 'text', text: '✓ Model switched to sonnet\n', ansi: '✓ Model switched to sonnet\n' }],
+      control: { kind: 'continue' },
+      session: { model: 'sonnet' },
+    };
+    vi.mocked(api.apiFetch)
+      .mockResolvedValueOnce(MODELS_RESPONSE)    // /api/models (ModelSelector mount)
+      .mockResolvedValueOnce(COMMANDS_RESPONSE)  // /api/commands (fetchCommands on '/')
+      .mockResolvedValueOnce(cmdResponse);        // POST /sessions/sess-1/commands
+
+    await renderAndSelect();
+    const ta = screen.getByRole('textbox');
+    fireEvent.change(ta, { target: { value: '/model sonnet' } });
+    fireEvent.keyDown(ta, { key: 'Enter' });
+
+    // Wait for the POST /commands to fire.
+    await waitFor(() => {
+      const calls = vi.mocked(api.apiFetch).mock.calls;
+      expect(calls.some((c) => String(c[0]).includes('/commands') &&
+        (c[1] as { method?: string })?.method === 'POST')).toBe(true);
+    }, { timeout: 3000 });
+
+    // The ModelSelector <select aria-label="Model"> must show 'sonnet'.
+    await waitFor(() => {
+      const sel = screen.getByRole('combobox', { name: 'Model' }) as HTMLSelectElement;
+      expect(sel.value).toBe('sonnet');
     }, { timeout: 3000 });
   });
 });
