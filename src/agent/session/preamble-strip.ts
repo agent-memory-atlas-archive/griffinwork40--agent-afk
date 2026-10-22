@@ -129,7 +129,10 @@ export function extractUserContent(text: string): string | undefined {
   const lines = text.split('\n');
   let lastBracketLine = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (/^\s*\[[\w-]+[:\s]/.test(lines[i]!)) lastBracketLine = i;
+    // Same two header shapes isPreamble() accepts: `[label: …` / `[label …`
+    // and a bare kebab tag such as `[placeholder-prevent] …`, whose body sits
+    // on the header line itself.
+    if (/^\s*(\[[\w-]+[:\s]|\[[a-z][a-z0-9]*(?:-[a-z0-9]+)+\])/.test(lines[i]!)) lastBracketLine = i;
   }
   if (lastBracketLine < 0) return undefined;
 
