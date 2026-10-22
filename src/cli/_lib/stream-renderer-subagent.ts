@@ -12,6 +12,7 @@ import type { SourceState } from './stream-renderer-source.js';
 import type { TerminalCompositor } from '../terminal-compositor.js';
 import type { ToolLane } from '../commands/interactive/tool-lane.js';
 import type { Writer } from '../slash/types.js';
+import type { CompletionWriter } from '../commands/interactive/shared.js';
 import type { CardSpec } from '../render.js';
 import { card } from '../render.js';
 import { commitBlockAbove } from './commit-block.js';
@@ -47,6 +48,14 @@ export interface SubagentCtx {
   toolLane: ToolLane;
   /** Where line-based output goes (non-TTY fallback + scrollback emits). */
   out: Writer;
+  /**
+   * Optional reference to the shared completion writer. When present,
+   * `finalizeSubagent` records the subagent's source id in
+   * `completionWriter.renderedSubagentIds` so the SubagentStop-hook
+   * Channel B line is suppressed even after `suppressSubagentCompletion`
+   * resets at turn teardown.
+   */
+  completionWriter?: CompletionWriter;
   /** Per-source streaming markdown renderers, keyed by subagent source ID. */
   streamingMarkdown: Map<string, StreamingMarkdownRenderer>;
   /**
@@ -336,6 +345,11 @@ export function finalizeSubagent(_sourceId: string, source: SourceState, ctx: Su
     parentId,
     syntheticResult(summary, false),
   );
+  // Record this subagent as rendered so emitSubagentCompletion (Channel B)
+  // skips it even after teardownTurn resets suppressSubagentCompletion.
+  if (ctx.completionWriter?.renderedSubagentIds && _sourceId) {
+    ctx.completionWriter.renderedSubagentIds.add(_sourceId);
+  }
   // Route through the full composed frame so the orchestrator's live-
   // thinking paragraph is preserved. (Issue #389.)
   if (ctx.isTTY && ctx.orchestratorCtx) {

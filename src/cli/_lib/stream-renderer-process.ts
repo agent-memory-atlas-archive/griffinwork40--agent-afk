@@ -21,6 +21,7 @@ import type { CommitCoordinator } from './commit-coordinator.js';
 import type { ChildActivityTracker } from './child-activity-select.js';
 import type { InFlightToolTracker } from '../input/work-derived-verb.js';
 import type { OrchestratorCtx } from './stream-renderer-orchestrator.js';
+import type { CompletionWriter } from '../commands/interactive/shared.js';
 import type { LoopStage, StageSignals } from '../commands/interactive/loop-stage.js';
 import { ORCHESTRATOR_SOURCE_KEY, type SourceState, freshSourceState } from './stream-renderer-source.js';
 import { noteRootWaitEvent, noteToolEvent } from '../input/work-derived-verb.js';
@@ -87,6 +88,12 @@ export interface ProcessCtx {
    * processEvent never references the class directly.
    */
   buildOrchestratorCtx: () => OrchestratorCtx;
+  /**
+   * Optional REPL completion writer — forwarded to `makeSubagentCtx` so
+   * `finalizeSubagent` can record rendered subagent ids and guard the
+   * teardown-race Channel B duplicate.
+   */
+  completionWriter?: CompletionWriter;
 }
 
 /**
@@ -144,6 +151,7 @@ export function processEvent(ctx: ProcessCtx, event: OutputEvent, meta?: Subagen
         streamingMarkdown: ctx.subagentMarkdown,
         thinkingMode: ctx.thinkingMode,
         orchestratorCtx: ctx.buildOrchestratorCtx(),
+        ...(ctx.completionWriter ? { completionWriter: ctx.completionWriter } : {}),
       }), parentSyntheticId);
     }
   }
@@ -186,6 +194,7 @@ export function processEvent(ctx: ProcessCtx, event: OutputEvent, meta?: Subagen
       streamingMarkdown: ctx.subagentMarkdown,
       thinkingMode: ctx.thinkingMode,
       orchestratorCtx: ctx.buildOrchestratorCtx(),
+      ...(ctx.completionWriter ? { completionWriter: ctx.completionWriter } : {}),
     }));
     // Refresh staleness timestamp and clear any pause annotation on new activity.
     source.lastEventAt = Date.now();

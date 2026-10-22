@@ -575,6 +575,19 @@ export interface CompletionWriter {
    * completions and the `chat` surface still surface the line.
    */
   suppressSubagentCompletion?: boolean;
+  /**
+   * Subagent IDs whose Done row the tool lane has already committed to
+   * scrollback (Channel A). {@link emitSubagentCompletion} skips any id in
+   * this set so the SubagentStop hook (Channel B) never double-renders a
+   * subagent that the tool lane already covered — even when the hook fires
+   * after `teardownTurn` resets `suppressSubagentCompletion`.
+   *
+   * Populated by `finalizeSubagent` in `stream-renderer-subagent.ts` at the
+   * exact moment `addResult` is called for the Done row. Cleared at the start
+   * of each new turn by `armAndWire` so the set never grows beyond the
+   * subagents in one turn's lifetime.
+   */
+  renderedSubagentIds?: Set<string>;
 }
 
 export interface TurnHandles {
