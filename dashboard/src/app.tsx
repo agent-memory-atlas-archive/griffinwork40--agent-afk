@@ -35,7 +35,7 @@ export function App() {
 }
 
 function Dashboard() {
-  const { sessions: serverSessions, loading } = useSessions();
+  const { sessions: serverSessions, loading, refresh: refreshSessions } = useSessions();
   const [sessionUpdates, setSessionUpdates] = useState<Record<string, { model?: string; title?: string; thinkingUi?: ThinkingUiMode }>>({});
   const sessions = serverSessions.map((session) => ({ ...session, ...sessionUpdates[session.id] }));
   const { approvals, pendingSessionIds } = usePendingApprovals();
@@ -118,6 +118,37 @@ function Dashboard() {
     }
   };
 
+  /** Navigate to a session returned by /fork or /resume. */
+  const handleNavigateToSession = useCallback((targetSessionId: string) => {
+    setSelectedSessionId(targetSessionId);
+    setActiveNav('sessions');
+  }, []);
+
+  /** Handle /exit: session is now readonly; sessions list will update on next poll. */
+  const handleSessionEnded = useCallback(() => {
+    // The session will appear as readonly after the next poll (10s).
+    // Deselect so the user sees the sidebar and picks their next session.
+    setSelectedSessionId(null);
+  }, []);
+
+  /**
+   * Resume a past session from the sidebar Resume button through the
+   * dedicated resume route, then select the new live session. Errors are
+   * surfaced as a notice rather than swallowed.
+   */
+  const handleResumeFromSidebar = useCallback(async (pastSessionId: string) => {
+    try {
+      const result = await apiFetch<{ session: { id: string } }>(
+        `/api/sessions/${encodeURIComponent(pastSessionId)}/resume`,
+        { method: 'POST' },
+      );
+      setSelectedSessionId(result.session.id);
+      refreshSessions();
+    } catch (err) {
+      toast(err instanceof Error ? `Could not resume: ${err.message}` : 'Could not resume this session', 'info');
+    }
+  }, [toast, refreshSessions]);
+
   const handleNewSession = useCallback(async () => {
     try {
       const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) });
@@ -172,6 +203,7 @@ function Dashboard() {
       pendingSessionIds={pendingSessionIds}
       selectedSessionId={selectedSessionId}
       onSelectSession={handleSelectSession}
+      onResumeSession={(id) => void handleResumeFromSidebar(id)}
       activeNav={activeNav}
       onNavChange={handleNavigate}
       collapsed={sidebarCollapsed}
@@ -292,6 +324,8 @@ function Dashboard() {
                   }}
                   onCommandOutput={handleCommandOutput}
                   onToast={(msg) => toast(msg, 'info')}
+                  onNavigate={handleNavigateToSession}
+                  onSessionEnded={handleSessionEnded}
                 />
               </div>
             )}

@@ -32,10 +32,10 @@ describe('web command capability gate', () => {
     expect(gateReason(name)).toMatch(/requires/);
   });
 
-  it.each(['/fork', '/resume', '/exit', '/quit'])(
-    'retains only picker/lifecycle deferral for %s', (name) => {
-      expect(isGated(name)).toBe(true);
-      expect(gateReason(name)).toBeTypeOf('string');
+  it.each(['/rewind', '/fork', '/resume', '/exit', '/quit'])(
+    '%s is no longer deferred: it runs as a native web command', (name) => {
+      registerCommand(name);
+      expect(isGated(name)).toBe(false);
     },
   );
 

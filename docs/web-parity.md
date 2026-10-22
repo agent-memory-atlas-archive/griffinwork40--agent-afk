@@ -39,7 +39,7 @@ remain deferred to Stages 4 and 5.
 | /todo | portable | TEXT | S0 + UX | todo panel above composer |
 | /goal | portable | TEXT | S0 + UX | goal chip in session header |
 | /name | portable | DONE | S1 | canonical rename updates sidebar and session title |
-| /fork | portable | GATED | S4 | new owned session + navigate; browser clipboard |
+| /fork | portable | DONE | S4 | creates new owned session + navigate control; dashboard selects the fork |
 | /changelog | portable | TEXT | S0 | text |
 | /bgsub, /bgsub:status, /bgsub:join, /bgsub:cancel | portable | TEXT | S0 + UX | jobs view (cancel route deferred) |
 | /tasks | partial | TEXT | S0 (list) → UX | subagent tree already in transcript; list as text |
@@ -64,7 +64,7 @@ remain deferred to Stages 4 and 5.
 | /export | portable | TEXT | S0 | download link (md/html) |
 | /handoffs, /handoffs:answer | portable | TEXT | DONE (view) | handoffs view exists; command form S0 |
 | /keys | portable | GATED | UX | web keyboard-shortcut sheet (?) |
-| /exit, /quit | session-control | GATED | S4 | close session tab |
+| /exit, /quit | session-control | DONE | S4 | marks session ended (sidecar closeTime); dashboard shows inline notice, deselects session |
 | /clear | session-control | DONE | S1 | resets conversation and command outputs across tabs; retains confirmation |
 | /compact | session-control | DONE | S1 → S3 | canonical compaction with live, correlated progress |
 | /plan | session-control | GATED | S1 | mode toggle in composer; requires session-control service |
@@ -74,7 +74,7 @@ remain deferred to Stages 4 and 5.
 | /theme | session-control | GATED | UX | dashboard light/dark/auto theme |
 | /retry | session-control | GATED | S1 | retry action on last message; requires session-control service |
 | /model | partial | DONE | S1 → S3 | argument switches directly; bare command opens choice picker; authoritative selector/header/sidebar updates |
-| /resume | partial | GATED | S4 | session lifecycle and picker remain deferred |
+| /resume | partial | DONE | S4 | bare: structured list block; /resume <id>: creates owned resumed session + navigate; Resume button on ended sidebar sessions (POST /api/sessions/:id/resume); refuses sessions live in another process |
 | /transcript | partial | TEXT | S0 | text; transcript view already exists |
 | /afk-md | partial | TEXT | S0 (show/reload/add) | `user`/`project` edit subcommands → UX editor |
 | /config | partial | TEXT | S1 (view/set) → UX | editable settings view |
@@ -106,7 +106,7 @@ Skill commands (plugin, user, builtin, marketplace): **DONE** via `classifySlash
 | Model selector | DONE | S1 → S3 | create and authoritative mid-session switching; bare `/model` opens a choice picker |
 | Peer inbox delivery / idle wake | N/A | | REPL-owned sessions; web sessions read peers via panel |
 | Command choice requests + progress | DONE | S3 | client-local dialog/status; correlated SSE, cross-tab settlement |
-| Resume / continue a stored session | MISSING | S4 | |
+| Resume / continue a stored session | DONE | S4 | /resume <id> or the sidebar Resume button on ended sessions; refuses sessions live in another process |
 | Retry / edit a sent message | MISSING | S1 / S3 | |
 | Message timestamps | MISSING | UX | |
 | Terminal title, worktree exit picker | N/A | | tab title per session; worktree panel |

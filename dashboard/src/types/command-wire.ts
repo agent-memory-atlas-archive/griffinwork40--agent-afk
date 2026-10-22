@@ -38,6 +38,7 @@ export type CommandControl =
   | { kind: 'continue' }
   | { kind: 'clear' }
   | { kind: 'exit' }
+  | { kind: 'navigate'; sessionId: string }
   | { kind: 'forward' }
   | { kind: 'rerun'; input: string }
   | { kind: 'submit'; message: string }

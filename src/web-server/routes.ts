@@ -72,6 +72,8 @@ export interface RouteContext {
    * without an owner, in which case the surface is attach-only.
    */
   createSession?: (request: CreateSessionRequest) => Promise<OwnedSessionInfo>;
+  /** Resume a stored session as a new owned session; null when none matches. */
+  resumeSession?: (pastSessionId: string) => Promise<import('./session-owner.lifecycle.js').ResumeByIdResult>;
   /** Soft-interrupt an in-flight turn on an owned session. */
   interrupt?: (sessionId: string) => Promise<void>;
 }

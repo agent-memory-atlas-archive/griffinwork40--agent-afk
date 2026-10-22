@@ -47,6 +47,8 @@ import { handleListHandoffs, handleAnswerHandoff } from './routes.handoffs.js';
 import { handleCommand } from './routes.commands.js';
 import { ChoiceBroker } from './choice-broker.js';
 import { handleChoiceAnswer } from './routes.choices.js';
+import { handleResumeSession } from './routes.resume.js';
+import { resumeStoredSessionById } from './session-owner.lifecycle.js';
 import { errorMessage } from '../utils/errors.js';
 
 export const DEFAULT_WEB_PORT = 4141;
@@ -176,6 +178,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
     ...(options.owner
       ? {
           createSession: (req: CreateSessionRequest) => options.owner!.create(req),
+          resumeSession: (id: string) => resumeStoredSessionById(options.owner!, id),
           interrupt: (id: string) => options.owner!.interrupt(id),
           submitSkillMessage: (id: string, msg: ContentBlockParam[]) =>
             options.owner!.submitSkillMessage(id, msg),
@@ -323,6 +326,12 @@ async function dispatch(
   const promptMatch = /^\/api\/sessions\/([^/]+)\/prompt$/.exec(path);
   if (promptMatch?.[1] && method === 'POST') {
     await handlePrompt(ctx, res, decodeURIComponent(promptMatch[1]), await readBody(req));
+    return;
+  }
+
+  const resumeMatch = /^\/api\/sessions\/([^/]+)\/resume$/.exec(path);
+  if (resumeMatch?.[1] && method === 'POST') {
+    await handleResumeSession(ctx, res, decodeURIComponent(resumeMatch[1]));
     return;
   }
 

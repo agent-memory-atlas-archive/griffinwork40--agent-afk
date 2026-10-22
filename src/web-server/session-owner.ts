@@ -112,8 +112,15 @@ export class SessionOwner {
     return this.options.cwd ?? process.cwd();
   }
 
-  /** Construct a session, wait for its id, and register it as drivable. */
-  async create(request: CreateSessionRequest = {}): Promise<OwnedSessionInfo> {
+  /**
+   * Construct a session, wait for its id, and register it as drivable.
+   *
+   * @param resumeConfig - Optional partial AgentConfig injected for /resume and
+   *   /fork paths. Only resume-specific fields (resumeMessages, resumeHistory,
+   *   resume, sessionId) are safe to merge here; all other config comes from
+   *   wiring + options. Lifecycle callers obtain this via resumeConfigFor().
+   */
+  async create(request: CreateSessionRequest = {}, resumeConfig: Partial<import('../agent/types.js').AgentConfig> = {}): Promise<OwnedSessionInfo> {
     const cwd = this.options.allowArbitraryCwd === true ? (request.cwd ?? this.baseCwd) : this.baseCwd;
     const model = request.model ?? this.options.model;
     const apiKey = getApiKeyForModel(model);
@@ -162,6 +169,11 @@ export class SessionOwner {
       ...(wiring.systemPrompt !== undefined ? { systemPrompt: wiring.systemPrompt } : {}),
       ...(wiring.systemPromptSource !== undefined ? { systemPromptSource: wiring.systemPromptSource } : {}),
       ...(wiring.traceWriter !== undefined ? { traceWriter: wiring.traceWriter } : {}),
+      // Resume/fork fields — only safe resume-specific keys merged here.
+      ...(resumeConfig.resume !== undefined ? { resume: resumeConfig.resume } : {}),
+      ...(resumeConfig.sessionId !== undefined ? { sessionId: resumeConfig.sessionId } : {}),
+      ...(resumeConfig.resumeMessages !== undefined ? { resumeMessages: resumeConfig.resumeMessages } : {}),
+      ...(resumeConfig.resumeHistory !== undefined ? { resumeHistory: resumeConfig.resumeHistory } : {}),
     };
 
     const session = new AgentSession(config, wiring.traceWriter);
@@ -228,7 +240,7 @@ export class SessionOwner {
       record.model = meta.model;
       if (meta.name) record.name = meta.name;
       else delete record.name;
-    }, fastModeController);
+    }, fastModeController, false, this);
     this.controls.set(id, control);
     this.autosavers.set(id, control.autosaver((err) => {
       console.error(`[afk web] session ${id} autosave failed; it may not be resumable:`, err);

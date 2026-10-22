@@ -16,14 +16,14 @@ import type { ServerResponse } from 'node:http';
 import { sendJson, requireValidSessionId } from './routes.js';
 import type { RouteContext } from './routes.js';
 import type { AgentSession } from '../agent/session/agent-session.js';
-import type { SlashResult } from '../cli/slash/types.js';
-import type { CommandControl } from './shared/command-wire.js';
 import { ensureSlashRegistry } from './slash-registry.js';
 import { parse, lookup, suggest } from '../cli/slash/registry.js';
 import { isGated, gateReason } from './command-gate.js';
 import { BufferingWriter } from './writer.buffer.js';
 import { getStats, buildSessionRef, buildOptionalSessionRef } from './session-owner.slash.js';
 import { createWebSlashContext } from './slash-context.web.js';
+import { normalizeSlashResult } from './slash-result.web.js';
+export { normalizeSlashResult } from './slash-result.web.js';
 
 /**
  * Poll owner.getSession up to 2s (40 × 50ms) before giving up.
@@ -43,20 +43,6 @@ async function waitForSessionReady(
   return false;
 }
 
-/** Normalise any SlashResult variant into the wire CommandControl shape. */
-export function normalizeSlashResult(result: SlashResult): CommandControl {
-  if (result === 'continue') return { kind: 'continue' };
-  if (result === 'exit') return { kind: 'exit' };
-  if (result === 'forward') return { kind: 'forward' };
-  if (typeof result === 'object' && result !== null) {
-    // 'rerun' is the discriminant for { rerun: string } — no cast needed after narrowing.
-    if ('rerun' in result) return { kind: 'rerun', input: result.rerun };
-    // 'kind' discriminates { kind: 'submit' | 'prefill'; message: string }.
-    if ('kind' in result && result.kind === 'submit') return { kind: 'submit', message: result.message };
-    if ('kind' in result && result.kind === 'prefill') return { kind: 'prefill', message: result.message };
-  }
-  return { kind: 'continue' };
-}
 
 export async function handleCommand(
   ctx: RouteContext,

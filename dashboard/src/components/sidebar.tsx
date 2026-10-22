@@ -9,6 +9,7 @@ export function Sidebar({
   pendingSessionIds,
   selectedSessionId,
   onSelectSession,
+  onResumeSession,
   activeNav,
   onNavChange,
   collapsed,
@@ -18,6 +19,8 @@ export function Sidebar({
   pendingSessionIds: Set<string>;
   selectedSessionId: string | null;
   onSelectSession: (id: string) => void;
+  /** Called when user clicks Resume on a readonly session card. */
+  onResumeSession?: (sessionId: string) => void;
   activeNav: string;
   onNavChange: (nav: string) => void;
   collapsed: boolean;
@@ -89,6 +92,7 @@ export function Sidebar({
                   pendingSessionIds={pendingSessionIds}
                   selected={selectedSessionId === s.id}
                   onSelect={onSelectSession}
+                  onResume={onResumeSession}
                 />
               ))}
             </div>

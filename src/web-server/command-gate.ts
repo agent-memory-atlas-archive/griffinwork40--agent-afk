@@ -7,13 +7,12 @@ import {
   type SurfaceCapability,
 } from '../cli/slash/capabilities.js';
 
-/** Temporary lifecycle/picker deferrals, removed when Stages 3/4 land. */
-const DEFERRED: ReadonlyMap<string, string> = new Map([
-  ['/fork', 'not on the web yet: forking a session is coming; use the REPL for now'],
-  ['/resume', 'not on the web yet: open past sessions from the sidebar (read-only for now)'],
-  ['/exit', 'not applicable on the web: close the tab or start a new session'],
-  ['/quit', 'not applicable on the web: close the tab or start a new session'],
-]);
+/**
+ * Explicit deferrals for commands a surface could run but that are not wired
+ * yet. Empty since Stages 3 and 4: every web gate is now derived from
+ * capabilities. Add an entry (with a user-facing reason) only as a stopgap.
+ */
+const DEFERRED: ReadonlyMap<string, string> = new Map();
 
 /** True when the web context cannot satisfy a registered command's requirements. */
 export function isGated(
