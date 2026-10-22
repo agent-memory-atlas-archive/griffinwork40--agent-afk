@@ -119,7 +119,12 @@ async function runNative(
     const slashCtx = createTelegramSlashContext(session, stats, writer);
     const isClear = cmd.name === '/clear';
     if (isClear) sm.beginConversationReset(route);
+    try {
     await withTypingIndicator(ctx, () => cmd.handler(slashCtx, args));
+    } catch (handlerError) {
+      if (isClear) sm.finishConversationReset(route);
+      throw handlerError;
+    }
     if (isClear) {
       if (session.state === 'closed') await sm.resetSession(route);
       else sm.finishConversationReset(route);

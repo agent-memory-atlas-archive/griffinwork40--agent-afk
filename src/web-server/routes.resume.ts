@@ -45,9 +45,11 @@ export async function handleResumeSession(
     }
     sendJson(res, 201, { session: { id: resumed.id } });
   } catch (error) {
+    // Log the full error server-side; never reflect internal details to the client.
+    console.error('[resume] failed:', error);
     sendJson(res, 500, {
       error: 'resume_failed',
-      message: error instanceof Error ? error.message : String(error),
+      message: 'Failed to resume session.',
     });
   }
 }

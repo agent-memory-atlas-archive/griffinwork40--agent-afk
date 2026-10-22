@@ -180,8 +180,8 @@ export async function handleWebResumeTarget(
 
     return { kind: 'navigate', sessionId: newInfo.id };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    ctx.out.error(`Failed to resume session: ${msg}`);
+    console.error('[web /resume] failed:', err);
+    ctx.out.error('Failed to resume session.');
     return 'continue';
   }
 }
@@ -334,7 +334,8 @@ export async function handleWebFork(
     ctx.out.info('This session continues here, untouched. The fork carries the conversation only.');
     return { kind: 'navigate', sessionId: newInfo.id };
   } catch (err) {
-    ctx.out.error(`Fork created but could not start new session: ${err instanceof Error ? err.message : String(err)}`);
+    console.error('[web /fork] failed:', err);
+    ctx.out.error('Fork created but could not start new session.');
     // The sidecar fork exists — user can /resume it manually.
     ctx.out.info(`Resume the fork with: /resume ${forkId}`);
     return 'continue';

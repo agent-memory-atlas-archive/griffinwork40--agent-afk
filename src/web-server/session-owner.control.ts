@@ -94,7 +94,8 @@ export class WebSessionControl {
 
     // Lifecycle commands: handled by session-owner.lifecycle.ts.
     if (cmd.name === '/exit' || cmd.name === '/quit') {
-      const control = await handleWebExit(this.owner!, this.id, ctx);
+      if (!this.owner) { ctx.out.error('exit not available (no owner)'); return { result: 'continue' }; }
+      const control = await handleWebExit(this.owner, this.id, ctx);
       return { result: 'continue', control };
     }
     if (cmd.name === '/fork' || cmd.name === '/branch') {

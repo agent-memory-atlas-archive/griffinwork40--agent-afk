@@ -40,9 +40,7 @@ export class ChoiceBroker {
   }
 
   choose(sessionId: string, request: ChoiceRequest, signal?: AbortSignal): Promise<string | null> {
-    if (signal?.aborted) {
-      return Promise.resolve(null);
-    }
+    if (signal?.aborted) return Promise.resolve(null);
     if (!request.corrId || this.pending.has(request.corrId)) {
       throw new Error('duplicate or empty choice correlation id');
     }
@@ -54,6 +52,8 @@ export class ChoiceBroker {
       timer.unref?.();
       const pending: PendingChoice = { sessionId, request, resolve, timer };
       this.pending.set(request.corrId, pending);
+      // Re-check after registration: signal may have fired between the guard and set.
+      if (signal?.aborted) { this.settle(request.corrId, null); return; }
       if (signal) {
         const onAbort = (): void => { this.settle(request.corrId, null); };
         signal.addEventListener('abort', onAbort, { once: true });

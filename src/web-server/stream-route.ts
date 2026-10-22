@@ -87,7 +87,6 @@ export async function handleStream(
       res.write(formatSseFrame({ id: `${generation}:${position}`, data: { record, replay } }));
     }
     if (!closed && !controller.signal.aborted) {
-      choices?.cancelSession(sessionId);
       res.write(formatSseFrame({ data: SSE_END_FRAME }));
     }
   } catch (err) {

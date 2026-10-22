@@ -219,4 +219,23 @@ describe('WebSessionControl', () => {
     expect(s.stats.totalTurns).toBe(2);
     vi.mocked(saveSession).mockReset();
   });
+
+  it('guards /exit when owner is undefined, matching /fork and /resume', async () => {
+    const stats = createSessionStats('sonnet');
+    const session = {
+      sessionId: 'no-owner',
+      reset: vi.fn(),
+      waitForInitialization: vi.fn(),
+      setModel: vi.fn(),
+      pushSidebandEvent: vi.fn(),
+      recordLedgerElicitation: vi.fn(),
+    } as unknown as AgentSession;
+    const control = new WebSessionControl('no-owner', session, stats, vi.fn());
+    const writer = new BufferingWriter();
+    const ctx = createWebSlashContext({ current: session }, stats, writer, '/tmp');
+    const result = await control.execute(command('/exit'), ctx, '');
+    expect(result.result).toBe('continue');
+    expect(result.control).toBeUndefined();
+    expect(writer.getChunks().join('')).toContain('exit not available');
+  });
 });

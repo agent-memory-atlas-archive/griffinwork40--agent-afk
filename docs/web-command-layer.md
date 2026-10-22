@@ -281,4 +281,4 @@ addition to the existing kinds.
 - **Dynamic imports on hot path**: `ensureSlashRegistry` and registry imports are dynamic to
   keep the `cli/slash` tree off the server's startup path. These will be hoisted to
   module-top once the route is opt-in (server.ts already routes lazily).
-- **Stage 4/5 deferred**: web fork/resume/exit session lifecycle and Telegram migration are not implemented here.
+- **Dynamic imports on hot path** (unchanged from Stage 1): `ensureSlashRegistry` and registry imports remain dynamic.
