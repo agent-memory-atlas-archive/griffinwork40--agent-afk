@@ -22,8 +22,9 @@ import { loadSkillPrompts } from '../../skills/_lib/prompt-loader.js';
 import { scanSkillsFromDir } from '../../skills/user-skills.js';
 import { scanLocalPlugins } from '../plugins-scanner.js';
 import { loadPluginEntrypoints, registerPluginHook } from '../plugins/load-entrypoints.js';
-import { makeDefaultStateStore } from '../providers/shared/provider-stores.js';
+import { getSharedPluginStateStore } from '../providers/shared/provider-stores.js';
 import { sendToSession } from '../peer/send.js';
+import type { SendInput } from '../peer/send.js';
 import { readLivePresenceFiles } from '../awareness/presence.js';
 import { extractPluginSkills, resolveKnownToolNames } from '../plugins/tool-injector.js';
 import { extractPluginCommands } from '../plugins/command-files.js';
@@ -607,6 +608,13 @@ export async function ensurePluginEntrypointsLoaded(): Promise<void> {
   // cannot resolve at all. See PluginApi for the full rationale.
   //
   // Declarations are installed on each session registry when it is created.
+  //
+  // selfId: stable process-level identity for the peer-messaging wrappers.
+  // ensurePluginEntrypointsLoaded is a process-global bootstrap with no per-session
+  // context, so we derive a stable sentinel from the process pid. This id is
+  // used to (a) filter self out of listSessions results (F-3) and (b) stamp the
+  // `from` field of sendToSession so plugins cannot forge the sender (F-2).
+  const selfId = `plugin-host:${String(process.pid)}`;
   await loadPluginEntrypoints(scanAllPluginRoots(), {
     pluginApi: {
       registerSkill,
@@ -625,10 +633,14 @@ export async function ensurePluginEntrypointsLoaded(): Promise<void> {
       deriveSessionFacet,
       loadStoredSession,
       registerHook: registerPluginHook,
-      // State store: bound methods from a lazily-created default store so
-      // plugins share the same SQLite handle as the rest of the host process.
+      // State store: bound methods from the process-wide shared StateStore so
+      // plugins share ONE SQLite handle with the rest of the host process.
+      // Contract: getSharedPluginStateStore() returns the same instance on every
+      // call (??= singleton) — opening a fresh handle per call (the old IIFE
+      // pattern) leaked handles and broke CAS atomicity across the plugin and
+      // provider layers (F-1, F-4).
       ...(() => {
-        const store = makeDefaultStateStore();
+        const store = getSharedPluginStateStore();
         return {
           stateGet: store.get.bind(store),
           statePut: store.put.bind(store),
@@ -639,8 +651,16 @@ export async function ensurePluginEntrypointsLoaded(): Promise<void> {
         };
       })(),
       // Peer messaging: thin wrappers over the peer send layer.
-      listSessions: () => readLivePresenceFiles(),
-      sendToSession,
+      // Contract: selfId is bound at injection time so:
+      //   - listSessions excludes this process from the returned list (F-3),
+      //   - sendToSession injects `from` so callers cannot forge sender identity
+      //     (F-2). The plugin-facing type uses Omit<SendInput,'from'>.
+      listSessions: async () => {
+        const all = await readLivePresenceFiles();
+        return all.filter(r => r.sessionId !== selfId);
+      },
+      sendToSession: (input: Omit<SendInput, 'from'>) =>
+        sendToSession({ ...input, from: { id: selfId } }),
     },
   });
 }

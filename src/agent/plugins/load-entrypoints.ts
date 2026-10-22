@@ -105,7 +105,12 @@ export type PluginApi = Pick<
      * `sendToSession` sends a message to a named peer session.
      */
     listSessions?: () => Promise<PresenceRecord[]>;
-    sendToSession?: (input: SendInput) => Promise<SendToSessionResult>;
+    /**
+     * Send a message to a named peer session. The `from` field is bound by the
+     * host at injection time (to the host session id) so plugins cannot forge
+     * the sender identity. Callers supply everything except `from`.
+     */
+    sendToSession?: (input: Omit<SendInput, 'from'>) => Promise<SendToSessionResult>;
     /**
      * Declare a handler to be installed on each future session registry.
      * Activation runs once per entrypoint path per process, not once per session;

@@ -236,28 +236,28 @@ describe('loadPluginEntrypoints', () => {
     const store = globalThis as unknown as Record<string, unknown>;
     try {
       await loadPluginEntrypoints(plugins, { pluginApi: fullApi, onError: (_p, err) => { throw err; } });
-      const probe = store.__afkApiProbe as Record<string, unknown> | undefined;
+      const probe = store['__afkApiProbe'] as Record<string, unknown> | undefined;
       expect(probe).toBeDefined();
-      expect(probe?.envType).toBe('object');
-      expect(probe?.subagentManagerType).toBe('function');
-      expect(probe?.subagentManagerName).toBe('SubagentManager');
-      expect(probe?.describeFailureType).toBe('function');
-      expect(probe?.getAgentFrameworkDirType).toBe('function');
-      expect(probe?.discoverPluginSkillBodiesType).toBe('function');
-      expect(probe?.getOrDeriveFacetType).toBe('function');
-      expect(probe?.listSessionIdsType).toBe('function');
-      expect(probe?.deriveSessionFacetType).toBe('function');
-      expect(probe?.loadStoredSessionType).toBe('function');
-      expect(probe?.stateGetType).toBe('function');
-      expect(probe?.statePutType).toBe('function');
-      expect(probe?.stateCasType).toBe('function');
-      expect(probe?.stateDelType).toBe('function');
-      expect(probe?.stateInsertIfAbsentType).toBe('function');
-      expect(probe?.stateQueryType).toBe('function');
-      expect(probe?.listSessionsType).toBe('function');
-      expect(probe?.sendToSessionType).toBe('function');
+      expect(probe?.['envType']).toBe('object');
+      expect(probe?.['subagentManagerType']).toBe('function');
+      expect(probe?.['subagentManagerName']).toBe('SubagentManager');
+      expect(probe?.['describeFailureType']).toBe('function');
+      expect(probe?.['getAgentFrameworkDirType']).toBe('function');
+      expect(probe?.['discoverPluginSkillBodiesType']).toBe('function');
+      expect(probe?.['getOrDeriveFacetType']).toBe('function');
+      expect(probe?.['listSessionIdsType']).toBe('function');
+      expect(probe?.['deriveSessionFacetType']).toBe('function');
+      expect(probe?.['loadStoredSessionType']).toBe('function');
+      expect(probe?.['stateGetType']).toBe('function');
+      expect(probe?.['statePutType']).toBe('function');
+      expect(probe?.['stateCasType']).toBe('function');
+      expect(probe?.['stateDelType']).toBe('function');
+      expect(probe?.['stateInsertIfAbsentType']).toBe('function');
+      expect(probe?.['stateQueryType']).toBe('function');
+      expect(probe?.['listSessionsType']).toBe('function');
+      expect(probe?.['sendToSessionType']).toBe('function');
     } finally {
-      delete store.__afkApiProbe;
+      delete store['__afkApiProbe'];
     }
   });
 
@@ -343,9 +343,9 @@ describe('loadPluginEntrypoints', () => {
       try {
         await first.dispatch(ctx);
         await second.dispatch(ctx);
-        expect(store.__afkHookProof).toBe(2);
+        expect(store['__afkHookProof']).toBe(2);
       } finally {
-        delete store.__afkHookProof;
+        delete store['__afkHookProof'];
       }
     });
 
