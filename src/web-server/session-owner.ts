@@ -31,6 +31,7 @@ import type { ContentBlockParam } from '@anthropic-ai/sdk/resources';
 import { createSessionAutosaver, type SessionAutosaver } from '../cli/session-autosave.js';
 import { drainAndPersistTurn } from './session-owner.autosave.js';
 import { errorMessage } from '../utils/errors.js';
+import { initSessionStats } from './session-owner.slash.js';
 
 export interface CreateSessionRequest {
   /** Working directory. Ignored unless `allowArbitraryCwd` — see the guard. */
@@ -203,6 +204,7 @@ export class SessionOwner {
       createdAt: new Date().toISOString(),
     };
     this.sessions.set(id, session);
+    initSessionStats(id, model);
     this.info.set(id, record);
     this.owned.add(id);
     this.autosavers.set(id, createSessionAutosaver({
@@ -269,7 +271,7 @@ export class SessionOwner {
           // The ledger is written as a side effect of the turn; the SSE route
           // tails it. Draining runs the turn to completion, then the completed
           // turn is saved to the session sidecar.
-          await drainAndPersistTurn(session, message, this.autosavers.get(sessionId));
+          await drainAndPersistTurn(session, message, this.autosavers.get(sessionId), sessionId);
         } finally {
           const remaining = (this.pending.get(sessionId) ?? 1) - 1;
           if (remaining > 0) this.pending.set(sessionId, remaining);
@@ -344,6 +346,14 @@ export class SessionOwner {
 
   list(): OwnedSessionInfo[] {
     return [...this.info.values()];
+  }
+
+  /**
+   * Look up a single owned session by id.
+   * Returns the AgentSession, or undefined if not found.
+   */
+  getSession(id: string): import('../agent/session/agent-session.js').AgentSession | undefined {
+    return this.sessions.get(id);
   }
 
   /**

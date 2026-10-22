@@ -34,6 +34,7 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 - move agent-type listing from tool description to system prompt (#4219) (dd7410af9)
 
 ### Changed
+- `POST /api/sessions/:id/prompt` now returns 422 for native slash commands (use `POST /api/sessions/:id/commands` instead), REPL-only commands, and unknown commands (#4246)
 - cover the round_cap_notice_dropped path (#4264) (075cd68be)
 
 ## [5.328.2] - 2026-10-20

@@ -25,6 +25,8 @@ interface TranscriptViewProps {
   turnActive?: boolean;
   /** Session being rendered; enables lazy-loading full tool results. */
   sessionId?: string;
+  /** Suppress the "No transcript items yet." placeholder (command outputs fill the view). */
+  hideEmptyState?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ export function TranscriptView({ sessionId, ...rest }: TranscriptViewProps) {
   );
 }
 
-function TranscriptBody({ items, totals, spineMode = true, turnActive = false }: Omit<TranscriptViewProps, 'sessionId'>) {
+function TranscriptBody({ items, totals, spineMode = true, turnActive = false, hideEmptyState = false }: Omit<TranscriptViewProps, 'sessionId'>) {
   const flatSlots = useMemo(() => groupItems(items), [items]);
   const spineSlots = useSpineSlots(items);
 
@@ -141,7 +143,7 @@ function TranscriptBody({ items, totals, spineMode = true, turnActive = false }:
           className="sticky top-0 z-10 mb-4 rounded-md border border-border bg-card px-3 py-1.5"
         />
       )}
-      {items.length === 0 ? (
+      {items.length === 0 && hideEmptyState ? null : items.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
           No transcript items yet.
         </p>

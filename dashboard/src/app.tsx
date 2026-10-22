@@ -4,7 +4,6 @@ import { Sidebar } from './components/sidebar';
 import type { NavItem } from './components/sidebar';
 import { CommandPalette } from './components/command-palette';
 import { KeyboardShortcuts } from './components/keyboard-shortcuts';
-import { TranscriptView } from './components/transcript-view';
 import { SessionMeter } from './components/session-meter';
 import { MemoryView } from './components/memory-view';
 import { SchedulesView } from './components/schedules-view';
@@ -14,15 +13,15 @@ import { SettingsView } from './components/settings-view';
 import { Composer } from './components/composer';
 import { ApprovalCards } from './components/approval-cards';
 import { MobileSidebar, HamburgerButton } from './components/mobile-sidebar';
-import { ToastProvider } from './components/toast';
+import { ToastProvider, useToast } from './components/toast';
 import { useSessions } from './hooks/use-sessions';
 import { usePendingApprovals } from './hooks/use-pending-approvals';
 import { useTranscript } from './hooks/use-transcript';
 import { useScrollPin } from './hooks/use-scroll-pin';
 import { useQueue } from './hooks/use-queue';
+import { useCommandOutputs } from './hooks/use-command-outputs';
+import { SessionContent } from './components/session-content';
 import { apiFetch } from './lib/api';
-
-// NavItem is imported from sidebar.tsx
 
 export function App() {
   return (
@@ -35,6 +34,7 @@ export function App() {
 function Dashboard() {
   const { sessions, loading } = useSessions();
   const { approvals, pendingSessionIds } = usePendingApprovals();
+  const { toast } = useToast();
 
   const [activeNav, setActiveNav] = useState<NavItem>('sessions');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -45,10 +45,14 @@ function Dashboard() {
   const { items, totals, status, turnActive, liveTurns } = useTranscript(selectedSessionId);
   const { containerRef, scrollToBottom, isPinned, showScrollButton } = useScrollPin();
 
+  // Per-session client-local command output items (not persisted; see use-command-outputs).
+  const { itemsFor: cmdItemsFor, addItem: addCmdItem } = useCommandOutputs();
+  const cmdItems = cmdItemsFor(selectedSessionId);
+
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
   useEffect(() => {
     if (isPinned) scrollToBottom();
-  }, [items.length, isPinned, scrollToBottom]);
+  }, [items.length, cmdItems.length, isPinned, scrollToBottom]);
 
   const handleNavigate = (nav: string) => {
     setActiveNav(nav as NavItem);
@@ -65,12 +69,12 @@ function Dashboard() {
 
   const handleNewSession = useCallback(async () => {
     try {
-      const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST' });
+      const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) });
       setSelectedSessionId(result.session.id);
     } catch {
       // best-effort
     }
-  }, []);
+  }, [selectedModel]);
 
   // Abort controller ref: abort in-flight POSTs when the session changes.
   const abortRef = useRef<AbortController | null>(null);
@@ -94,20 +98,16 @@ function Dashboard() {
   // Track the previous liveTurns value to detect new turn completions.
   const prevTurnsRef = useRef(0);
 
-  // Clear the queue and abort any in-flight POST when the selected session
-  // changes to prevent a prompt queued for session A from being sent to
-  // session B.
+  // Clear the queue, abort in-flight POST, and clear command outputs when session changes.
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
     queue.clear();
     prevTurnsRef.current = 0;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- queue identity is stable; selectedSessionId is the real dep
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- queue identity stable; selectedSessionId is the real dep
   }, [selectedSessionId]);
 
-  // Flush the queue when a live turn completes (liveTurns increments only on
-  // non-replay 'done' records, preventing spurious flushes during initial
-  // replay on session load).
+  // Flush the queue when a live turn completes.
   useEffect(() => {
     if (liveTurns > prevTurnsRef.current) {
       void queue.flush();
@@ -185,7 +185,6 @@ function Dashboard() {
 
         {/* Content area */}
         <div className="relative flex flex-1 flex-col overflow-hidden">
-          {/* New messages floating button */}
           {showScrollButton && activeNav === 'sessions' && (
             <button
               onClick={scrollToBottom}
@@ -196,41 +195,45 @@ function Dashboard() {
             </button>
           )}
           <div ref={containerRef} className="relative flex flex-1 flex-col overflow-y-auto">
-          <div className="flex-1">
-            {activeNav === 'sessions' && (
-              <SessionContent
-                loading={loading}
-                sessions={sessions}
-                selectedSession={selectedSession}
-                items={items}
-                totals={totals}
-                status={status}
-                turnActive={turnActive}
-              />
-            )}
-            {activeNav === 'memory' && <MemoryView />}
-            {activeNav === 'schedules' && <SchedulesView />}
-            {activeNav === 'jobs' && <BgJobsView />}
-            {activeNav === 'handoffs' && <HandoffsView />}
-            {activeNav === 'settings' && <SettingsView />}
-          </div>
-
-          {/* Composer + approvals (sessions view only, live sessions) */}
-          {activeNav === 'sessions' && selectedSession && selectedSession.mode === 'live' && (
-            <div className="shrink-0">
-              {approvals.length > 0 && (
-                <ApprovalCards approvals={approvals} />
+            <div className="flex-1">
+              {activeNav === 'sessions' && (
+                <SessionContent
+                  loading={loading}
+                  sessions={sessions}
+                  selectedSession={selectedSession}
+                  items={items}
+                  cmdItems={cmdItems}
+                  totals={totals}
+                  status={status}
+                  turnActive={turnActive}
+                />
               )}
-              <Composer
-                sessionId={selectedSession.id}
-                sessionMode={selectedSession.mode}
-                isBusy={isBusy}
-                queue={queue}
-                onModelSelect={setSelectedModel}
-                currentModel={selectedModel}
-              />
+              {activeNav === 'memory' && <MemoryView />}
+              {activeNav === 'schedules' && <SchedulesView />}
+              {activeNav === 'jobs' && <BgJobsView />}
+              {activeNav === 'handoffs' && <HandoffsView />}
+              {activeNav === 'settings' && <SettingsView />}
             </div>
-          )}
+
+            {/* Composer + approvals (sessions view only, live sessions) */}
+            {activeNav === 'sessions' && selectedSession && selectedSession.mode === 'live' && (
+              <div className="shrink-0">
+                {approvals.length > 0 && (
+                  <ApprovalCards approvals={approvals} />
+                )}
+                <Composer
+                  sessionId={selectedSession.id}
+                  sessionMode={selectedSession.mode}
+                  isBusy={isBusy}
+                  queue={queue}
+                  onModelSelect={setSelectedModel}
+                  currentModel={selectedModel}
+                  onCommandOutput={(input, response) =>
+                    addCmdItem(selectedSession.id, input, response, items.length)}
+                  onToast={(msg) => toast(msg, 'info')}
+                />
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -239,77 +242,9 @@ function Dashboard() {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components (kept in app.tsx to avoid over-splitting trivial pieces)
+// Sub-components
 // ---------------------------------------------------------------------------
 
-import type { SessionSummary } from './types/api';
-import type { TranscriptItem } from '@/lib/ledger-adapter';
-import type { SessionTotals } from './components/session-meter';
-
-function SessionContent({
-  loading,
-  sessions,
-  selectedSession,
-  items,
-  totals,
-  status,
-  turnActive,
-}: {
-  loading: boolean;
-  sessions: SessionSummary[];
-  selectedSession: SessionSummary | undefined;
-  items: TranscriptItem[];
-  totals: SessionTotals;
-  status: string;
-  turnActive: boolean;
-}) {
-  if (loading && !sessions.length) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-          <div className="size-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
-          <span className="text-sm">Loading sessions...</span>
-        </div>
-      </div>
-    );
-  }
-  if (!loading && sessions.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        <p className="text-sm">
-          No sessions found. Start one with{' '}
-          <code className="rounded bg-secondary px-1 font-mono">afk web</code>
-        </p>
-      </div>
-    );
-  }
-  if (selectedSession && items.length > 0) {
-    return <TranscriptView sessionId={selectedSession.id} items={items} totals={totals} turnActive={turnActive} />;
-  }
-  if (selectedSession) {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        <div className="flex flex-col items-center gap-2">
-          {status === 'connecting' || status === 'reconnecting' ? (
-            <>
-              <div className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              <span className="text-sm">Connecting to session...</span>
-            </>
-          ) : selectedSession.mode === 'live' ? (
-            <span className="text-sm">New session. Send a message to start.</span>
-          ) : (
-            <span className="text-sm">No transcript data</span>
-          )}
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-full items-center justify-center text-muted-foreground">
-      <p className="text-sm">Select a session from the sidebar</p>
-    </div>
-  );
-}
 
 function StreamStatusDot({ status }: { status: string }) {
   if (status === 'open') {
@@ -323,5 +258,3 @@ function StreamStatusDot({ status }: { status: string }) {
   }
   return null;
 }
-
-
