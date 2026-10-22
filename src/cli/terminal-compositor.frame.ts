@@ -302,7 +302,7 @@ function repaintPickerFrame(self: FrameHost): void {
     contentHugBandReserve(self, self.stdout.rows ?? 24),
   );
   const frameLines = buildPickerFrameLines(
-    chrome, layout.trimmedOverlay, layout.renderGap, pickerRows, contentBand(self.stdout.columns ?? 80).margin,
+    chrome, layout.trimmedOverlay, layout.renderGap, pickerRows, contentBand(self.stdout.columns ?? 80).margin, contentBand(self.stdout.columns ?? 80).width,
   );
   // Empty-frame guard: when the picker's renderRows() is empty and no
   // chrome is active, frameLines is []. The CupFrameRenderer clamps

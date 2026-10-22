@@ -21,6 +21,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.argv = originalArgv;
+  vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.resetModules();
 });
