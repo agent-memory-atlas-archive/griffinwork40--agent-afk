@@ -17,8 +17,7 @@ formatting and terminal interaction adapter; web sends live progress over SSE wi
 
 `session-owner.control.ts` binds these operations to live owner stats, autosave, and the
 provider's fast-mode controller. Clear resets conversation/stats/trusted-skill ledger while
-retaining model, permission and thinking preference. Telegram's replacement-session behavior
-is deliberately not adopted; Telegram migration remains Stage 5.
+retaining model, permission and thinking preference. Telegram adopted the same reset-in-place contract in Stage 5 (see below).
 
 Successful clear returns `control: {kind:'clear'}`. Model/name/thinking commands may return
 `session` metadata. The dashboard clears old client-local command output and conversation
@@ -28,6 +27,25 @@ frames rebase both existing tabs and reconnecting clients, including repeated cl
 
 Stage 2 builds on these canonical reads and controls: handlers obtain data from the
 session-control service, then use structured block helpers without changing REPL rendering.
+
+## Stage 5: Telegram adapter
+
+Telegram is the third adapter of the same layer. It uses the same registry, `requires` metadata and
+session-control service as web.
+
+| Module | Role |
+|---|---|
+| `src/telegram/writer.telegram.ts` | `TelegramWriter`: buffers lines and blocks in order and renders Telegram HTML. It escapes `& < > "` and strips ANSI. Tables and diffs become `<pre>`, keyValue becomes bold labels, lists become bullets with `<code>` names, and links become anchors (http(s) only). Output is split under 4096 characters at line boundaries, and every chunk carries its own wrapper tags. |
+| `src/telegram/slash-context.telegram.ts` | `createTelegramSlashContext(session, stats, writer)`: declares `telegramCapabilities()` (`sessionControl`). It has no tty, compositor, ledger or resume swap. |
+| `src/telegram/slash-dispatch.telegram.ts` | `classifyTelegramSlash` returns native, refused, skill, passthrough or unknown. It defines the Telegram lifecycle deferrals (/exit, /resume, /fork, /rewind), `registryMenuDescriptors()` for `setMyCommands`, and lazy one-time `registerAll()`. |
+| `src/telegram/handlers/slash.ts` | `dispatchTelegramSlash`: runs native commands. Session-control commands reserve the route's turn slot and queue while a turn is active; drained items re-enter the same path. |
+
+Telegram-only commands stay `bot.command` handlers and never reach generic dispatch. `/clear`
+follows the shared reset-in-place contract. The AgentSession object is kept, so routeKey-scoped
+bg-job injection and notifier registrations remain valid. `SessionManager.beginConversationReset` /
+`finishConversationReset` retire the old id's elicitation route and registry handle, drop a staged
+`/sessions` resume, and re-point persisted `SessionData.sessionId`. If an in-place reset leaves the
+session closed, the old replace-the-session path runs as a fallback.
 
 ## Overview
 

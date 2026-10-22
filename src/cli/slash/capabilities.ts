@@ -80,3 +80,12 @@ export function capabilityReason(capability: SurfaceCapability): string {
     case 'consoleOutput': return 'requires direct console output; use the REPL until output is portable';
   }
 }
+
+/**
+ * Telegram chats drive a live per-chat session (reset, compact, model, name,
+ * preferences) but have no terminal, readline, shell-job registry or console.
+ * Fresh set per context, like webCapabilities().
+ */
+export function telegramCapabilities(): ReadonlySet<SurfaceCapability> {
+  return new Set<SurfaceCapability>(['sessionControl']);
+}
