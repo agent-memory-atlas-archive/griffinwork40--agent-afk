@@ -28,11 +28,12 @@ export interface CommandResponse {
   session?: { model?: string; name?: string; thinkingUi?: 'summary' | 'live' | 'digest' | 'off' };
 }
 
-/** Normalised `SlashResult` for the wire. All 6 variants represented. */
+/** Normalised `SlashResult` for the wire. All variants represented. */
 export type CommandControl =
   | { kind: 'continue' }
   | { kind: 'clear' }
   | { kind: 'exit' }
+  | { kind: 'navigate'; sessionId: string }
   | { kind: 'forward' }
   | { kind: 'rerun'; input: string }
   | { kind: 'submit'; message: string }

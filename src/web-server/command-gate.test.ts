@@ -32,10 +32,17 @@ describe('web command capability gate', () => {
     expect(gateReason(name)).toMatch(/requires/);
   });
 
-  it.each(['/rewind', '/fork', '/resume', '/exit', '/quit'])(
-    'retains only picker/lifecycle deferral for %s', (name) => {
-      expect(isGated(name)).toBe(true);
-      expect(gateReason(name)).toBeTypeOf('string');
+  it('retains picker deferral for /rewind (Stage 3 picker)', () => {
+    // /rewind still needs an interactive picker (Stage 3). /fork, /resume,
+    // /exit and /quit were un-gated in Stage 4 and now run as native commands.
+    expect(isGated('/rewind')).toBe(true);
+    expect(gateReason('/rewind')).toBeTypeOf('string');
+  });
+
+  it.each(['/fork', '/resume', '/exit', '/quit'])(
+    'Stage 4: %s is no longer gated (runs as native web command)', (name) => {
+      registerCommand(name);
+      expect(isGated(name)).toBe(false);
     },
   );
 

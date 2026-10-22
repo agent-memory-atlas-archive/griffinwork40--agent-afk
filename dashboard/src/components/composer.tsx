@@ -19,6 +19,7 @@ import { AtFilePopover } from './at-file-popover';
 import { ModelSelector } from './model-selector';
 import { QueuePanel } from './queue-panel';
 import type { UseQueueResult } from '@/hooks/use-queue';
+import { useCommandControl } from '@/hooks/use-command-control';
 
 interface ComposerProps {
   sessionId: string;
@@ -35,6 +36,10 @@ interface ComposerProps {
   onCommandStart?: (input: string) => void;
   /** Called with a toast message (e.g. gated command reason). */
   onToast?: (message: string) => void;
+  /** Called when a /fork or /resume produces a navigate control. */
+  onNavigate?: (targetSessionId: string) => void;
+  /** Called when /exit marks the session as ended. */
+  onSessionEnded?: () => void;
 }
 
 /** Cached slash commands — cleared on page focus to pick up new skills. */
@@ -111,6 +116,8 @@ export function Composer({
   onCommandOutput,
   onCommandStart,
   onToast,
+  onNavigate,
+  onSessionEnded,
 }: ComposerProps) {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -170,8 +177,16 @@ export function Composer({
     });
   }, [sessionId]);
 
+  const { handleControl } = useCommandControl({
+    sessionId,
+    setText,
+    onNavigate,
+    onSessionEnded,
+    onToast,
+  });
+
   /**
-   * POST to /commands and handle the A6 control result.
+   * POST to /commands and handle the CommandControl result via useCommandControl.
    * Returns true if the caller should clear the composer text (normal case),
    * false when the control itself manages the text (e.g. prefill).
    */
@@ -187,26 +202,8 @@ export function Composer({
     if (!lifetime.active) return false;
     onCommandOutput?.(input, response);
     if (response.session?.model) onModelSelect?.(response.session.model);
-
-    // A6 control handling
-    const { control } = response;
-    if (control.kind === 'continue') {
-      // no-op
-    } else if (control.kind === 'prefill') {
-      setText(control.message);
-      return false; // caller must NOT clear — we just set the text
-    } else if (control.kind === 'submit') {
-      await submitPrompt(control.message);
-    } else if (control.kind === 'rerun') {
-      // Re-POST to /commands with the rerun string
-      await submitCommand(control.input);
-    } else if (control.kind === 'forward') {
-      await submitPrompt(input);
-    } else if (control.kind === 'exit') {
-      onToast?.('Session ended in REPL terms — no effect on web (Stage 4)');
-    }
-    return true;
-  }, [sessionId, onCommandStart, onCommandOutput, onModelSelect, onToast, submitPrompt]);
+    return handleControl(response.control, input);
+  }, [sessionId, onCommandStart, onCommandOutput, onModelSelect, handleControl]);
 
   const selectModel = useCallback(async (modelId: string) => {
     if (disabled || submitting || isBusy || modelId === currentModel) return;

@@ -14,6 +14,13 @@ import type { SessionAutosaver } from '../cli/session-autosave.js';
 import type { AgentSession } from '../agent/session/agent-session.js';
 import type { SlashCommand, SlashContext, SessionStats } from '../cli/slash/types.js';
 import type { CommandControl } from './shared/command-wire.js';
+import type { SessionOwner } from './session-owner.js';
+import {
+  handleWebExit,
+  handleWebFork,
+  handleWebResumeList,
+  handleWebResumeTarget,
+} from './session-owner.lifecycle.js';
 
 export interface SessionControlResult {
   result: Awaited<ReturnType<SlashCommand['handler']>>;
@@ -34,6 +41,7 @@ export class WebSessionControl {
     private readonly onMetadata: (metadata: { model: string; name?: string }) => void,
     fastMode = new FastModeController(),
     private readonly hasCustomEndpoint = false,
+    private readonly owner?: SessionOwner,
   ) { this.fastMode = fastMode; }
 
   /** Same controller passed to the owning provider, never a UI-only toggle. */
@@ -81,6 +89,28 @@ export class WebSessionControl {
       ctx.out.success('Conversation history cleared.');
       return { result: 'continue', control: { kind: 'clear' } };
     }
+
+    // Lifecycle commands: handled by session-owner.lifecycle.ts.
+    if (cmd.name === '/exit' || cmd.name === '/quit') {
+      const control = await handleWebExit(this.owner!, this.id, ctx);
+      return { result: 'continue', control };
+    }
+    if (cmd.name === '/fork' || cmd.name === '/branch') {
+      if (!this.owner) { ctx.out.error('fork not available (no owner)'); return { result: 'continue' }; }
+      const control = await handleWebFork(this.owner, this.id, ctx);
+      return { result: 'continue', control: typeof control === 'string' ? { kind: 'continue' } : control };
+    }
+    if (cmd.name === '/resume') {
+      if (!this.owner) { ctx.out.error('resume not available (no owner)'); return { result: 'continue' }; }
+      const target = args.trim();
+      if (!target) {
+        await handleWebResumeList(ctx);
+        return { result: 'continue' };
+      }
+      const control = await handleWebResumeTarget(this.owner, this.id, ctx, target);
+      return { result: 'continue', control: typeof control === 'string' ? { kind: 'continue' } : control };
+    }
+
     Object.assign(ctx, this.context());
     const result = await cmd.handler(ctx, args);
     this.stats.sessionId = this.id;

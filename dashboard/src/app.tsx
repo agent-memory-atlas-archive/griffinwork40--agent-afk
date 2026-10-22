@@ -107,6 +107,50 @@ function Dashboard() {
     }
   };
 
+  /** Navigate to a session returned by /fork or /resume. */
+  const handleNavigateToSession = useCallback((targetSessionId: string) => {
+    setSelectedSessionId(targetSessionId);
+    setActiveNav('sessions');
+  }, []);
+
+  /** Handle /exit: session is now readonly; sessions list will update on next poll. */
+  const handleSessionEnded = useCallback(() => {
+    // The session will appear as readonly after the next poll (10s).
+    // Deselect so the user sees the sidebar and picks their next session.
+    setSelectedSessionId(null);
+  }, []);
+
+  /**
+   * Resume a past session from the sidebar Resume button.
+   * Sends /resume <id> to the currently selected live session's command route,
+   * or creates a fresh session to issue the command from if none is selected.
+   */
+  const handleResumeFromSidebar = useCallback(async (pastSessionId: string) => {
+    try {
+      // Find a live session to issue /resume through, or create one.
+      const liveSession = sessions.find((s) => s.mode === 'live' && s.id !== pastSessionId);
+      let commandSessionId: string;
+      if (liveSession) {
+        commandSessionId = liveSession.id;
+      } else {
+        const result = await apiFetch<{ session: { id: string } }>(
+          '/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) },
+        );
+        commandSessionId = result.session.id;
+        setSelectedSessionId(commandSessionId);
+      }
+      const response = await apiFetch<import('./types/command-wire').CommandResponse>(
+        `/api/sessions/${commandSessionId}/commands`,
+        { method: 'POST', body: JSON.stringify({ input: `/resume ${pastSessionId}` }) },
+      );
+      if (response.control.kind === 'navigate') {
+        setSelectedSessionId(response.control.sessionId);
+      }
+    } catch {
+      // Best-effort; sidebar remains usable
+    }
+  }, [sessions, selectedModel]);
+
   const handleNewSession = useCallback(async () => {
     try {
       const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) });
@@ -161,6 +205,7 @@ function Dashboard() {
       pendingSessionIds={pendingSessionIds}
       selectedSessionId={selectedSessionId}
       onSelectSession={handleSelectSession}
+      onResumeSession={(id) => void handleResumeFromSidebar(id)}
       activeNav={activeNav}
       onNavChange={handleNavigate}
       collapsed={sidebarCollapsed}
@@ -279,6 +324,8 @@ function Dashboard() {
                   }}
                   onCommandOutput={handleCommandOutput}
                   onToast={(msg) => toast(msg, 'info')}
+                  onNavigate={handleNavigateToSession}
+                  onSessionEnded={handleSessionEnded}
                 />
               </div>
             )}
