@@ -22,7 +22,7 @@ describe('LiveBroker', () => {
     broker.observe('s', text('c'));
     expect(got).toEqual([]);
     vi.advanceTimersByTime(50);
-    expect(got).toEqual([{ type: 'live_delta', seg: 0, part: 'text', offset: 0, text: 'abc' }]);
+    expect(got).toEqual([{ type: 'live_delta', turn: 1, seg: 0, part: 'text', offset: 0, text: 'abc' }]);
   });
 
   it('snapshot holds the OPEN segment only (sealed text arrives via the ledger)', () => {
@@ -31,7 +31,7 @@ describe('LiveBroker', () => {
     broker.observe('s', text('ALPHA'));
     broker.observe('s', tool);
     broker.observe('s', text('OME'));
-    expect(broker.snapshot('s')).toEqual([{ type: 'live_snapshot', seg: 1, part: 'text', text: 'OME' }]);
+    expect(broker.snapshot('s')).toEqual([{ type: 'live_snapshot', turn: 1, seg: 1, part: 'text', text: 'OME' }]);
   });
 
   it('flushes pending deltas before the seal, in order', () => {
@@ -63,7 +63,7 @@ describe('LiveBroker', () => {
     broker.observe('s', text('x'));
     broker.observe('s', { type: 'done' } as OutputEvent);
     broker.endTurn('s', 'aborted');
-    expect(got.at(-1)).toEqual({ type: 'live_end', reason: 'done' });
+    expect(got.at(-1)).toEqual({ type: 'live_end', turn: 1, reason: 'done' });
     expect(broker.snapshot('s')).toEqual([]);
   });
 
@@ -74,7 +74,7 @@ describe('LiveBroker', () => {
     broker.subscribe('s', (e) => got.push(e));
     broker.beginTurn('s');
     broker.endTurn('s', 'aborted');
-    expect(got).toEqual([{ type: 'live_end', reason: 'aborted' }]);
+    expect(got).toEqual([{ type: 'live_end', turn: 1, reason: 'aborted' }]);
   });
 });
 
@@ -95,5 +95,20 @@ describe('drainAndPersistTurn live tap', () => {
     const session = { async *sendMessageStream() { yield { type: 'done' }; } } as unknown as AgentSession;
     await drainAndPersistTurn(session, 'q', undefined, undefined, { sink, sessionId: 's' });
     expect(sink.endTurn).toHaveBeenCalledWith('s', 'done');
+  });
+
+  it('numbers turns per session so seg 0 of turn 2 never collides with turn 1', () => {
+    const broker = new LiveBroker(0);
+    const got: LiveSsePayload[] = [];
+    broker.subscribe('s', (e) => got.push(e));
+    for (let i = 0; i < 3; i++) {
+      broker.beginTurn('s');
+      broker.observe('s', text(`t${i}`));
+      broker.observe('s', { type: 'done' } as OutputEvent);
+      broker.endTurn('s', 'done');
+    }
+    const keys = got.filter((e) => e.type === 'live_seal').map((e) => `${e.turn}:${e.type === 'live_seal' ? e.seg : ''}`);
+    expect(keys).toEqual(['1:0', '2:0', '3:0']);
+    expect(got.filter((e) => e.type === 'live_end').map((e) => e.turn)).toEqual([1, 2, 3]);
   });
 });
