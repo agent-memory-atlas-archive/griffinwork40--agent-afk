@@ -16,10 +16,11 @@
 import { isAbsolute, resolve as resolvePath } from 'path';
 import { pathToFileURL } from 'url';
 import type { SdkPluginConfig } from '../types/sdk-types.js';
-import type { HarnessHookEvent, HookHandler, HookRegistry, RegisterOptions } from '../hooks.js';
+import type { HarnessHookEvent, HookDecision, HookHandler, HookRegistry, RegisterOptions } from '../hooks.js';
 import type { StateStore } from '../state/state-store.js';
 import type { SendInput, SendToSessionResult } from '../peer/send.js';
 import type { PresenceRecord } from '../awareness/presence.js';
+import { runWithPluginSessionContext } from './plugin-session-context.js';
 
 /**
  * Host runtime API injected into a plugin entrypoint's default-export function.
@@ -70,7 +71,8 @@ export type PluginApi = Pick<
   > & {
     /**
      * Durable cross-session key-value store operations. Optional: only present
-     * when the host wires a StateStore instance at plugin activation time.
+     * when the host wires a StateStore at boot. The store is lazily opened on
+     * first invocation — not at plugin activation time.
      * Plugins that need persistence should guard: `if (!api.stateGet) return`.
      */
     stateGet?: (namespace: string, key: string) => ReturnType<StateStore['get']>;
@@ -99,24 +101,39 @@ export type PluginApi = Pick<
       opts?: Parameters<StateStore['query']>[1],
     ) => ReturnType<StateStore['query']>;
     /**
-     * Peer session messaging. Optional: only present when the host wires a
-     * caller session id at plugin activation time.
-     * `listSessions` returns the live presence records (excluding self).
+     * Peer session messaging. Always present when the host is current. Both
+     * methods read the trusted caller identity from the per-hook-dispatch
+     * AsyncLocalStorage context set by `runWithPluginSessionContext` — NOT from
+     * plugin activation time. Calling either method outside a hook dispatch
+     * (i.e. when no ALS context is set) throws with a descriptive error rather
+     * than silently using a wrong identity.
+     * `listSessions` returns the live presence records (excluding the calling session).
      * `sendToSession` sends a message to a named peer session.
      */
     listSessions?: () => Promise<PresenceRecord[]>;
     /**
-     * Send a message to a named peer session. The `from` field is bound by the
-     * host at injection time (to the host session id) so plugins cannot forge
-     * the sender identity. Callers supply everything except `from`.
+     * Send a message to a peer session. The `from` field is omitted from the
+     * input type — the host implementation overwrites it with the trusted
+     * caller session id resolved from the per-hook-dispatch ALS context,
+     * preventing plugins from spoofing the sender identity. Throws when called
+     * outside a hook dispatch context.
      */
     sendToSession?: (input: Omit<SendInput, 'from'>) => Promise<SendToSessionResult>;
     /**
      * Declare a handler to be installed on each future session registry.
-     * Activation runs once per entrypoint path per process, not once per session;
-     * handlers should use their context for session-specific state. Returns a
-     * function removing the declaration from future registries. Optional for
-     * hosts without hook support.
+     * Registration is recorded once per process; the handler is invoked per
+     * hook dispatch (not at activation time). Handlers should derive
+     * session-specific state from their `ctx` argument. Returns a function
+     * removing the declaration from future registries. Optional for hosts
+     * without hook support.
+     *
+     * `listSessions` and `sendToSession` read the trusted caller identity from
+     * the per-dispatch AsyncLocalStorage context set by
+     * `runWithPluginSessionContext`. This context is set for BOTH hook
+     * dispatches (via `load-entrypoints.ts`) AND inline-skill handler
+     * invocations (via `skill-executor.ts:executeRegistrySkill`), so plugins
+     * using `registerSkill` with an inline handler can safely call peer API
+     * methods from within that handler.
      */
     registerHook?: (
       event: HarnessHookEvent,
@@ -179,13 +196,23 @@ export const registerPluginHook: NonNullable<PluginApi['registerHook']> = (event
 export function installPluginHooks(registry: HookRegistry): void {
   for (const { event, handler, options } of pluginHooks) {
     const isolated: typeof handler = async (ctx, signal) => {
-      try {
-        return await handler(ctx, signal);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[plugin-hook] handler threw — degrading to no-op', err);
-        return {};
-      }
+      // Always enter the ALS — even when sessionId is undefined (legacy or
+      // synthetic context). Running with undefined clears any outer ALS value
+      // that async propagation might otherwise inherit, so a nested hook with
+      // no session id can never accidentally read an ancestor caller's identity.
+      // Peer API methods (listSessions, sendToSession) fail closed on undefined,
+      // which is correct: they must not operate with an unknown identity.
+      const sessionId = (ctx as { sessionId?: string }).sessionId;
+      const run = async (): Promise<HookDecision> => {
+        try {
+          return await handler(ctx, signal);
+        } catch (err: unknown) {
+          // eslint-disable-next-line no-console
+          console.warn('[plugin-hook] handler threw — degrading to no-op', err);
+          return {};
+        }
+      };
+      return runWithPluginSessionContext(sessionId, run);
     };
     registry.register(event, isolated, options);
   }
