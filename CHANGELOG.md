@@ -11,6 +11,9 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Fixed
+- republish of 5.329.0, which the npm registry left stuck in staging and never served (npm/cli#9889); no code changes, so 5.329.1 is the first installable build of everything listed under 5.329.0 (1c1353c1e)
+
 ## [5.329.0] - 2026-10-22
 
 ### Added
