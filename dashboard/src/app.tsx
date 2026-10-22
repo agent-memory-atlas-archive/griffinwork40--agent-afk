@@ -317,7 +317,8 @@ function Dashboard() {
             {activeNav === 'sessions' && selectedSession && (
               <SessionMeter totals={totals} className="hidden lg:flex" />
             )}
-            <kbd className="hidden rounded border bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">
+            {/* P1-9 cross-lane: text-foreground/70 gives ≥4.5:1 on bg-secondary (was text-muted-foreground = 4.17). */}
+            <kbd className="hidden rounded border bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-foreground/70 sm:inline-block">
               ⌘K
             </kbd>
           </div>

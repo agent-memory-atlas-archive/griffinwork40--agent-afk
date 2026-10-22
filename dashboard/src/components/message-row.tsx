@@ -66,7 +66,8 @@ export function AssistantRow({
 }) {
   return (
     <div className="group relative flex flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-widest text-brand/60">
+      {/* P1-9: text-brand/80 gives ≥4.5:1 contrast on dark bg (was /60 = ~3.1). */}
+      <span className="text-[11px] font-medium uppercase tracking-widest text-brand/80">
         Agent
       </span>
       <div className="max-w-3xl">
