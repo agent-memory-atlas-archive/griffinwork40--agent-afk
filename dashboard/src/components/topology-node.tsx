@@ -187,21 +187,31 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
   // Chevron for collapsible agent nodes
   const ChevronIcon = expanded ? ChevronDown : ChevronRight;
 
+  // Tool nodes with output are also interactive (whole row toggles output).
+  const isRowInteractive = isCollapsible || hasToolOutput;
+
   return (
     <div className={cn('relative', depth > 0 && 'pl-3')}>
       {/* ── Header row ─────────────────────────────────────── */}
       <div
         className={cn(
           'flex flex-wrap items-center gap-1.5 py-1 group rounded focus-visible:outline-2 focus-visible:outline-ring',
-          isCollapsible && 'cursor-pointer select-none',
+          isRowInteractive && 'cursor-pointer select-none hover:bg-muted/20',
         )}
-        onClick={isCollapsible ? () => setExpanded(e => !e) : undefined}
-        role={isCollapsible ? 'button' : undefined}
-        tabIndex={isCollapsible ? 0 : undefined}
-        onKeyDown={isCollapsible ? e => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v); }
+        onClick={isRowInteractive ? () => {
+          if (isCollapsible) setExpanded(e => !e);
+          else if (hasToolOutput) setOutputOpen(v => !v);
         } : undefined}
-        aria-expanded={isCollapsible ? expanded : undefined}
+        role={isRowInteractive ? 'button' : undefined}
+        tabIndex={isRowInteractive ? 0 : undefined}
+        onKeyDown={isRowInteractive ? e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (isCollapsible) setExpanded(v => !v);
+            else if (hasToolOutput) setOutputOpen(v => !v);
+          }
+        } : undefined}
+        aria-expanded={isCollapsible ? expanded : hasToolOutput ? outputOpen : undefined}
       >
         {/* Collapse chevron — only on collapsible agent nodes */}
         {isCollapsible ? (
@@ -270,26 +280,16 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
       </div>
 
       {/* ── Output (tool nodes) ─────────────────────────────── */}
-      {hasToolOutput && (
-        <div className="pl-5">
-          <button
-            type="button"
-            onClick={() => setOutputOpen((v) => !v)}
-            aria-expanded={outputOpen}
-            className="text-[10px] text-muted-foreground hover:text-foreground rounded focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            {outputOpen ? 'Hide output' : 'Output'}
-          </button>
-          {outputOpen && (
-            <div className="mt-0.5 mb-1 rounded border border-border/50 bg-card px-2 py-1">
-              <FullToolOutput
-                toolUseId={node.sourceId}
-                preview={node.output}
-                clipped={node.outputClipped}
-                unavailable={node.outputUnavailable}
-              />
-            </div>
-          )}
+      {hasToolOutput && outputOpen && (
+        <div className="pl-5 mb-1">
+          <div className="mt-0.5 rounded border border-border/50 bg-card px-2 py-1">
+            <FullToolOutput
+              toolUseId={node.sourceId}
+              preview={node.output}
+              clipped={node.outputClipped}
+              unavailable={node.outputUnavailable}
+            />
+          </div>
         </div>
       )}
 
