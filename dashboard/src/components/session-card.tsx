@@ -91,16 +91,17 @@ export function SessionCard({
       </button>
 
       {/* Resume action for past (readonly) sessions */}
-      {session.mode === 'readonly' && onResume && (
+      {session.mode === 'readonly' && session.alive !== true && onResume && (
         <button
           onClick={(e) => { e.stopPropagation(); onResume(session.id); }}
           className={cn(
             'flex items-center gap-1.5 self-start rounded px-2 py-0.5',
             'text-xs text-muted-foreground transition-colors',
             'hover:bg-accent hover:text-foreground',
-            'opacity-0 group-hover:opacity-100',
+            'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
           )}
           title="Resume this session"
+          aria-label="Resume this session"
         >
           <RotateCcw className="size-3" />
           Resume

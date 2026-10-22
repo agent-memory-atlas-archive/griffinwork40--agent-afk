@@ -33,7 +33,7 @@ export function App() {
 }
 
 function Dashboard() {
-  const { sessions: serverSessions, loading } = useSessions();
+  const { sessions: serverSessions, loading, refresh: refreshSessions } = useSessions();
   const [sessionUpdates, setSessionUpdates] = useState<Record<string, { model?: string; title?: string; thinkingUi?: ThinkingUiMode }>>({});
   const sessions = serverSessions.map((session) => ({ ...session, ...sessionUpdates[session.id] }));
   const { approvals, pendingSessionIds } = usePendingApprovals();
@@ -121,35 +121,22 @@ function Dashboard() {
   }, []);
 
   /**
-   * Resume a past session from the sidebar Resume button.
-   * Sends /resume <id> to the currently selected live session's command route,
-   * or creates a fresh session to issue the command from if none is selected.
+   * Resume a past session from the sidebar Resume button through the
+   * dedicated resume route, then select the new live session. Errors are
+   * surfaced as a notice rather than swallowed.
    */
   const handleResumeFromSidebar = useCallback(async (pastSessionId: string) => {
     try {
-      // Find a live session to issue /resume through, or create one.
-      const liveSession = sessions.find((s) => s.mode === 'live' && s.id !== pastSessionId);
-      let commandSessionId: string;
-      if (liveSession) {
-        commandSessionId = liveSession.id;
-      } else {
-        const result = await apiFetch<{ session: { id: string } }>(
-          '/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) },
-        );
-        commandSessionId = result.session.id;
-        setSelectedSessionId(commandSessionId);
-      }
-      const response = await apiFetch<import('./types/command-wire').CommandResponse>(
-        `/api/sessions/${commandSessionId}/commands`,
-        { method: 'POST', body: JSON.stringify({ input: `/resume ${pastSessionId}` }) },
+      const result = await apiFetch<{ session: { id: string } }>(
+        `/api/sessions/${encodeURIComponent(pastSessionId)}/resume`,
+        { method: 'POST' },
       );
-      if (response.control.kind === 'navigate') {
-        setSelectedSessionId(response.control.sessionId);
-      }
-    } catch {
-      // Best-effort; sidebar remains usable
+      setSelectedSessionId(result.session.id);
+      refreshSessions();
+    } catch (err) {
+      toast(err instanceof Error ? `Could not resume: ${err.message}` : 'Could not resume this session', 'info');
     }
-  }, [sessions, selectedModel]);
+  }, [toast, refreshSessions]);
 
   const handleNewSession = useCallback(async () => {
     try {

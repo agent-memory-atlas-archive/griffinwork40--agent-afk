@@ -27,6 +27,7 @@ import { forkJournal } from '../agent/journal/index.js';
 import { formatCost } from '../cli/format-utils.js';
 import { writeKeyValue, writeList } from '../cli/slash/output-blocks.format.js';
 import { resumeConfigFor } from '../cli/resume-session.js';
+import { readLivePresenceFiles } from '../agent/awareness/presence.js';
 import type { SlashContext } from '../cli/slash/types.js';
 import type { CommandControl } from './shared/command-wire.js';
 import type { SessionOwner } from './session-owner.js';
@@ -141,18 +142,18 @@ export async function handleWebResumeTarget(
   }
 
   const label = found.data.name ?? found.id;
+  if (await isLiveElsewhere(found)) {
+    ctx.out.warn(`${label} is running in another process. Continue it there, or end it first.`);
+    return 'continue';
+  }
   ctx.out.info(`Resuming session ${label} …`);
-
-  const resumeConfig = resumeConfigFor({
-    id: found.id,
-    resumeId: found.data.sessionId ?? found.id,
-    stored: found.data,
-  });
 
   try {
     const model = String(found.data.model ?? ctx.stats.model);
-    const cwd = found.data.cwd ?? ctx.stats.cwd ?? process.cwd();
-    const newInfo = await owner.create({ model, cwd }, resumeConfig);
+    const newInfo = await resumeStoredSession(owner, found, {
+      model,
+      cwd: found.data.cwd ?? ctx.stats.cwd ?? process.cwd(),
+    });
     ctx.out.success(`Resumed ${label}  (new session id: ${newInfo.id})`);
 
     // Emit key-value summary of the resumed session.
@@ -179,6 +180,72 @@ export async function handleWebResumeTarget(
     ctx.out.error(`Failed to resume session: ${msg}`);
     return 'continue';
   }
+}
+
+/** A stored session as returned by `findSession`. */
+type StoredSession = NonNullable<ReturnType<typeof findSession>>;
+
+/**
+ * Create a new owned session resumed from a stored sidecar.
+ *
+ * Contract: shared by `/resume <id>` (inside a command turn) and the
+ * dedicated `POST /api/sessions/:id/resume` route (no carrier session).
+ * It never reserves a turn itself: the new session is not live until this
+ * returns, so there is no concurrent turn to admit against.
+ */
+export async function resumeStoredSession(
+  owner: SessionOwner,
+  found: StoredSession,
+  fallback: { model?: string; cwd?: string } = {},
+): Promise<{ id: string }> {
+  const resumeConfig = resumeConfigFor({
+    id: found.id,
+    resumeId: found.data.sessionId ?? found.id,
+    stored: found.data,
+  });
+  const model = found.data.model !== undefined ? String(found.data.model) : fallback.model;
+  const cwd = found.data.cwd ?? fallback.cwd;
+  const request: { model?: string; cwd?: string } = {};
+  if (model !== undefined) request.model = model;
+  if (cwd !== undefined) request.cwd = cwd;
+  return owner.create(request, resumeConfig);
+}
+
+/**
+ * True when some live process (REPL, Telegram, daemon, another `afk web`)
+ * currently holds this stored session.
+ *
+ * Invariant: resuming a session that is live elsewhere starts a second
+ * writer on the same journal and sidecar, so both resume paths refuse it.
+ * Fails closed: if presence cannot be read we cannot rule out a live
+ * writer, so the answer is "live".
+ */
+export async function isLiveElsewhere(found: StoredSession): Promise<boolean> {
+  const ids = new Set<string>([found.id]);
+  if (found.data.sessionId !== undefined) ids.add(found.data.sessionId);
+  try {
+    const live = await readLivePresenceFiles();
+    return live.some((r) => ids.has(r.sessionId));
+  } catch {
+    return true;
+  }
+}
+
+export type ResumeByIdResult =
+  | { kind: 'resumed'; id: string }
+  | { kind: 'not-found' }
+  | { kind: 'live-elsewhere' };
+
+/** Resume by id or name for the route. */
+export async function resumeStoredSessionById(
+  owner: SessionOwner,
+  target: string,
+): Promise<ResumeByIdResult> {
+  const found = findSession(target);
+  if (!found) return { kind: 'not-found' };
+  if (await isLiveElsewhere(found)) return { kind: 'live-elsewhere' };
+  const info = await resumeStoredSession(owner, found);
+  return { kind: 'resumed', id: info.id };
 }
 
 // ---------------------------------------------------------------------------
