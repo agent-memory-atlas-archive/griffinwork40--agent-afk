@@ -95,7 +95,11 @@ export const CodeBlock = memo(function CodeBlock({ code, language }: CodeBlockPr
     <div className="relative group rounded-md overflow-hidden mb-2" style={{ backgroundColor: bgColor }}>
       {/* Header row: language label + copy button */}
       <div className="flex items-center justify-between px-3 pt-1.5 pb-0.5">
-        <span className="text-[10px] text-muted-foreground select-none font-mono">
+        {/* P1-9: explicit colour passes ≥4.5:1 on the Shiki github-dark bg
+            (#24292e). Tailwind opacity tokens blend against the page bg, not
+            the inline-style code bg, so axe's contrast check fails them — use
+            a literal mid-grey (#9ba3ae) that is verifiably ≥4.5:1 on #24292e. */}
+        <span className="text-[10px] select-none font-mono" style={{ color: '#9ba3ae' }}>
           {language ?? 'plaintext'}
         </span>
         <button
