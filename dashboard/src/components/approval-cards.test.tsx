@@ -80,3 +80,36 @@ describe('ApprovalCards — text type', () => {
     expect(screen.getByRole('textbox')).toBeTruthy();
   });
 });
+
+describe('approval accessibility', () => {
+  it('announces approvals, accepts Y while focused, and restores composer focus after persistence', async () => {
+    render(<><textarea placeholder="Send a message… (/ for commands)" /><ApprovalCards approvals={[makeApproval()]} /></>);
+    expect(screen.getByRole('status')).toHaveTextContent('Approval required: Test approval');
+    const card = screen.getByRole('dialog', { name: 'Test approval' });
+    card.focus();
+    fireEvent.keyDown(card, { key: 'y' });
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(api.apiFetch).toHaveBeenLastCalledWith('/api/approve', expect.objectContaining({ body: expect.stringContaining('"action":"accept"') }));
+  });
+  it('declines with N but ignores modified shortcuts and repeated submissions', async () => {
+    render(<ApprovalCards approvals={[makeApproval()]} />);
+    const card = screen.getByRole('dialog');
+    const before = vi.mocked(api.apiFetch).mock.calls.length;
+    fireEvent.keyDown(card, { key: 'n', ctrlKey: true });
+    expect(vi.mocked(api.apiFetch).mock.calls.length).toBe(before);
+    fireEvent.keyDown(card, { key: 'n' });
+    fireEvent.keyDown(card, { key: 'y' });
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(vi.mocked(api.apiFetch).mock.calls.length).toBe(before + 1);
+    expect(api.apiFetch).toHaveBeenLastCalledWith('/api/approve', expect.objectContaining({ body: expect.stringContaining('"action":"decline"') }));
+  });
+  it('retains the card and focus on a failed request', async () => {
+    vi.mocked(api.apiFetch).mockRejectedValueOnce(new Error('offline'));
+    render(<ApprovalCards approvals={[makeApproval()]} />);
+    const card = screen.getByRole('dialog'); card.focus();
+    fireEvent.keyDown(card, { key: 'y' });
+    await vi.waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Failed to submit'));
+    expect(card).toHaveFocus();
+  });
+});

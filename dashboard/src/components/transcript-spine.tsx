@@ -7,6 +7,7 @@
  * a hierarchical execution view.
  */
 import { useMemo } from 'react';
+import { ToolSummaryContext } from '@/lib/tool-summary-context';
 import type { TranscriptItem } from '@/lib/ledger-adapter';
 import { TopologySpine } from './topology-spine';
 import { buildSpineTree } from '@/lib/topology';
@@ -60,7 +61,7 @@ export function groupIntoSpineSlots(items: TranscriptItem[]): SpineSlot[] {
 
     if (run.length > 0) {
       const spineNodes = buildSpineTree(run);
-      slots.push({
+      if (spineNodes.length > 0) slots.push({
         kind: 'execution',
         items: run,
         id: run[0]!.id,
@@ -84,18 +85,18 @@ interface SpineTranscriptProps {
  */
 export function SpineTranscript({ slots, renderTextItem }: SpineTranscriptProps) {
   return (
-    <>
+    <ToolSummaryContext>
       {slots.map((slot, idx) => {
         if (slot.kind === 'text') {
           return renderTextItem(slot.item, idx);
         }
         return (
-          <div key={slot.id} className="py-2 px-1">
+          <div key={slot.id} className="py-2 px-1 [content-visibility:auto] [contain-intrinsic-size:auto_100px]">
             <TopologySpine nodes={slot.spineNodes} />
           </div>
         );
       })}
-    </>
+    </ToolSummaryContext>
   );
 }
 

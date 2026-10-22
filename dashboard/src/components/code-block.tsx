@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Copy, Check } from 'lucide-react';
 import type { Highlighter } from 'shiki';
 
@@ -63,7 +63,11 @@ interface CodeBlockProps {
   language?: string;
 }
 
-export function CodeBlock({ code, language }: CodeBlockProps) {
+export const CodeBlock = memo(function CodeBlock({ code, language }: CodeBlockProps) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = code.split('\n');
+  const hiddenLines = Math.max(0, lines.length - 25);
+  const visibleCode = expanded ? code : lines.slice(0, 25).join('\n');
   const [html, setHtml] = useState<string | null>(null);
   const [reHighlightTick, setReHighlightTick] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -105,7 +109,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
       }
 
       try {
-        const highlighted = hl.codeToHtml(code, {
+        const highlighted = hl.codeToHtml(visibleCode, {
           lang: resolvedLang,
           theme: 'github-dark',
         });
@@ -125,7 +129,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps -- reHighlightTick is
   // an intentional re-trigger for when an on-demand grammar finishes loading.
-  }, [code, language, reHighlightTick]);
+  }, [visibleCode, language, reHighlightTick]);
 
   // Cleanup copy timer on unmount.
   useEffect(() => {
@@ -157,7 +161,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
       <button
         onClick={handleCopy}
         aria-label="Copy code"
-        className="absolute top-1.5 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity rounded p-1 text-muted-foreground hover:text-foreground hover:bg-white/10"
+        className="absolute top-1.5 right-2 z-10 opacity-100 focus-visible:outline-2 focus-visible:outline-ring transition-opacity rounded p-1 text-muted-foreground hover:text-foreground hover:bg-white/10"
       >
         {copied
           ? <Check size={13} strokeWidth={2.5} />
@@ -165,6 +169,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
         }
       </button>
 
+      <div className="relative">
       {/* Highlighted HTML or fallback */}
       {html !== null ? (
         <div
@@ -176,9 +181,14 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
         />
       ) : (
         <pre className="overflow-x-auto p-3 font-mono text-xs leading-5 text-foreground">
-          <code>{code}</code>
+          <code>{visibleCode}</code>
         </pre>
       )}
+      {hiddenLines > 0 && !expanded && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-secondary to-transparent" />}
+      </div>
+      {hiddenLines > 0 && <button type="button" aria-expanded={expanded} onClick={() => setExpanded(v => !v)} className="w-full py-2 text-xs text-foreground hover:bg-muted rounded focus-visible:outline-2 focus-visible:outline-ring">
+        {expanded ? 'Show less' : `Show ${hiddenLines} more lines`}
+      </button>}
     </div>
   );
-}
+});

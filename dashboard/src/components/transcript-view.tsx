@@ -131,7 +131,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
       const isTurnStart = item.kind === 'user' && idx > 0;
       const streaming = turnActive && item.id === lastAssistantId;
       return (
-        <div key={item.id}>
+        <div key={item.id} className="[content-visibility:auto] [contain-intrinsic-size:auto_160px]">
           {isTurnStart && (
             <div className="my-6 border-t border-border/40" aria-hidden="true" />
           )}
@@ -143,7 +143,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
   );
 
   return (
-    <div className="flex flex-col gap-0 max-w-4xl mx-auto w-full">
+    <div role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text" aria-busy={turnActive} className="flex flex-col gap-0 max-w-4xl mx-auto w-full [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-ring [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-ring">
       {totals && (
         <SessionMeter
           totals={totals}
@@ -163,7 +163,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
             const isTurnStart = item.kind === 'user' && idx > 0;
             const streaming = turnActive && item.id === lastAssistantId;
             return (
-              <div key={item.id}>
+              <div key={item.id} className="[content-visibility:auto] [contain-intrinsic-size:auto_160px]">
                 {isTurnStart && (
                   <div className="my-6 border-t border-border/40" aria-hidden="true" />
                 )}
@@ -175,7 +175,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
           }
           const roots = buildTree(slot.items);
           return (
-            <div key={slot.id} className="py-2 px-1">
+            <div key={slot.id} className="py-2 px-1 [content-visibility:auto] [contain-intrinsic-size:auto_100px]">
               <SubagentTree roots={roots} />
             </div>
           );
