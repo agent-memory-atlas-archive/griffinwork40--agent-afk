@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.332.0] - 2026-10-22
+
 ### Added
 - OpenAI family aliases (sol/luna/astra/terra) (#4310) (ed09d4eab)
 - /resume repo-root filtering, smarter naming, daemon exclusion (#4308) (ad8dc1d99)
