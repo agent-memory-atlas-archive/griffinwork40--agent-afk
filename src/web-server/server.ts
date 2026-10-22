@@ -49,6 +49,7 @@ import { ChoiceBroker } from './choice-broker.js';
 import { handleChoiceAnswer } from './routes.choices.js';
 import { handleResumeSession } from './routes.resume.js';
 import { resumeStoredSessionById } from './session-owner.lifecycle.js';
+
 import { errorMessage } from '../utils/errors.js';
 
 export const DEFAULT_WEB_PORT = 4141;
@@ -188,6 +189,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
           releaseTurn: (id: string) => options.owner!.releaseTurn(id),
           getSession: (id: string) => options.owner!.getSession(id),
           executeSessionControl: (id, command, context, args) => options.owner!.executeSessionControl(id, command, context, args),
+
         }
       : {}),
   };
@@ -335,6 +337,7 @@ async function dispatch(
     return;
   }
 
+
   const commandMatch = /^\/api\/sessions\/([^/]+)\/commands$/.exec(path);
   if (commandMatch?.[1] && method === 'POST') {
     await handleCommand(ctx, res, decodeURIComponent(commandMatch[1]), await readBody(req));
@@ -346,6 +349,7 @@ async function dispatch(
     handleChoiceAnswer(ctx, res, decodeURIComponent(choiceMatch[1]), decodeURIComponent(choiceMatch[2]), await readBody(req));
     return;
   }
+
 
   if (path === '/api/sessions' && method === 'POST') {
     await handleCreateSession(ctx, res, await readBody(req));

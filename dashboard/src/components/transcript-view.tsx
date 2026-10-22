@@ -118,6 +118,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
   const flatSlots = useMemo(() => groupItems(visibleItems), [visibleItems]);
   const spineSlots = useSpineSlots(visibleItems);
 
+
   // Find the id of the last assistant item — only that one gets streaming animation.
   const lastAssistantId = useMemo(() => {
     for (let i = items.length - 1; i >= 0; i--) {

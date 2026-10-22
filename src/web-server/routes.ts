@@ -67,6 +67,7 @@ export interface RouteContext {
     context: import('../cli/slash/types.js').SlashContext,
     args: string,
   ) => Promise<import('./session-owner.control.js').SessionControlResult>;
+
   /**
    * Start a new session in this process. Absent when the server was started
    * without an owner, in which case the surface is attach-only.

@@ -40,6 +40,7 @@ interface ComposerProps {
   onNavigate?: (targetSessionId: string) => void;
   /** Called when /exit marks the session as ended. */
   onSessionEnded?: () => void;
+
 }
 
 /** Cached slash commands — cleared on page focus to pick up new skills. */
@@ -118,6 +119,7 @@ export function Composer({
   onToast,
   onNavigate,
   onSessionEnded,
+
 }: ComposerProps) {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -193,6 +195,7 @@ export function Composer({
   const submitCommand = useCallback(async (input: string): Promise<boolean> => {
     const lifetime = lifetimeRef.current;
     onCommandStart?.(input);
+
     const response = await apiFetch<CommandResponse>(
       `/api/sessions/${sessionId}/commands`,
       { method: 'POST', body: JSON.stringify({ input }) },
@@ -217,6 +220,7 @@ export function Composer({
     }
   }, [disabled, submitting, isBusy, currentModel, submitCommand, onToast]);
 
+
   const submit = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed || submitting || disabled) return;
@@ -230,6 +234,7 @@ export function Composer({
         if (cmd?.kind === 'skill') {
           // Skill commands always go to /prompt
           await submitPrompt(trimmed);
+
           setText('');
           return;
         }
@@ -237,6 +242,7 @@ export function Composer({
         if (cmd?.kind === 'native' && cmd.web === 'gated') {
           // Show gate reason locally — no network call
           onToast?.(cmd.gateReason ?? `${normaliseName(cmd.name)} is not available on the web surface`);
+
           return;
         }
 

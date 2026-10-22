@@ -36,6 +36,7 @@ import { drainAndPersistTurn } from './session-owner.autosave.js';
 import { errorMessage } from '../utils/errors.js';
 import { initSessionStats, getStats } from './session-owner.slash.js';
 
+
 export interface CreateSessionRequest {
   /** Working directory. Ignored unless `allowArbitraryCwd` — see the guard. */
   cwd?: string;
@@ -306,6 +307,7 @@ export class SessionOwner {
           // tails it. Draining runs the turn to completion, then the completed
           // turn is saved to the session sidecar.
           await drainAndPersistTurn(session, message, this.autosavers.get(sessionId), this.controls.has(sessionId) ? undefined : sessionId);
+
         } finally {
           const remaining = (this.pending.get(sessionId) ?? 1) - 1;
           if (remaining > 0) this.pending.set(sessionId, remaining);
@@ -397,6 +399,7 @@ export class SessionOwner {
     if (!control) throw new Error(`session ${id} has no control adapter`);
     return control.execute(cmd, ctx, args);
   }
+
 
   /**
    * Close every owned session.

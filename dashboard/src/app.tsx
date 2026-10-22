@@ -26,6 +26,7 @@ import { CommandProgress } from './components/command-progress';
 import { apiFetch } from './lib/api';
 import type { CommandResponse, ThinkingUiMode } from './types/command-wire';
 
+
 export function App() {
   return (
     <ToastProvider>
@@ -73,6 +74,7 @@ function Dashboard() {
       setAnsweredChoice(null);
     }
   }, [choices, selectedSessionId, answeredChoice]);
+
 
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
   useEffect(() => {
@@ -299,6 +301,7 @@ function Dashboard() {
               )}
               {activeNav === 'sessions' && selectedSession && status === 'open' &&
                 <CommandProgress progress={progress} />}
+
               {activeNav === 'memory' && <MemoryView />}
               {activeNav === 'schedules' && <SchedulesView />}
               {activeNav === 'jobs' && <BgJobsView />}
@@ -314,6 +317,7 @@ function Dashboard() {
                 )}
                 <Composer
                   key={selectedSession.id}
+
                   sessionId={selectedSession.id}
                   sessionMode={selectedSession.mode}
                   isBusy={isBusy}
@@ -329,6 +333,7 @@ function Dashboard() {
                   onToast={(msg) => toast(msg, 'info')}
                   onNavigate={handleNavigateToSession}
                   onSessionEnded={handleSessionEnded}
+
                 />
               </div>
             )}
