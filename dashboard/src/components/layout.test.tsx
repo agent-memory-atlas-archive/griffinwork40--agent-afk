@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { SessionContent } from './session-content';
-import { SessionStatusBadge } from './session-status-badge';
+import { SessionStatusBadge, classifySession } from './session-status-badge';
 import { MobileSidebar } from './mobile-sidebar';
 
 const empty = { loading: false, sessions: [], selectedSession: undefined, items: [], cmdItems: [], totals: { costUsd: 0, turns: 0, durationMs: 0 }, status: 'open', turnActive: false };
@@ -43,4 +43,12 @@ it('makes the closed drawer inert and derives its width from its content', () =>
   expect(drawer.className).toContain('w-max');
   rerender(<MobileSidebar open onClose={vi.fn()}><aside /></MobileSidebar>);
   expect(screen.getByRole('dialog')).not.toHaveAttribute('inert');
+});
+
+it('classifies an idle live session as Idle (active), not Done', () => {
+  const live = { id: 'l', mode: 'live' } as Parameters<typeof classifySession>[0];
+  expect(classifySession(live, new Set())).toBe('active');
+  expect(classifySession(live, new Set(), new Set(['l']))).toBe('active');
+  expect(classifySession({ id: 'r', mode: 'readonly' } as Parameters<typeof classifySession>[0], new Set(), new Set(['r']))).toBe('active');
+  expect(classifySession({ id: 'r', mode: 'readonly' } as Parameters<typeof classifySession>[0], new Set())).toBe('completed');
 });

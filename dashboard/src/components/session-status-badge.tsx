@@ -27,11 +27,11 @@ export function classifySession(
   busySessionIds?: Set<string>,
 ): SessionStatusGroup {
   if (pendingSessionIds.has(session.id)) return 'needs-input';
-  // A live session is only shown as "Running" when it actually has a turn in
-  // flight. When isBusy is false (turn finished or was stopped) the badge
-  // reverts to "Done" so the sidebar clears promptly after Stop.
-  if (session.mode === 'live') return busySessionIds?.has(session.id) ? 'active' : 'completed';
-  if (session.alive) return 'active';
+  // A live session waiting for input is "Idle" (active), never "Done": it
+  // can still take a prompt. Whether a turn is in flight is the badge's
+  // separate `running` flag, which clears the moment the turn ends or is
+  // stopped. A busy session is active even before its summary reports live.
+  if (session.mode === 'live' || session.alive || busySessionIds?.has(session.id)) return 'active';
   return 'completed';
 }
 

@@ -272,6 +272,7 @@ function Dashboard() {
         onClose={() => setMobileSidebarOpen(false)}
       >
         <Sidebar sessions={sessions} pendingSessionIds={pendingSessionIds}
+          busySessionIds={isBusy && selectedSessionId ? new Set([selectedSessionId]) : undefined}
           selectedSessionId={selectedSessionId} onSelectSession={handleSelectSession}
           onResumeSession={(id) => void handleResumeFromSidebar(id)} activeNav={activeNav}
           onNavChange={handleNavigate} collapsed={false} onToggleCollapse={() => undefined}
