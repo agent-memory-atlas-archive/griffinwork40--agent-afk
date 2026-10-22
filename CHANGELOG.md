@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.329.0] - 2026-10-22
+
 ### Added
 - continue a capped subagent with its full prior conversation (#4263) (cd4599bc7)
 
