@@ -353,14 +353,14 @@ describe('runEvalCase', () => {
     expect(run.checks.filter((c) => c.name !== 'fixture-integrity').every((c) => c.status === 'pass')).toBe(true);
   });
 
-  it('validates the subagent-block (skill depth hint) contract end to end', async () => {
+  it('validates the subagent-block (hook-block detector) contract end to end', async () => {
     // subagent-block has a guardrail-presence contract but no replay handler, so
-    // the pattern-absent assertion is never executed — result is `unsupported`,
-    // not `pass`. A guardrail-presence pass alone is not card-specific proof.
+    // replayHandlerExists=false → decideStatus returns `unsupported` (not `pass`).
+    // A guardrail-presence pass alone is not card-specific behavioural proof.
     const run = await runEvalCase(makeEvalCase({ pattern: 'subagent-block' }), { ...baseCtx, clockMs: stubClock([1, 2]) });
     expect(run.status).toBe('unsupported');
-    expect(run.contract).toBe('skill-max-depth-recovery-hint');
-    expect(run.checks.some((c) => c.name === 'recovery-hint-present' && c.status === 'pass')).toBe(true);
+    expect(run.contract).toBe('subagent-hook-block-detector');
+    expect(run.checks.some((c) => c.name === 'emits-card-on-recurring-subagent-block' && c.status === 'pass')).toBe(true);
   });
 
   it('honours the resolveFixtureAbsPath seam', async () => {
