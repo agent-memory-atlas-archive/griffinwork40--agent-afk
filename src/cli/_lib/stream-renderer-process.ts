@@ -216,9 +216,10 @@ export function processEvent(ctx: ProcessCtx, event: OutputEvent, meta?: Subagen
       // requiring 2K continuous ticks (60s) of new silence.
       source.stalledTicks = 0;
       const label = source.agentType ?? sourceId;
-      ctx.toolLane.addStartWithAgentContext(
-        source.syntheticAgentToolUseId, 'Agent', `(${label})`, undefined,
-      );
+      // Update-only: if this agent's block was already absorbed into an
+      // ancestor's committed flush, re-creating the row would leave a ghost
+      // root that commits below the parent's Done (see annotateIfPresent).
+      ctx.toolLane.annotateIfPresent(source.syntheticAgentToolUseId, 'Agent', `(${label})`);
     }
     // Terminal event for a subagent stream: 'done' (normal completion) OR
     // 'error' (aborted, timed-out, or provider-side failure). Both must

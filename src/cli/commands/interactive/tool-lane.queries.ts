@@ -31,3 +31,24 @@ export function trailingCompletedRootToolName(
   }
   return undefined;
 }
+
+/**
+ * Count the in-flight nesting children (Agent / Task / skill / compose rows
+ * with no result yet) directly under `parentId`. Drives the stall checker's
+ * `· awaiting N children` label: a parent whose own stream is silent only
+ * because it is blocked on live child agents is not hung, so it must neither
+ * read as `· waiting Xs` nor be auto-settled by the hard no-event cutoff.
+ * Leaf tools are not counted — a parent waiting on a plain tool is covered by
+ * that tool's own elapsed counter.
+ */
+export function liveChildAgentCount(
+  entries: ReadonlyMap<string, Entry>,
+  parentId: string,
+): number {
+  let count = 0;
+  for (const entry of entries.values()) {
+    if (entry.kind !== 'tool' || entry.agentContext !== parentId) continue;
+    if (entry.result === undefined && NESTING_TOOLS.has(entry.toolName)) count += 1;
+  }
+  return count;
+}

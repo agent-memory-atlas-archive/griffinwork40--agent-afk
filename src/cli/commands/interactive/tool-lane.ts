@@ -13,7 +13,7 @@ import {
 } from './tool-lane-render.js';
 import type { ToolLaneFlash } from './tool-lane-flash.js';
 import type { ElementFade } from '../../smoke-fade.js';
-import { trailingCompletedRootToolName } from './tool-lane.queries.js';
+import { liveChildAgentCount, trailingCompletedRootToolName } from './tool-lane.queries.js';
 import { renderToolLaneOverlay } from './tool-lane-overlay.js';
 import { propagateChildFailure as propagateChildFailureIn } from './tool-lane.ancestry.js';
 import { elapsedDisplayNeedsUpdate } from './tool-lane.elapsed-check.js';
@@ -166,6 +166,28 @@ export class ToolLane {
     const entry = freshToolEntry(toolUseId, toolName, safeInput, prefix, agentContext);
     this.entries.set(toolUseId, entry);
     this.order.push(toolUseId);
+  }
+
+  /**
+   * Update-only relabel of an EXISTING tool entry's display input (the stall
+   * annotation / heartbeat path). Returns `false` and does nothing when the
+   * entry is absent.
+   *
+   * Invariant: this never creates an entry. An absent id means the agent's
+   * block was already committed to scrollback — usually absorbed into an
+   * ancestor's flushSource block — and re-creating it would leave a ghost
+   * root that later commits as a separate block below its parent's Done row.
+   * Use {@link addStartWithAgentContext} only where creation is intended.
+   */
+  annotateIfPresent(toolUseId: string, toolName: string, toolInput: string): boolean {
+    if (!this.hasEntry(toolUseId)) return false;
+    this.addStartWithAgentContext(toolUseId, toolName, toolInput, undefined);
+    return true;
+  }
+
+  /** In-flight nesting children directly under `parentId`. See {@link liveChildAgentCount}. */
+  countLiveChildAgents(parentId: string): number {
+    return liveChildAgentCount(this.entries, parentId);
   }
 
   mergeAgentLabel(parentToolUseId: string, label: string, maxWidth?: number): boolean {
