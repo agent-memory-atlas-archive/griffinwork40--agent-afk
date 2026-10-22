@@ -19,6 +19,7 @@ it('keeps the browser mirror assignable in both directions with structured block
   expectTypeOf<NonNullable<CommandResponse['session']>>().toEqualTypeOf<{
     model?: string;
     name?: string;
+    nameExplicit?: boolean;
     thinkingUi?: 'summary' | 'live' | 'digest' | 'off';
   }>();
 });

@@ -21,6 +21,7 @@ export function setSessionName(
   const name = slugifySessionName(raw.trim());
   if (!name) return { ok: false };
   stats.name = name;
+  stats.nameExplicit = true;
   options.onName?.(name);
   if (stats.totalTurns === 0) return { ok: true, name, saved: false };
   try {

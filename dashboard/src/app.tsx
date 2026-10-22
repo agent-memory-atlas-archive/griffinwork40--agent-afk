@@ -28,6 +28,7 @@ import { apiFetch, ApiError } from './lib/api';
 import type { CommandResponse, ThinkingUiMode } from './types/command-wire';
 import { useRewind } from './hooks/use-rewind';
 import { useTabNotification } from './hooks/use-tab-notification';
+import { sessionDisplayTitle } from './lib/session-title';
 
 
 export function App() {
@@ -40,7 +41,7 @@ export function App() {
 
 function Dashboard() {
   const { sessions: serverSessions, loading, refresh: refreshSessions } = useSessions();
-  const [sessionUpdates, setSessionUpdates] = useState<Record<string, { model?: string; title?: string; thinkingUi?: ThinkingUiMode }>>({});
+  const [sessionUpdates, setSessionUpdates] = useState<Record<string, { model?: string; title?: string; titleExplicit?: boolean; thinkingUi?: ThinkingUiMode }>>({});
   const sessions = serverSessions.map((session) => ({ ...session, ...sessionUpdates[session.id] }));
   const { approvals, pendingSessionIds } = usePendingApprovals();
   const { toast } = useToast();
@@ -148,7 +149,7 @@ function Dashboard() {
         [selectedSessionId]: {
           ...prev[selectedSessionId],
           ...(metadata.model !== undefined ? { model: metadata.model } : {}),
-          ...(metadata.name !== undefined ? { title: metadata.name } : {}),
+          ...(metadata.name !== undefined ? { title: metadata.name, titleExplicit: metadata.nameExplicit === true } : {}),
           ...(metadata.thinkingUi !== undefined ? { thinkingUi: metadata.thinkingUi } : {}),
         },
       }));
@@ -304,7 +305,7 @@ function Dashboard() {
               <>
                 <StreamStatusDot status={status} />
                 <h1 className="min-w-0 truncate text-sm font-medium text-foreground" title={selectedSession.title ?? undefined}>
-                  {selectedSession.title ? humanizeTitle(selectedSession.title) : 'New session'}
+                  {sessionDisplayTitle(selectedSession, 'New session')}
                 </h1>
                 {selectedSession.model && (
                   <span className="hidden shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground sm:inline-block" title="Session model">
@@ -443,13 +444,3 @@ function lastUserText(items: readonly { kind: string; text?: string }[]): string
   return undefined;
 }
 
-/**
- * Convert a slug-shaped title (kebab-case or snake_case) to a human-readable
- * string. Titles that already contain spaces are returned as-is.
- * Mirrors session-card.tsx so the header and sidebar show the same label.
- */
-function humanizeTitle(title: string): string {
-  if (/\s/.test(title)) return title;
-  const words = title.replace(/[-_]+/g, ' ').trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}

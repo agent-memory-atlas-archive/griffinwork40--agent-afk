@@ -21,7 +21,7 @@ import { getSessionLedgerPath, getSessionsDir, isSafeLedgerSessionId } from '../
 import { readLedger } from '../agent/session-ledger.js';
 import { readLivePresenceFiles } from '../agent/awareness/presence.js';
 import { isPreamble, extractUserContent } from '../agent/session/preamble-strip.js';
-import { readSidecarName } from './session-name-head.js';
+import { readSidecarNameInfo } from './session-name-head.js';
 
 /** One agent session as the web UI's session list can render it. */
 export interface WebSessionSummary {
@@ -39,6 +39,12 @@ export interface WebSessionSummary {
    * ~80 chars.
    */
   title?: string;
+  /**
+   * True when `title` is a name the user chose (`/name`): surfaces show it
+   * verbatim. Absent when it was derived (an auto slug or the first message),
+   * which a surface may humanize for display.
+   */
+  titleExplicit?: boolean;
   /** Liveness from presence records. Set for foreign sessions only. */
   alive?: boolean;
 }
@@ -222,14 +228,15 @@ export async function listWebSessions(
   const summaries = await Promise.all(
     [...ids].map(async (id): Promise<WebSessionSummary> => {
       const mode: 'live' | 'readonly' = owned.has(id) ? 'live' : 'readonly';
-      const [head, name] = await Promise.all([readLedgerHead(id), readSidecarName(id)]);
+      const [head, sidecar] = await Promise.all([readLedgerHead(id), readSidecarNameInfo(id)]);
       const mtime = onDisk.get(id);
 
       const summary: WebSessionSummary = { id, mode };
       if (head.cwd !== undefined) summary.cwd = head.cwd;
       if (head.surface !== undefined) summary.surface = head.surface;
-      const title = name ?? head.title;
+      const title = sidecar.name ?? head.title;
       if (title !== undefined) summary.title = title;
+      if (sidecar.name !== undefined && sidecar.explicit) summary.titleExplicit = true;
       if (mtime !== undefined) summary.updatedAt = mtime.toISOString();
       if (mode === 'readonly' && aliveIds !== null) summary.alive = aliveIds.has(id);
       return summary;

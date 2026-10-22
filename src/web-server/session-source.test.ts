@@ -448,6 +448,16 @@ describe('listWebSessions', () => {
     fs.writeFileSync(path.join(getSessionsDir(), 'named.json'), JSON.stringify(sidecar, null, 2));
     const [s0] = await listWebSessions(new Set());
     expect(s0?.title).toBe('what-are-the-local-changes-on');
+    expect(s0?.titleExplicit).toBeUndefined(); // auto-derived slug: the UI may humanize it
+  });
+
+  it('flags an explicit /name (nameExplicit in the sidecar) as titleExplicit', async () => {
+    writeLedger('explicit', [metaLine('explicit', { cwd: '/w' }), userLine('first prompt here')]);
+    const sidecar = { sessionId: 'explicit', name: 'smoke-stage3', nameExplicit: true, model: 'm', turns: [] };
+    fs.writeFileSync(path.join(getSessionsDir(), 'explicit.json'), JSON.stringify(sidecar, null, 2));
+    const [s0] = await listWebSessions(new Set());
+    expect(s0?.title).toBe('smoke-stage3');
+    expect(s0?.titleExplicit).toBe(true);
   });
 
   it('falls back to the preview when the sidecar has no top-level name', async () => {

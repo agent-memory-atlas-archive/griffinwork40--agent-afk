@@ -62,6 +62,19 @@ describe('session-store', () => {
     expect((raw['turns'] as unknown[]).length).toBe(1);
   });
 
+  it('persists nameExplicit in the sidecar head (before turns) only for an explicit name', () => {
+    const stats = createSessionStats('sonnet');
+    recordTurn(stats, 'auto name me', 'ok', { totalCostUsd: 0, durationMs: 1, usage: { input_tokens: 1, output_tokens: 1 }, sessionId: 'sdk-auto' });
+    const auto = readFileSync(saveSession(stats), 'utf-8');
+    expect(auto).not.toContain('nameExplicit');
+    stats.name = 'chosen';
+    stats.nameExplicit = true;
+    const text = readFileSync(saveSession(stats), 'utf-8');
+    expect(text.indexOf('"nameExplicit": true')).toBeGreaterThan(0);
+    expect(text.indexOf('"nameExplicit": true')).toBeLessThan(text.indexOf('"turns"'));
+    expect(loadSession(saveSession(stats))!.nameExplicit).toBe(true);
+  });
+
   it('loadSession round-trips saved data', () => {
     const stats = createSessionStats('sonnet');
     recordTurn(stats, 'q', 'a', { totalCostUsd: 0.02, durationMs: 200, usage: { input_tokens: 20, output_tokens: 10 }, sessionId: 'sdk-xyz' });

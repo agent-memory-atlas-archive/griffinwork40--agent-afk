@@ -60,6 +60,7 @@ export function reseedStatsFromStored(
   stats.turns = [...stored.turns];
   stats.sessionId = stored.sessionId ?? resumeId;
   stats.name = stored.name;
+  if (stored.nameExplicit) stats.nameExplicit = true;
   stats.model = stored.model;
   // External constraint: legacy stored sessions saved before `startedAt`
   // was added lack the field, deserializing as undefined despite the type.

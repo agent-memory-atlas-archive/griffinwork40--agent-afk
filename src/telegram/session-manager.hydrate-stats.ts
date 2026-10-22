@@ -73,6 +73,7 @@ export function hydrateStatsFromStore(
   const stats: SessionStats = {
     sessionId: stored.sessionId,
     name: stored.name,
+    ...(stored.nameExplicit ? { nameExplicit: true } : {}),
     model: stored.model,
     source: stored.source,
     telegramChatId: stored.telegramChatId,
@@ -151,6 +152,7 @@ export function persistSessionName(
   const stats = sessionStats.get(key);
   if (!stats) return { persisted: false };
   stats.name = slug;
+  stats.nameExplicit = true;
 
   // Capture the live session's id if the stats don't carry one yet.
   const live = sessions.get(key);

@@ -43,17 +43,40 @@ export function parseSidecarName(head: string): string | undefined {
 }
 
 /**
+ * True when the head's top-level `nameExplicit` is `true` (the name came from
+ * `/name`). Same top-level/before-`turns` scoping as {@link parseSidecarName}.
+ */
+export function parseSidecarNameExplicit(head: string): boolean {
+  const turnsAt = head.search(/^ {2}"turns"\s*:/m);
+  const scope = turnsAt >= 0 ? head.slice(0, turnsAt) : head;
+  return /^ {2}"nameExplicit"\s*:\s*true\s*,?\s*$/m.test(scope);
+}
+
+/** Sidecar name plus whether it was chosen explicitly. Never throws. */
+export async function readSidecarNameInfo(sessionId: string): Promise<{ name?: string; explicit: boolean }> {
+  const head = await readSidecarHead(sessionId);
+  if (head === undefined) return { explicit: false };
+  const name = parseSidecarName(head);
+  return name === undefined ? { explicit: false } : { name, explicit: parseSidecarNameExplicit(head) };
+}
+
+/**
  * The sidecar `name` for `sessionId`, or `undefined` when there is no sidecar
  * (e.g. a session started from the web UI, which does not write one) or it
  * carries no name. Never throws.
  */
 export async function readSidecarName(sessionId: string): Promise<string | undefined> {
+  const head = await readSidecarHead(sessionId);
+  return head === undefined ? undefined : parseSidecarName(head);
+}
+
+async function readSidecarHead(sessionId: string): Promise<string | undefined> {
   let fh: fsp.FileHandle | undefined;
   try {
     fh = await fsp.open(path.join(getSessionsDir(), `${sessionId}.json`), 'r');
     const buf = Buffer.alloc(SIDECAR_HEAD_BYTES);
     const { bytesRead } = await fh.read(buf, 0, SIDECAR_HEAD_BYTES, 0);
-    return parseSidecarName(buf.subarray(0, bytesRead).toString('utf8'));
+    return buf.subarray(0, bytesRead).toString('utf8');
   } catch {
     return undefined;
   } finally {
