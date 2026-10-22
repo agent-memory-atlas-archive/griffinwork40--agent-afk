@@ -122,14 +122,17 @@ function Dashboard() {
   const handleNavigateToSession = useCallback((targetSessionId: string) => {
     setSelectedSessionId(targetSessionId);
     setActiveNav('sessions');
-  }, []);
+    // The new session is not in the polled list yet; refresh now rather than
+    // leaving it shown as unknown/read-only for up to one poll interval.
+    refreshSessions();
+  }, [refreshSessions]);
 
-  /** Handle /exit: session is now readonly; sessions list will update on next poll. */
+  /** Handle /exit: deselect and refresh so the session shows as ended now. */
   const handleSessionEnded = useCallback(() => {
-    // The session will appear as readonly after the next poll (10s).
     // Deselect so the user sees the sidebar and picks their next session.
     setSelectedSessionId(null);
-  }, []);
+    refreshSessions();
+  }, [refreshSessions]);
 
   /**
    * Resume a past session from the sidebar Resume button through the

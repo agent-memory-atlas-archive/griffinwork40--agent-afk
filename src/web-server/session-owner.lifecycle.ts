@@ -28,6 +28,10 @@ import { formatCost } from '../cli/format-utils.js';
 import { writeKeyValue, writeList } from '../cli/slash/output-blocks.format.js';
 import { resumeConfigFor } from '../cli/resume-session.js';
 import { readLivePresenceFiles } from '../agent/awareness/presence.js';
+import { reseedStatsFromStored } from '../cli/commands/interactive/shared.js';
+import { getStats } from './session-owner.slash.js';
+import { seedForkLedger } from './fork-ledger.js';
+import type { StoredSession as StoredSidecar } from '../cli/session-store.js';
 import type { SlashContext } from '../cli/slash/types.js';
 import type { CommandControl } from './shared/command-wire.js';
 import type { SessionOwner } from './session-owner.js';
@@ -208,7 +212,20 @@ export async function resumeStoredSession(
   const request: { model?: string; cwd?: string } = {};
   if (model !== undefined) request.model = model;
   if (cwd !== undefined) request.cwd = cwd;
-  return owner.create(request, resumeConfig);
+  const info = await owner.create(request, resumeConfig);
+  reseedOwnedStats(info.id, found.data, found.data.sessionId ?? found.id);
+  return info;
+}
+
+/**
+ * Contract: a web session created from a stored sidecar (resume or fork)
+ * starts with the stored turns, cost and name, exactly as the REPL does on
+ * resume (reseedStatsFromStored). Without it the session reports 0 turns, so
+ * `/cost` shows $0 and `/fork` refuses with "nothing to fork yet".
+ */
+function reseedOwnedStats(id: string, stored: StoredSidecar, resumeId: string): void {
+  const stats = getStats(id);
+  if (stats) reseedStatsFromStored(stats, stored, resumeId);
 }
 
 /**
@@ -282,7 +299,9 @@ export async function handleWebFork(
   // Best-effort journal copy (same as REPL).
   if (ctx.stats.sessionId) {
     try { await ctx.session.current.messageJournal?.flush(); } catch { /* best-effort */ }
-    forkJournal(ctx.stats.sessionId, forkId);
+    if (forkJournal(ctx.stats.sessionId, forkId)) {
+      seedForkLedger(forkId, { model: String(ctx.stats.model), ...(ctx.stats.cwd ? { cwd: ctx.stats.cwd } : {}) });
+    }
   }
 
   ctx.out.success(`Forked  ${forkPath}`);
@@ -292,10 +311,7 @@ export async function handleWebFork(
 
   // Build a resume config from the fork sidecar so the new session starts
   // with the forked conversation history.
-  const resumeConfig = resumeConfigFor({
-    id: forkId,
-    resumeId: forkId,
-    stored: {
+  const forkStored: StoredSidecar = {
       sessionId: forkId,
       model,
       startedAt: ctx.stats.sessionStartTime,
@@ -309,11 +325,12 @@ export async function handleWebFork(
       forkedAt: Date.now(),
       cwd,
       source: 'web',
-    },
-  });
+  };
+  const resumeConfig = resumeConfigFor({ id: forkId, resumeId: forkId, stored: forkStored });
 
   try {
     const newInfo = await owner.create({ model, cwd }, resumeConfig);
+    reseedOwnedStats(newInfo.id, forkStored, forkId);
     ctx.out.info('This session continues here, untouched. The fork carries the conversation only.');
     return { kind: 'navigate', sessionId: newInfo.id };
   } catch (err) {
