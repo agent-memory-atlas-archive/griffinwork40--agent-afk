@@ -13,8 +13,9 @@
  * useSseStream if they need to e.g. visually separate replay from live.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSseStream } from '@/hooks/use-sse-stream';
+import { useLiveDrafts } from '@/hooks/use-live-drafts';
 import { useChoiceProgress } from '@/hooks/use-choice-progress';
 import type { ChoiceRequest, CommandProgress } from '@/hooks/use-choice-progress';
 import type { StreamStatus } from '@/hooks/use-sse-stream';
@@ -60,7 +61,9 @@ export interface UseTranscriptResult {
 export function useTranscript(sessionId: string | null, onReset?: () => void): UseTranscriptResult {
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revision = sessionId ? revisions[sessionId] ?? 0 : 0;
-  const { events, status, error, generation } = useSseStream(sessionId, revision, onReset);
+  // Live drafts (id-less live_* frames) never enter `events`; see use-live-drafts.
+  const live = useLiveDrafts();
+  const { events, status, error, generation } = useSseStream(sessionId, revision, onReset, live.onLive);
   const { choices, progress } = useChoiceProgress(events);
 
   const [items, setItems] = useState<TranscriptItem[]>([]);
@@ -94,6 +97,12 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
     setLiveTurns(0);
   }, [sessionId, revision, generation]);
 
+  // Drafts are dropped only for a NEW stream (session/revision). A ledger
+  // reset (generation) already delivered `live_reset` in-order from the SSE
+  // hook, and the server writes the rebuilt snapshot right behind the reset
+  // frame; clearing here (after render) would erase that snapshot.
+  useEffect(() => { live.clearAll(); }, [sessionId, revision]); // clearAll is stable
+
   // Feed new SSE events into the transcript incrementally. We track how many
   // events we have processed via a ref to avoid depending on items/totals as
   // effect deps (which would cause infinite re-renders).
@@ -116,7 +125,8 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
       const frame = raw as { record?: unknown; replay?: boolean; type?: string };
       // Sideband choice/progress frames are not ledger records.
       if (frame.type === 'choice_request' || frame.type === 'choice_settled' ||
-          frame.type === 'choice_stream_boundary' || frame.type === 'progress') continue;
+          frame.type === 'choice_stream_boundary' || frame.type === 'progress' ||
+          frame.type?.startsWith('live_')) continue;
       const record = (frame.record ?? raw) as LedgerRecordLike;
       const isReplay = frame.replay === true;
 
@@ -125,6 +135,7 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
         nextTurnActive = true;
       } else if (record.kind === 'done' || record.kind === 'error') {
         nextTurnActive = false;
+        live.settle();
       }
 
       // Count live (non-replay) done records for the flush trigger.
@@ -140,6 +151,13 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
       // case we set hasMutation so we trigger a re-render of the items array.
       const item = ledgerRecordToItem(record, toolIndex, subagentIndexRef.current);
       if (item !== undefined) {
+        // A durable segment replaces its live draft and REUSES the draft's id,
+        // so React keeps the same DOM node (no remount/flicker).
+        const seg = (record as { seg?: unknown }).seg;
+        if (typeof seg === 'number' && (item.kind === 'assistant' || item.kind === 'thinking')) {
+          const draftId = live.claim(item.kind === 'assistant' ? 'text' : 'thinking', seg);
+          if (draftId !== undefined) item.id = draftId;
+        }
         newItems.push(item);
       } else if (record.kind === 'tool_result' || record.kind === 'subagent_lifecycle') {
         // Mutated an existing item in place; signal re-render.
@@ -178,5 +196,8 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
     }
   }, [events, generation]);
 
-  return { items, totals, status, error, turnActive, liveTurns, clear, choices, progress };
+  // Drafts always render after every durable item.
+  const merged = useMemo(() => live.drafts.length === 0 ? items : [...items, ...live.drafts], [items, live.drafts]);
+
+  return { items: merged, totals, status, error, turnActive, liveTurns, clear, choices, progress };
 }

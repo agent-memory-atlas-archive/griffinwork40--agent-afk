@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 export interface ChoiceRequest {
   corrId: string;
@@ -40,10 +40,20 @@ function choice(value: unknown): ChoiceRequest | null {
  * request can leak into a different session or ledger generation.
  */
 export function useChoiceProgress(events: unknown[]): { choices: ChoiceRequest[]; progress: CommandProgress[] } {
+  // Incremental fold: `events` is append-only until the stream replaces it
+  // (new session/clear/reset), so only frames past the last fold are scanned.
+  const fold = useRef({ first: undefined as unknown, count: 0,
+    choices: new Map<string, ChoiceRequest>(), progress: new Map<string, CommandProgress>() });
   return useMemo(() => {
-    const choices = new Map<string, ChoiceRequest>();
-    const progress = new Map<string, CommandProgress>();
-    for (const event of events) {
+    const state = fold.current;
+    if (events.length < state.count || (state.count > 0 && events[0] !== state.first)) {
+      state.count = 0;
+      state.choices = new Map();
+      state.progress = new Map();
+    }
+    const { choices, progress } = state;
+    for (let i = state.count; i < events.length; i++) {
+      const event = events[i];
       if (!object(event)) continue;
       if (event.type === 'choice_stream_boundary') {
         choices.clear();
@@ -64,6 +74,8 @@ export function useChoiceProgress(events: unknown[]): { choices: ChoiceRequest[]
         }
       }
     }
+    state.first = events[0];
+    state.count = events.length;
     return { choices: [...choices.values()], progress: [...progress.values()] };
   }, [events]);
 }

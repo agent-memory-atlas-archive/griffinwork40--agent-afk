@@ -16,6 +16,7 @@ import type { TranscriptItem } from '@/lib/ledger-adapter';
 import type { ThinkingUiMode } from '@/types/command-wire';
 import type { SessionTotals } from './session-meter';
 import { TranscriptSessionContext } from '@/hooks/use-full-tool-result';
+import { liveStateOf } from '@/hooks/use-live-drafts';
 
 interface TranscriptViewProps {
   items: TranscriptItem[];
@@ -24,7 +25,7 @@ interface TranscriptViewProps {
   totals?: SessionTotals;
   /** When true, render execution blocks as topology spine trees. */
   spineMode?: boolean;
-  /** When true, the last assistant message is actively streaming. */
+  /** Turn in progress (live drafts carry their own streaming state). */
   turnActive?: boolean;
   /** Session being rendered; enables lazy-loading full tool results. */
   sessionId?: string;
@@ -76,7 +77,7 @@ export function renderNonSubagentItem(item: TranscriptItem, isStreaming = false)
   switch (item.kind) {
     case 'user':      return <UserMessage text={item.text} />;
     case 'assistant': return <AssistantRow text={item.text} isStreaming={isStreaming} />;
-    case 'thinking':  return <ThinkingPanel text={item.text} />;
+    case 'thinking':  return <ThinkingPanel text={item.text} isStreaming={isStreaming} />;
     case 'tool':      return <ToolCallCard {...item} />;
     case 'error':     return <ErrorItem message={item.message} />;
     case 'notice':    return <NoticeItem text={item.text} />;
@@ -89,7 +90,7 @@ function renderTextItem(item: TranscriptItem, isStreaming = false): React.ReactN
   switch (item.kind) {
     case 'user':      return <UserMessage text={item.text} />;
     case 'assistant': return <AssistantRow text={item.text} isStreaming={isStreaming} />;
-    case 'thinking':  return <ThinkingPanel text={item.text} />;
+    case 'thinking':  return <ThinkingPanel text={item.text} isStreaming={isStreaming} />;
     case 'error':     return <ErrorItem message={item.message} />;
     case 'notice':    return <NoticeItem text={item.text} />;
     case 'bg_job':    return <BgJobItem item={item} />;
@@ -110,7 +111,7 @@ export function TranscriptView({ sessionId, ...rest }: TranscriptViewProps) {
   );
 }
 
-function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false }: Omit<TranscriptViewProps, 'sessionId'>) {
+function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, hideEmptyState = false }: Omit<TranscriptViewProps, 'sessionId'>) {
   // Filter only the render projection, before either grouping path. Never mutate
   // the ledger-backed array: toggling back on restores old and new thinking.
   const visibleItems = useMemo(() => thinkingUi === 'off'
@@ -118,21 +119,12 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
   const flatSlots = useMemo(() => groupItems(visibleItems), [visibleItems]);
   const spineSlots = useSpineSlots(visibleItems);
 
-
-  // Find the id of the last assistant item — only that one gets streaming animation.
-  const lastAssistantId = useMemo(() => {
-    for (let i = items.length - 1; i >= 0; i--) {
-      if (items[i]?.kind === 'assistant') return items[i]!.id;
-    }
-    return null;
-  }, [items]);
-
   const renderSpineTextItem = useCallback(
     (item: TranscriptItem, idx: number) => {
       const isTurnStart = item.kind === 'user' && idx > 0;
-      const streaming = turnActive && item.id === lastAssistantId;
+      const streaming = liveStateOf(item) === 'streaming';
       return (
-        <div key={item.id}>
+        <div key={item.id} {...(liveStateOf(item) ? { 'data-live': liveStateOf(item) } : {})}>
           {isTurnStart && (
             <div className="my-6 border-t border-border/40" aria-hidden="true" />
           )}
@@ -140,7 +132,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
         </div>
       );
     },
-    [turnActive, lastAssistantId],
+    [],
   );
 
   return (
@@ -162,9 +154,9 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
           if (slot.kind === 'item') {
             const { item } = slot;
             const isTurnStart = item.kind === 'user' && idx > 0;
-            const streaming = turnActive && item.id === lastAssistantId;
+            const streaming = liveStateOf(item) === 'streaming';
             return (
-              <div key={item.id}>
+              <div key={item.id} {...(liveStateOf(item) ? { 'data-live': liveStateOf(item) } : {})}>
                 {isTurnStart && (
                   <div className="my-6 border-t border-border/40" aria-hidden="true" />
                 )}

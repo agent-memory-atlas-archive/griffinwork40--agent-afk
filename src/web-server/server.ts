@@ -26,7 +26,6 @@ import {
   handlePrompt,
   header,
   sendJson,
-  type RouteContext,
 } from './routes.js';
 import { handleStream } from './stream-route.js';
 import { handleGetToolResult } from './routes.tool-results.js';
@@ -46,6 +45,7 @@ import { handleGetConfig } from './routes.config.js';
 import { handleListHandoffs, handleAnswerHandoff } from './routes.handoffs.js';
 import { handleCommand } from './routes.commands.js';
 import { ChoiceBroker } from './choice-broker.js';
+import { wireLive, type ServerContext } from './server.live.js';
 import { handleChoiceAnswer } from './routes.choices.js';
 import { handleResumeSession } from './routes.resume.js';
 import { resumeStoredSessionById } from './session-owner.lifecycle.js';
@@ -150,14 +150,16 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
   bridge.install();
   const choiceBroker = new ChoiceBroker();
   options.owner?.setChoiceCancellation?.((id) => choiceBroker.cancelSession(id));
+  const live = wireLive(options.owner);
 
   /** Abort controllers for in-flight SSE streams, so shutdown can end them. */
   const streams = new Set<AbortController>();
 
-  const ctx: RouteContext = {
+  const ctx: ServerContext = {
     owned,
     bridge,
     choiceBroker,
+    liveBroker: live.liveBroker,
     submitPrompt:
       options.submitPrompt ??
       (options.owner
@@ -223,6 +225,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
       bridge.uninstall();
       choiceBroker.cancelAll();
       options.owner?.setChoiceCancellation?.(undefined);
+      const liveStopped = live.stop(); // MCP spare disconnect runs beside socket teardown
       // Invariant: abort live SSE streams BEFORE awaiting `server.close()`.
       // `close()` stops accepting new connections but waits for existing ones
       // to end, and an event-stream response never ends on its own — it tails
@@ -244,6 +247,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeAllConnections();
       await closed;
+      await liveStopped;
     },
   };
 }
@@ -279,7 +283,7 @@ function actualPort(server: Server): number {
 async function dispatch(
   req: IncomingMessage,
   res: ServerResponse,
-  ctx: RouteContext,
+  ctx: ServerContext,
   auth: StaticAuth,
   host: string,
   port: number,
@@ -315,7 +319,7 @@ async function dispatch(
 
   const streamMatch = /^\/api\/sessions\/([^/]+)\/stream$/.exec(path);
   if (streamMatch?.[1] && method === 'GET') {
-    await handleStream(req, res, decodeURIComponent(streamMatch[1]), streams, ctx.choiceBroker);
+    await handleStream(req, res, decodeURIComponent(streamMatch[1]), streams, ctx.choiceBroker, ctx.liveBroker);
     return;
   }
 

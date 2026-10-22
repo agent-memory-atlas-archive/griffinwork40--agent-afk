@@ -53,6 +53,21 @@ describe('projectOutputEvent', () => {
     expect(projectOutputEvent(event)).toEqual({ kind: 'assistant', text: 'hello world' });
   });
 
+  it('stores a 20k assistant message whole (no 8k clip)', () => {
+    const text = 'a'.repeat(20_000);
+    const event: OutputEvent = { type: 'message', message: { role: 'assistant', content: text, timestamp: new Date() } };
+    expect(projectOutputEvent(event)).toEqual({ kind: 'assistant', text });
+  });
+
+  it('still clips user text at 8k', async () => {
+    const id = freshId();
+    const writer = new SessionLedgerWriter(id);
+    writer.recordUser('u'.repeat(20_000));
+    await writer.close('close');
+    const user = (await collect(readLedger(id))).find((r) => r.kind === 'user');
+    expect(user && user.kind === 'user' && user.text.length).toBeLessThan(8_100);
+  });
+
   it('skips user-role message events (recorded separately via recordUser)', () => {
     const event: OutputEvent = {
       type: 'message',
