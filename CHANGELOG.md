@@ -11,7 +11,15 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Added
+- continue a capped subagent with its full prior conversation (#4263) (cd4599bc7)
+
 ### Fixed
+- continuation hardening from #4263 final review (#4265) (1c6a2fb7f)
+- replace mismapped subagent-block contract with real hook-block detector probe (#4245) (f15e5f81d)
+- never silently drop the subagent round-cap notice (#4258) (d1a66c704)
+- decideStatus returns unsupported (not pass) when no replay handler exists (#4244) (6c14878e8)
+- block mutating git stash inside linked worktrees (#4249) (2fa896cfe)
 - handle.ts cancel comment, mint finally leak, disarmCols reset, manager truncation, redactSecrets test, composeTool pin (#4224) (c65852a6d)
 - telegram /insights help, logging, NaN guard, tests (#4211) (2daf01cd2)
 - checkEgress try/catch, atomic release push, unconditional breaker assertion, SlotProvider import type, stale AFK.md (#4221) (67ca3156c)
@@ -22,6 +30,9 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 - agent host remote-path invariants and test accuracy (#4214) (aa0bce8f1)
 - move background-job tools to optional tail; fix schemas.order.ts JSDoc (#4222) (751979da9)
 - move agent-type listing from tool description to system prompt (#4219) (dd7410af9)
+
+### Changed
+- cover the round_cap_notice_dropped path (#4264) (075cd68be)
 
 ## [5.328.2] - 2026-10-20
 
