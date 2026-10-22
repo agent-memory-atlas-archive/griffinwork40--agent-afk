@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { ArrowDown, SquarePen } from 'lucide-react';
 import { Sidebar } from './components/sidebar';
 import { getNavItem } from './lib/nav-registry';
@@ -84,7 +84,9 @@ function Dashboard() {
 
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
   // When not pinned, arm the "New messages" pill so the user knows content arrived.
-  useEffect(() => {
+  // Layout effect: scroll in the same commit that appends a live draft, so the
+  // draft is never painted below the fold (content-visibility:auto skips it).
+  useLayoutEffect(() => {
     if (isPinned) scrollToBottom();
     else notifyNewContent();
   // eslint-disable-next-line react-hooks/exhaustive-deps

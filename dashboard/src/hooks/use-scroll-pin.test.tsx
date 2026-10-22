@@ -126,3 +126,45 @@ describe('useScrollPin — regression: jump button missing on finished transcrip
     document.body.removeChild(el);
   });
 });
+
+describe('useScrollPin — regression: layout scroll events must not unpin (fan-in turn-3 blank)', () => {
+  /**
+   * A viewport resize (phone rotation) or the pill's padding toggle fires a
+   * scroll event with a changed geometry but no upward user scroll. Before the
+   * fix that event unpinned the transcript 93 px above the bottom (no pill:
+   * under the 200 px threshold), so the next turn streamed below the fold.
+   */
+  function mutableEl(): { el: HTMLDivElement; size: { height: number; client: number } } {
+    const size = { height: 1000, client: 200 };
+    const el = document.createElement('div');
+    Object.defineProperty(el, 'scrollHeight', { get: () => size.height, configurable: true });
+    Object.defineProperty(el, 'clientHeight', { get: () => size.client, configurable: true });
+    el.scrollTop = 800;
+    return { el, size };
+  }
+
+  it('stays pinned and re-pins to the bottom when content grows without a user scroll', () => {
+    const { el, size } = mutableEl();
+    document.body.appendChild(el);
+    const { result } = renderHook(() => {
+      const pin = useScrollPin();
+      if (!pin.containerRef.current) pin.containerRef.current = el;
+      return pin;
+    });
+    act(() => { fireScroll(el, 800); });
+    expect(result.current.isPinned).toBe(true);
+
+    // Reflow: content grows 600 px, scrollTop unchanged (distance 600 > thresholds).
+    size.height = 1600;
+    act(() => { el.dispatchEvent(new Event('scroll')); });
+    expect(result.current.isPinned).toBe(true);
+    expect(result.current.showScrollButton).toBe(false);
+    expect(el.scrollTop).toBe(1600); // re-pinned (jsdom does not clamp)
+
+    // A genuine upward user scroll still releases the pin.
+    act(() => { fireScroll(el, 100); });
+    expect(result.current.isPinned).toBe(false);
+    expect(result.current.showScrollButton).toBe(true);
+    document.body.removeChild(el);
+  });
+});

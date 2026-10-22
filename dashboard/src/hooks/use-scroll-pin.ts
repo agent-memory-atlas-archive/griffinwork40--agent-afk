@@ -64,16 +64,36 @@ export function useScrollPin(): UseScrollPinResult {
   const [hasNewContent, setHasNewContent] = useState(false);
   // Ref mirror of isScrolledUp for use inside notifyNewContent callback.
   const scrolledUpRef = useRef(false);
+  // Ref mirror of isPinned, read synchronously inside the scroll handler.
+  const pinnedRef = useRef(true);
 
   // Track pin state and button visibility on scroll.
   useEffect(() => {
     const el = containerRef.current;
     if (el === null) return;
 
+    // Invariant: only a USER scroll (scrollTop moving up) may release the pin.
+    // A scroll event caused by layout (viewport resize, the pill's padding
+    // toggle, content reflow) is not intent: while pinned it re-pins to the
+    // bottom instead of unpinning. History: a phone-width resize mid-turn plus
+    // the pill's conditional bottom padding unpinned the transcript, so the
+    // next turn's live draft rendered below the fold (content-visibility:auto
+    // skipped it) and the screen stayed blank while busy.
+    // A user scroll-up always lowers scrollTop; a reflow that grows the
+    // content (narrower viewport, padding added) leaves scrollTop unchanged.
+    let lastTop = el.scrollTop;
     function handleScroll(): void {
       if (el === null) return;
+      const userScrolledUp = el.scrollTop < lastTop;
+      lastTop = el.scrollTop;
+      if (pinnedRef.current && !userScrolledUp
+        && el.scrollHeight - el.scrollTop - el.clientHeight > PINNED_THRESHOLD_PX) {
+        el.scrollTop = el.scrollHeight;
+        lastTop = el.scrollTop;
+      }
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const pinned = distanceFromBottom <= PINNED_THRESHOLD_PX;
+      pinnedRef.current = pinned;
       const scrolledUp = distanceFromBottom > SHOW_BUTTON_THRESHOLD_PX;
       scrolledUpRef.current = scrolledUp;
       setIsPinned(pinned);
@@ -90,6 +110,7 @@ export function useScrollPin(): UseScrollPinResult {
     const el = containerRef.current;
     if (el === null) return;
     el.scrollTop = el.scrollHeight;
+    pinnedRef.current = true;
     setHasNewContent(false);
   }, []);
 
