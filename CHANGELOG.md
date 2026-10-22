@@ -20,6 +20,7 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 - remove write-only pending-question-store (#4299) (728d32c01)
 - address remaining advisory findings from 2026-10-19 evening triage (#4301) (a82a9aaac)
 - bash lexer long wrapper options, pipe-ampersand, truncated verbs (#4303) (9c0037771)
+- enable GitHub security features + CodeQL workflow (#4311) (3bbfd581d)
 
 ### Changed
 - stage 3 — use resolveChildModel in dispatchDagNode for model-resolution parity (#4288) (30b8993d7)
