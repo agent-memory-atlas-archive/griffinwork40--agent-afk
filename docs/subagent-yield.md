@@ -156,13 +156,23 @@ children under-yielding or false positives causing real harm.
   state, and a child's Asking block arrives inside a `tool_result` in a
   user-role message. The mechanism that populates `turn.assistant` from the
   journal has not been verified end-to-end, so this is plausible but
-  [UNVERIFIED].
+  CONFIRMED safe (see resolved question 5 below).
 
-## Open questions
+## Resolved questions
 
-1. A second composition-boundary check on the revised design, scoped to the
-   tag set in `runToResult` / `buildResultFromMessage` and the ToolResult
-   assemblers that must honor it.
+1. ~~Composition-boundary check on the detection point.~~
+   **Resolved.** All five consumer paths silently discard a `needsInput` tag
+   today and need targeted changes:
+   - `foreground-handoff.ts` (path 1, low): spread `needsInput` onto ToolResult.
+   - `dag-subagent.dispatch.ts` (path 2, low-medium): fail-fast on yield.
+   - `fork-result.ts` (path 3, low): spread `needsInput` onto ToolResult.
+   - `continuation-dispatch.ts` (path 4, medium): extend `reasonOf` to map
+     `needsInput` to `'asking'`.
+   - `background-registry` (path 5, high): handle is torn down on terminal;
+     no return path exists. **Deferred to v2** (needs handle kept alive).
+   Cross-cutting: parent-side routing (deciding what to do with a `needsInput`
+   ToolResult) is in neither of these files; it lives in the parent model's
+   tool-result handling.
 2. ~~Whether forks inherit the parent's assembled system prompt.~~
    **Resolved: NO.** `assembleSystemPrompt` appends `END_OF_TURN_DIRECTIVE`
    (containing the full Asking block format) only for `repl` and `telegram`
@@ -174,13 +184,35 @@ children under-yielding or false positives causing real harm.
    `taskPrompt` only for the workspace-store query, not for the child config.
    **Consequence: the conditional preamble paragraph must spell out the Asking
    block format itself.** Children have never seen it through inheritance.
-3. Whether compose nodes get yields at all in v1, or stay on today's wording.
-4. Whether a lost continuation chain can be rebuilt from the subagent journal
-   after a restart, which would remove the fresh-re-dispatch fallback for that
-   case.
-5. End-to-end verification that `turn.assistant` in the facet pipeline never
-   contains tool_result text from a child (claim 4 above, currently
-   [UNVERIFIED]).
+3. ~~Whether compose nodes get yields at all in v1.~~
+   **Resolved: NO.** A yielding compose node looks like a successful completion
+   to the DAG executor (`status: 'succeeded'`), so downstream nodes proceed on
+   partial data and fail-fast does not trigger. V1 disables yields for compose
+   nodes (preamble paragraph not injected) with a fail-fast safety net in
+   `dag-subagent.dispatch.ts`.
+4. ~~Whether a lost continuation chain can be rebuilt from the journal.~~
+   **Resolved: PARTIAL.** The journal read side already works
+   (`loadJournalMessages` in `reader.ts:128-133` is the exact call continuation
+   uses). But 9 of 13 `ChainRecord` fields have no disk representation; the
+   hard blocker is the `owner` field (random token per process,
+   `continuation-registry.ts:109-118`). Fix = persist a `.chain.json` sidecar
+   alongside each subagent journal in `recordChainTerminal`. **Deferred.**
+5. ~~Facet pipeline safety.~~
+   **Resolved: CONFIRMED safe.** `tool_result` text never reaches
+   `turn.assistant`. The structural firewall is in `transformProviderEvent`
+   (`stream-consumer.ts:329-336` vs `:365-369`): `assistant.message` and
+   `tool.output` are mutually exclusive arms populating separate fields
+   (`TurnRecord.assistant` vs `TurnRecord.toolEvents`). A child's Asking block
+   arrives as tool_result content and is never scanned as the parent's own
+   terminal state.
+
+## V1 scope
+
+- Foreground `agent` tool dispatches: full yield support.
+- Skill forks (`fork-dispatch.ts`): full yield support.
+- Compose/DAG nodes: yields disabled; fail-fast safety net.
+- Background children: deferred (handle lifecycle change needed).
+- Journal-based chain rebuild: deferred (chain sidecar needed).
 
 ## Related
 
