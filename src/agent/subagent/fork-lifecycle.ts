@@ -65,6 +65,11 @@ export function emitForkStarted(args: EmitForkStartedArgs): string {
       ? effectiveChildModel
       : JSON.stringify(effectiveChildModel);
 
+  // Fire-and-forget: emitSubagentLifecycle is best-effort trace observability.
+  // Awaiting here would block forkSubagent's hot path; the subagent drain
+  // already collects pending write promises and awaits them (bounded) before
+  // the seal so the row is guaranteed to land before session_sealed (#3714).
+  // Pre-existing intentional pattern — flagged in advisory #3811.
   void emitSubagentLifecycle(effectiveTraceWriter, {
     transition: 'started',
     subagentId: id,
