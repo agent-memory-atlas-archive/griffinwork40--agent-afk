@@ -7,6 +7,7 @@ import { listNavItems } from '@/lib/nav-registry';
 export function Sidebar({
   sessions,
   pendingSessionIds,
+  busySessionIds,
   selectedSessionId,
   onSelectSession,
   onResumeSession,
@@ -17,6 +18,7 @@ export function Sidebar({
 }: {
   sessions: SessionSummary[];
   pendingSessionIds: Set<string>;
+  busySessionIds?: Set<string>;
   selectedSessionId: string | null;
   onSelectSession: (id: string) => void;
   /** Called when user clicks Resume on a readonly session card. */
@@ -90,6 +92,7 @@ export function Sidebar({
                   key={s.id}
                   session={s}
                   pendingSessionIds={pendingSessionIds}
+                  busySessionIds={busySessionIds}
                   selected={selectedSessionId === s.id}
                   onSelect={onSelectSession}
                   onResume={onResumeSession}

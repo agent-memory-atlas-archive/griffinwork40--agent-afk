@@ -5,6 +5,7 @@ import { getSessionJournalPath } from '../paths.js';
 import { hydrateMessages, loadDisplayMessages, loadJournalFold } from '../agent/journal/index.js';
 import { hasToolResultBlock, messageText } from '../agent/content/user-authored.js';
 import { clip, MAX_TEXT_LEN, MAX_TOOL_INPUT_LEN } from '../agent/session-ledger-project.js';
+import { isPreamble, extractUserContent } from '../agent/session/preamble-strip.js';
 import type { AgentSession } from '../agent/session/agent-session.js';
 import type { JournalMessage } from '../agent/journal/index.js';
 import type { LedgerPayload } from '../agent/session-ledger.js';
@@ -30,7 +31,12 @@ export function projectJournalMessages(messages: readonly JournalMessage[]): Led
     if (message.role === 'user' && !hasToolResultBlock(message.content)) {
       if (turn) records.push({ kind: 'done' });
       turn = true;
-      const text = messageText(message.content, '\n') || message.content.map((b) => `[${b.type}]`).join(' ');
+      const raw = messageText(message.content, '\n') || message.content.map((b) => `[${b.type}]`).join(' ');
+      // Strip framework-injected preamble ([placeholder-prevent], [jev rules],
+      // skill dispatch XML, bridge context, etc.) before writing to the browser
+      // projection so the /rewind picker and the transcript show only what the
+      // user actually typed.
+      const text = isPreamble(raw) ? (extractUserContent(raw) ?? raw) : raw;
       records.push({ kind: 'user', text: clip(text, MAX_TEXT_LEN) });
       continue;
     }

@@ -28,8 +28,8 @@
 // ---------------------------------------------------------------------------
 
 export type TranscriptItem =
-  | { kind: 'user'; id: string; text: string }
-  | { kind: 'assistant'; id: string; text: string }
+  | { kind: 'user'; id: string; text: string; ts?: number }
+  | { kind: 'assistant'; id: string; text: string; ts?: number }
   | { kind: 'thinking'; id: string; text: string }
   | {
       kind: 'tool';
@@ -51,6 +51,7 @@ export type TranscriptItem =
     }
   | { kind: 'error'; id: string; message: string }
   | { kind: 'notice'; id: string; text: string }
+  | { kind: 'stopped'; id: string; text: string }
   | {
       kind: 'subagent';
       id: string;
@@ -233,10 +234,10 @@ export function ledgerRecordToItem(
 
   switch (record.kind) {
     case 'user':
-      return { kind: 'user', id: nextId('u'), text: str(record['text']) ?? '' };
+      return { kind: 'user', id: nextId('u'), text: str(record['text']) ?? '', ...(record.ts !== undefined ? { ts: record.ts as number } : {}) };
 
     case 'assistant':
-      return { kind: 'assistant', id: nextId('a'), text: str(record['text']) ?? '' };
+      return { kind: 'assistant', id: nextId('a'), text: str(record['text']) ?? '', ...(record.ts !== undefined ? { ts: record.ts as number } : {}) };
 
     case 'thinking':
       return { kind: 'thinking', id: nextId('th'), text: str(record['text']) ?? '' };
@@ -295,6 +296,8 @@ export function ledgerRecordToItem(
       return { kind: 'error', id: nextId('e'), message: str(record['message']) ?? 'error' };
 
     case 'done': {
+      const stopReason = str(record['stopReason']);
+      const stopped = stopReason === 'interrupted';
       const cost = record['costUsd'];
       const ms = record['durationMs'];
       const bits: string[] = [];
@@ -310,6 +313,13 @@ export function ledgerRecordToItem(
         if (outputTok !== undefined) parts.push(`${outputTok}out`);
         if (cacheRead !== undefined) parts.push(`${cacheRead}cache`);
         bits.push(parts.join('/'));
+      }
+      if (stopped) {
+        return {
+          kind: 'stopped',
+          id: nextId('n'),
+          text: bits.length ? `Stopped · ${bits.join(' · ')}` : 'Stopped',
+        };
       }
       return {
         kind: 'notice',

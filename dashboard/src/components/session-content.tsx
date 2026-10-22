@@ -22,6 +22,9 @@ export function SessionContent({
   status,
   turnActive,
   thinkingUi,
+  onRetry,
+  onEdit,
+  isBusy,
 }: {
   loading: boolean;
   sessions: SessionSummary[];
@@ -32,6 +35,9 @@ export function SessionContent({
   status: string;
   turnActive: boolean;
   thinkingUi?: ThinkingUiMode;
+  onRetry?: () => void;
+  onEdit?: (text: string) => void;
+  isBusy?: boolean;
 }) {
   if (loading && !sessions.length) {
     return (
@@ -62,6 +68,9 @@ export function SessionContent({
         totals={totals}
         turnActive={turnActive}
         thinkingUi={thinkingUi}
+        onRetry={onRetry}
+        onEdit={onEdit}
+        isBusy={isBusy}
       />
     );
   }
@@ -102,6 +111,9 @@ function TranscriptWithCommands({
   totals,
   turnActive,
   thinkingUi,
+  onRetry,
+  onEdit,
+  isBusy,
 }: {
   sessionId: string;
   items: TranscriptItem[];
@@ -109,6 +121,9 @@ function TranscriptWithCommands({
   totals: SessionTotals;
   turnActive: boolean;
   thinkingUi?: ThinkingUiMode;
+  onRetry?: () => void;
+  onEdit?: (text: string) => void;
+  isBusy?: boolean;
 }) {
   // Contract: outputs render at their anchor (see interleave-commands), and
   // only the first transcript segment carries the session meter.
@@ -129,6 +144,9 @@ function TranscriptWithCommands({
             turnActive={turnActive && i === segments.length - 1}
             hideEmptyState
             thinkingUi={thinkingUi}
+            onRetry={onRetry}
+            onEdit={onEdit}
+            isBusy={isBusy}
           />
         ) : (
           <div key={`c-${seg.item.key}`} className="px-2 py-3">

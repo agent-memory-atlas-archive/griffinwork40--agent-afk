@@ -123,12 +123,12 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
       // Track turn activity: user records start a turn; done/error records end it.
       if (record.kind === 'user') {
         nextTurnActive = true;
-      } else if (record.kind === 'done' || record.kind === 'error') {
+      } else if (record.kind === 'done' || record.kind === 'error' || record.kind === 'stopped') {
         nextTurnActive = false;
       }
 
-      // Count live (non-replay) done records for the flush trigger.
-      if (record.kind === 'done' && !isReplay) {
+      // Count live (non-replay) done/stopped records for the flush trigger.
+      if ((record.kind === 'done' || record.kind === 'stopped') && !isReplay) {
         liveTurnsDelta += 1;
       }
 

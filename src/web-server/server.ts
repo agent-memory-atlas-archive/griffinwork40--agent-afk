@@ -48,6 +48,7 @@ import { handleCommand } from './routes.commands.js';
 import { ChoiceBroker } from './choice-broker.js';
 import { handleChoiceAnswer } from './routes.choices.js';
 import { handleResumeSession } from './routes.resume.js';
+import { handleRewind } from './routes.rewind.js';
 import { resumeStoredSessionById } from './session-owner.lifecycle.js';
 import { errorMessage } from '../utils/errors.js';
 
@@ -274,6 +275,8 @@ function actualPort(server: Server): number {
   return typeof addr === 'object' && addr !== null ? addr.port : 0;
 }
 
+
+
 async function dispatch(
   req: IncomingMessage,
   res: ServerResponse,
@@ -351,6 +354,9 @@ async function dispatch(
     await handleCreateSession(ctx, res, await readBody(req));
     return;
   }
+
+  const rewindMatch = /^\/api\/sessions\/([^/]+)\/rewind$/.exec(path);
+  if (rewindMatch?.[1] && method === 'POST') { await handleRewind(ctx, res, decodeURIComponent(rewindMatch[1]), await readBody(req)); return; }
 
   const interruptMatch = /^\/api\/sessions\/([^/]+)\/interrupt$/.exec(path);
   if (interruptMatch?.[1] && method === 'POST') {
