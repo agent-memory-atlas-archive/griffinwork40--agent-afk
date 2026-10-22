@@ -37,8 +37,9 @@ export interface UseCommandControlResult {
    * Dispatch a CommandControl received from the server.
    * Returns true when the caller should clear the composer text,
    * false when the control manages the text itself (prefill).
+   * @param depth Recursion depth for rerun controls; capped at 3.
    */
-  handleControl: (control: CommandControl, originalInput: string) => Promise<boolean>;
+  handleControl: (control: CommandControl, originalInput: string, depth?: number) => Promise<boolean>;
 }
 
 export function useCommandControl({
@@ -49,7 +50,7 @@ export function useCommandControl({
   onToast,
 }: UseCommandControlOptions): UseCommandControlResult {
   const handleControl = useCallback(
-    async (control: CommandControl, originalInput: string): Promise<boolean> => {
+    async (control: CommandControl, originalInput: string, depth = 0): Promise<boolean> => {
       switch (control.kind) {
         case 'continue':
           return true;
@@ -82,7 +83,12 @@ export function useCommandControl({
         }
 
         case 'rerun': {
-          // Re-POST to /commands with the rerun string (depth 1 only).
+          // Re-POST to /commands with the rerun string — depth-guarded to prevent
+          // infinite recursion if a command keeps returning rerun controls.
+          if (depth >= 3) {
+            onToast?.('Command rerun limit reached');
+            return true;
+          }
           await apiFetch(`/api/sessions/${sessionId}/commands`, {
             method: 'POST',
             body: JSON.stringify({ input: control.input }),

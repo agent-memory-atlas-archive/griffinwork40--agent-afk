@@ -395,6 +395,62 @@ describe('handleCommand', () => {
 // not inside handleCommand itself. The server.test.ts integration tests cover the
 // full auth flow. Here we confirm the handler itself does NOT enforce auth —
 // auth is a server-level concern, consistent with how handlePrompt is tested.
+describe('handleCommand — security: 500 response body is redacted', () => {
+  it('500 body does not echo the raw error message', async () => {
+    FAKE_CMD.handler = vi.fn().mockRejectedValue(new Error('secret internal detail'));
+    const { res, json } = makeRes();
+    await handleCommand(makeCtx(), res, SESSION_ID, { input: '/help' });
+    expect(json().status).toBe(500);
+    const body = json().body as { error: string; message: string };
+    expect(body.error).toBe('command_execution_failed');
+    // Raw err.message must NOT appear in the response body.
+    expect(body.message).not.toContain('secret internal detail');
+    expect(body.message).toBe('An internal error occurred while executing the command.');
+  });
+
+  it('404 message truncates command name to 64 chars', async () => {
+    const longName = '/'.padEnd(70, 'a'); // 70-char name
+    mockParse.mockReturnValue({ name: longName, args: '' });
+    mockLookup.mockReturnValue(undefined);
+    mockSuggest.mockReturnValue(undefined);
+    const { res, json } = makeRes();
+    await handleCommand(makeCtx(), res, SESSION_ID, { input: longName });
+    expect(json().status).toBe(404);
+    const body = json().body as { message: string };
+    // Truncated name is at most 64 chars.
+    const nameInMsg = body.message.replace('unknown command: ', '');
+    expect(nameInMsg.length).toBeLessThanOrEqual(64);
+  });
+
+  it('504 when handler exceeds 15s timeout', async () => {
+    vi.useFakeTimers();
+    FAKE_CMD.handler = vi.fn().mockImplementation(
+      () => new Promise<never>(() => { /* never resolves */ }),
+    );
+    const { res, json } = makeRes();
+    const pending = handleCommand(makeCtx(), res, SESSION_ID, { input: '/help' });
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(json().status).toBe(504);
+    expect((json().body as { error: string }).error).toBe('command_timeout');
+    vi.useRealTimers();
+  });
+
+  it('504 releases the turn reservation', async () => {
+    vi.useFakeTimers();
+    FAKE_CMD.handler = vi.fn().mockImplementation(
+      () => new Promise<never>(() => { /* never resolves */ }),
+    );
+    const ctx = makeCtx();
+    const { res } = makeRes();
+    const pending = handleCommand(ctx, res, SESSION_ID, { input: '/help' });
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(ctx.releaseTurn).toHaveBeenCalledWith(SESSION_ID);
+    vi.useRealTimers();
+  });
+});
+
 describe('handleCommand — no server-level auth enforcement in unit tests', () => {
   it('handler itself does not check Origin (server dispatch layer does)', async () => {
     // handleCommand trusts that server.ts already enforced Origin+bearer.

@@ -2,14 +2,17 @@
  * POST /api/sessions/:id/commands — execute a native slash command on a
  * web-owned session and return the buffered output as JSON.
  *
- * Ordering (Amendment A2):
+ * Ordering (Amendment A2, revised):
  *   1. Validate session id
  *   2. Require owned
  *   3. Require turn-accounting present (501 if absent — no isBusy/reserveTurn)
  *   4. Parse body
  *   5. isBusy → 409  (no await between this check and reserveTurn)
- *   6. reserveTurn (synchronous)
- *   7. try { registry + gate + ctx + handler } finally { releaseTurn }
+ *   6. ensureSlashRegistry (idempotent memo — safe before reservation)
+ *   7. waitForSessionReady — readiness is checked BEFORE reserveTurn so a
+ *      2 s poll does not hold a reservation open against an unready session
+ *   8. reserveTurn (synchronous, immediately after readiness confirmed)
+ *   9. try { parse + gate + ctx + handler } finally { releaseTurn }
  */
 
 import type { ServerResponse } from 'node:http';
@@ -95,7 +98,20 @@ export async function handleCommand(
     return;
   }
 
-  // 6. Reserve turn synchronously (no await between isBusy and this call).
+  // 6. Ensure registry is initialized (idempotent memo — safe before reservation).
+  await ensureSlashRegistry();
+
+  // 7. Wait for session to be ready BEFORE reserving the turn so the 2 s poll
+  //    does not hold a reservation open against an unready session.
+  if (ctx.getSession && !(await waitForSessionReady(ctx, sessionId))) {
+    sendJson(res, 503, {
+      error: 'session_not_ready',
+      message: 'session is not yet ready — retry in a moment',
+    });
+    return;
+  }
+
+  // 8. Reserve turn synchronously (no await between readiness check and this call).
   ctx.reserveTurn(sessionId);
   // IncomingMessage.close also fires after the POST body is consumed; only the
   // response's premature close means the waiting browser command went away.
@@ -104,18 +120,6 @@ export async function handleCommand(
   res.on?.('close', onDisconnect);
 
   try {
-    // Ensure registry is initialized (idempotent memo).
-    await ensureSlashRegistry();
-
-    // Wait for session to be ready (poll up to 2s).
-    if (ctx.getSession && !(await waitForSessionReady(ctx, sessionId))) {
-      sendJson(res, 503, {
-        error: 'session_not_ready',
-        message: 'session is not yet ready — retry in a moment',
-      });
-      return;
-    }
-
     // Look up command in registry.
     const parsed = parse(input);
     if (!parsed) {
@@ -125,11 +129,13 @@ export async function handleCommand(
 
     const cmd = lookup(parsed.name);
     if (!cmd) {
-      const suggestion = suggest(parsed.name) ?? undefined;
+      const safeName = parsed.name.slice(0, 64);
+      const rawSuggestion = suggest(parsed.name) ?? undefined;
+      const safeSuggestion = rawSuggestion?.slice(0, 64);
       sendJson(res, 404, {
         error: 'unknown_command',
-        message: `unknown command: ${parsed.name}`,
-        ...(suggestion ? { suggestion } : {}),
+        message: `unknown command: ${safeName}`,
+        ...(safeSuggestion ? { suggestion: safeSuggestion } : {}),
       });
       return;
     }
@@ -178,16 +184,34 @@ export async function handleCommand(
 
     // The owner wraps canonical handlers with persistent accounting and a
     // provider-backed fast controller. This route alone owns the reservation.
+    // Execute handler — bounded to 15 s to prevent runaway commands from
+    // holding the turn reservation open indefinitely.
+    const HANDLER_TIMEOUT_MS = 15_000;
     const execution = ctx.executeSessionControl
-      ? await ctx.executeSessionControl(sessionId, cmd, slashCtx, parsed.args ?? '')
-      : { result: await cmd.handler(slashCtx, parsed.args ?? '') };
+      ? await Promise.race([
+          ctx.executeSessionControl(sessionId, cmd, slashCtx, parsed.args ?? ''),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('command_timeout')), HANDLER_TIMEOUT_MS),
+          ),
+        ])
+      : { result: await Promise.race([
+          cmd.handler(slashCtx, parsed.args ?? ''),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('command_timeout')), HANDLER_TIMEOUT_MS),
+          ),
+        ]) };
     const blocks = writer.toOutputBlocks();
     const control = execution.control ?? normalizeSlashResult(execution.result);
 
     sendJson(res, 200, { blocks, control, ...(execution.session ? { session: execution.session } : {}) });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    sendJson(res, 500, { error: 'command_execution_failed', message });
+    if (err instanceof Error && err.message === 'command_timeout') {
+      console.error('[web] command handler timed out after 15000ms');
+      sendJson(res, 504, { error: 'command_timeout', message: 'Command execution timed out.' });
+    } else {
+      console.error('[web] command handler failed:', err);
+      sendJson(res, 500, { error: 'command_execution_failed', message: 'An internal error occurred while executing the command.' });
+    }
   } finally {
     res.off?.('close', onDisconnect);
     // Invariant: releaseTurn fires for ALL return paths inside the try block

@@ -192,7 +192,7 @@ export function Composer({
    * Returns true if the caller should clear the composer text (normal case),
    * false when the control itself manages the text (e.g. prefill).
    */
-  const submitCommand = useCallback(async (input: string): Promise<boolean> => {
+  const submitCommand = useCallback(async (input: string, depth = 0): Promise<boolean> => {
     const lifetime = lifetimeRef.current;
     onCommandStart?.(input);
 
@@ -205,7 +205,7 @@ export function Composer({
     if (!lifetime.active) return false;
     onCommandOutput?.(input, response);
     if (response.session?.model) onModelSelect?.(response.session.model);
-    return handleControl(response.control, input);
+    return handleControl(response.control, input, depth);
   }, [sessionId, onCommandStart, onCommandOutput, onModelSelect, handleControl]);
 
   const selectModel = useCallback(async (modelId: string) => {
@@ -232,17 +232,25 @@ export function Composer({
         const cmd = findCommand(cmds, token);
 
         if (cmd?.kind === 'skill') {
-          // Skill commands always go to /prompt
-          await submitPrompt(trimmed);
-
+          // Skill commands go to /prompt; when a turn is in flight, enqueue
+          // instead of submitting immediately (mirrors the Enter handler).
+          if (isBusy && queue) {
+            queue.enqueue(trimmed);
+          } else {
+            await submitPrompt(trimmed);
+          }
           setText('');
           return;
         }
 
         if (cmd?.kind === 'native' && cmd.web === 'gated') {
-          // Show gate reason locally — no network call
-          onToast?.(cmd.gateReason ?? `${normaliseName(cmd.name)} is not available on the web surface`);
-
+          // Show gate reason locally — no network call.
+          const reason = cmd.gateReason ?? `${normaliseName(cmd.name)} is not available on the web surface`;
+          if (onToast) {
+            onToast(reason);
+          } else {
+            console.warn('[composer] gated command dismissed:', reason);
+          }
           return;
         }
 
