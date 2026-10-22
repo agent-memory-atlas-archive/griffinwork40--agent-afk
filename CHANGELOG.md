@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.331.0] - 2026-10-22
+
 ### Added
 - web/CLI parity Stages 1-5: cross-surface slash commands, choices, lifecycle (/fork, /resume, /exit), structured /diff, session controls (#4295) (6a7043d2a)
 - /rewind conversation|files|both with cross-turn file restore (#4286) (2fd716087)
