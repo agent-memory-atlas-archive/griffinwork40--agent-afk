@@ -46,7 +46,7 @@ function ApprovalCard({
       await answerApproval({ requestId: id, response: { action, content } });
       // Invariant: return focus only after the approval write succeeds.
       onAnswered();
-      document.querySelector<HTMLTextAreaElement>('textarea[placeholder^="Send a message"]')?.focus();
+      document.querySelector<HTMLTextAreaElement>('[data-testid="composer-textarea"]')?.focus();
     } catch {
       setError('Failed to submit — try again');
     } finally {

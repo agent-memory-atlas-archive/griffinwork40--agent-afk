@@ -138,7 +138,7 @@ describe('ApprovalCards — text type', () => {
 
 describe('approval accessibility', () => {
   it('announces approvals, accepts Y while focused, and restores composer focus after persistence', async () => {
-    render(<><textarea placeholder="Send a message… (/ for commands)" /><ApprovalCards approvals={[makeApproval()]} /></>);
+    render(<><textarea data-testid="composer-textarea" placeholder="Running… (Esc or ⌘. to stop, Enter to queue)" /><ApprovalCards approvals={[makeApproval()]} /></>);
     expect(screen.getByRole('status')).toHaveTextContent('Approval required: Test approval');
     const card = screen.getByRole('dialog', { name: 'Test approval' });
     card.focus();
