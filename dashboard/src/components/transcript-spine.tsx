@@ -21,7 +21,7 @@ import type { SpineNode } from '@/lib/topology-types';
 const EXECUTION_KINDS = new Set(['tool', 'subagent', 'notice']);
 
 // Items that are prose/text (rendered individually)
-const TEXT_KINDS = new Set(['user', 'assistant', 'thinking', 'error', 'bg_job']);
+const TEXT_KINDS = new Set(['user', 'assistant', 'thinking', 'error', 'stopped', 'bg_job']);
 
 /**
  * A rendered slot is either a single text item or a group of execution
@@ -44,7 +44,11 @@ export function groupIntoSpineSlots(items: TranscriptItem[]): SpineSlot[] {
     const item = items[i];
     if (item === undefined) { i++; continue; }
 
-    if (TEXT_KINDS.has(item.kind)) {
+    // Invariant: every iteration consumes at least one item. A kind in
+    // neither set (e.g. a new ledger kind) renders as text rather than
+    // looping forever on an empty execution run — that froze the tab when
+    // `stopped` was added without being listed here.
+    if (TEXT_KINDS.has(item.kind) || !EXECUTION_KINDS.has(item.kind)) {
       slots.push({ kind: 'text', item });
       i++;
       continue;
