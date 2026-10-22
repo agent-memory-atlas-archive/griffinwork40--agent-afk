@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.330.0] - 2026-10-22
+
 ### Added
 - emphasise and colour bash command words in the REPL tool lane (#4275) (4ff66f8d9)
 - Stage 0 of web/CLI parity: run native slash commands in afk web (#4246) (12e9e6e58)
