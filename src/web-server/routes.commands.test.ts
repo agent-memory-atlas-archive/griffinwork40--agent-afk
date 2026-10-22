@@ -210,6 +210,25 @@ describe('handleCommand', () => {
     expect((json().body as { error: string }).error).toBe('command_execution_failed');
   });
 
+  it('504 with command_timeout error shape when handler exceeds timeout', async () => {
+    vi.useFakeTimers();
+    // Handler never resolves — simulates a runaway command.
+    FAKE_CMD.handler = vi.fn().mockReturnValue(new Promise<never>(() => {}));
+    const ctx = makeCtx();
+    const { res, json } = makeRes();
+    const promise = handleCommand(ctx, res, SESSION_ID, { input: '/help' });
+    // Advance past the 15 s handler timeout.
+    await vi.advanceTimersByTimeAsync(15_001);
+    await promise;
+    expect(json().status).toBe(504);
+    const body = json().body as { error: string; message: string };
+    expect(body.error).toBe('command_timeout');
+    expect(typeof body.message).toBe('string');
+    // releaseTurn must still fire (finally block).
+    expect(ctx.releaseTurn).toHaveBeenCalledWith(SESSION_ID);
+    vi.useRealTimers();
+  });
+
   it('always calls releaseTurn even when handler throws', async () => {
     FAKE_CMD.handler = vi.fn().mockRejectedValue(new Error('boom'));
     const ctx = makeCtx();
