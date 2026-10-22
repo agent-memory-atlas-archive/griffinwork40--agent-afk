@@ -312,8 +312,13 @@ export function detectNeedsInput(
 ): SubagentResult['needsInput'] | undefined {
   const ts = parseTerminalState(content);
   if (ts?.kind !== 'asking') return undefined;
+  // SEC-2: require a parsed Question bullet. rawBody is child-controlled free
+  // text (~8 KB) that would be injected into the parent's tool_result as an
+  // authoritative question. Treat a missing Question bullet as a malformed
+  // yield — return undefined so the caller sees no yield (#4297).
+  if (ts.question === undefined) return undefined;
   return {
-    question: ts.question ?? ts.rawBody,
+    question: ts.question,
     ...(ts.assumption !== undefined && { assumption: ts.assumption }),
     ...(ts.followup !== undefined && { onceAnswered: ts.followup }),
   };
@@ -339,9 +344,16 @@ export function buildResultFromMessage<T>(
 
   // Detect Asking terminal state before schema validation: a yielding child
   // cannot satisfy an outputSchema, so skip validation when needsInput is set.
+  // Invariant: extract text blocks rather than JSON.stringify — parseTerminalState
+  // splits on '\n', and JSON.stringify produces single-line JSON that collapses
+  // every block into one line, silently breaking detection for extended-thinking
+  // models whose content is ContentBlock[] (#4297 SEC-1/F-C3).
   const contentStr = typeof message.content === 'string'
     ? message.content
-    : JSON.stringify(message.content);
+    : (message.content as Array<{ type: string; text?: string }>)
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text ?? '')
+        .join('\n');
   const needsInput = detectNeedsInput(contentStr);
 
   if (!outputSchema || needsInput !== undefined) {

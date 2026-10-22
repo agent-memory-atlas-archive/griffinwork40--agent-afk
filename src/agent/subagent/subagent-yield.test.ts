@@ -74,16 +74,29 @@ describe('buildResultFromMessage needsInput detection', () => {
     expect(result.status).not.toBe('failed');
   });
 
-  it('populates question from rawBody when Question bullet is absent', () => {
+  it('returns undefined needsInput when Question bullet is absent (SEC-2)', () => {
     const msg = makeMessage(
       'Summary of work.\n\n' +
       '**Asking**\n' +
       'Should I use TypeScript strict mode?\n',
     );
     const result = buildResultFromMessage('child-5', 'succeeded', msg, undefined);
+    // SEC-2: missing Question bullet is a malformed yield — rawBody must not
+    // be injected as an authoritative question into the parent tool_result.
+    expect(result.needsInput).toBeUndefined();
+  });
+
+  it('detects needsInput from ContentBlock[] content (F-T1)', () => {
+    const blocks = [
+      { type: 'thinking', thinking: 'reasoning about the question...' },
+      { type: 'text', text: 'I did some work.\n\n**Asking**\n- Question: What database should I use?\n- Assumption it resolves: The persistence layer choice\n- Once answered: I will implement the schema\n' },
+    ];
+    const msg: Message = { role: 'assistant', content: blocks as never, timestamp: new Date() };
+    const result = buildResultFromMessage('child-6', 'succeeded', msg, undefined);
     expect(result.needsInput).toBeDefined();
-    // Falls back to rawBody when the Question bullet is missing
-    expect(result.needsInput?.question).toBeTruthy();
+    expect(result.needsInput?.question).toBe('What database should I use?');
+    expect(result.needsInput?.assumption).toContain('persistence layer');
+    expect(result.needsInput?.onceAnswered).toContain('implement the schema');
   });
 });
 

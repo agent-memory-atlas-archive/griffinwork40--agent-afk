@@ -1,6 +1,8 @@
 /** Synchronous phases of the foreground run; all inputs and lifetime state are explicit. */
 import type { RunForegroundArgs, PromotedSubagentInfo } from './foreground-promotion.js';
 import type { ToolResult } from '../types.js';
+import type { SubagentResult } from '../../subagent/result.js';
+import type { ContinuationResultFields } from './continuation-dispatch.js';
 import type { QueuedNoteClaim } from './queued-note.js';
 import { annotateIfIncomplete, incompleteToolResultFields } from '../../subagent/result.js';
 import { emitTelemetry, truncate, boundedStopReason, measurePartial, buildFailurePayload } from './failure-payload.js';
@@ -160,31 +162,14 @@ export function foregroundCompletionResult(
     );
     const { content: cappedContent, capped: wasCapped } = capSubagentResult(assembled, parentSessionId, handle.id);
 
-    // When the child yielded an Asking block, prepend a structured header so
-    // the parent model can recognise the needs_input result without substring
-    // matching, and knows how to resume (chain or fresh re-dispatch).
-    let finalContent = cappedContent;
-    if (result.needsInput !== undefined) {
-      const ni = result.needsInput;
-      const chainLine = result.continuation?.chainId
-        ? `Chain ID (pass as continuation_chain_id to resume): ${result.continuation.chainId}`
-        : 'No chain ID available — re-dispatch a fresh agent with the child\'s summary and your answer.';
-      finalContent =
-        `[needs_input] This child yielded a question to you instead of completing.\n\n` +
-        `Question: ${ni.question}\n` +
-        (ni.assumption !== undefined ? `Assumption it resolves: ${ni.assumption}\n` : '') +
-        (ni.onceAnswered !== undefined ? `Once answered: ${ni.onceAnswered}\n` : '') +
-        `\n${chainLine}\n\n` +
-        `To answer, dispatch a new \`agent\` call with \`continuation_chain_id\` set to the chain id above and ` +
-        `include your answer as the prompt. If no chain id is shown, re-dispatch a fresh agent with the ` +
-        `child's summary and your answer as the prompt.\n\n---\n${cappedContent}`;
-    }
-
-    const toolResult: ToolResult = {
-      content: finalContent,
+    const toolResult: ToolResult & { _needsInput?: SubagentResult['needsInput'] } = {
+      content: cappedContent,
       ...incompleteToolResultFields(result.stopReason),
       ...(wasCapped ? { truncated: true } : {}),
     };
+    // Stash needsInput so prependNeedsInputHeader (called AFTER annotateChainResult
+    // stamps continuation) can read it (#4297 F-C1).
+    if (result.needsInput !== undefined) toolResult._needsInput = result.needsInput;
     return toolResult;
   }
 
@@ -265,4 +250,30 @@ export function adoptForegroundRun(
     // Invariant: budget release belongs to registry settlement, never the foreground return.
     ...(budgetRelease !== undefined ? { onSettled: budgetRelease } : {}),
   });
+}
+
+/**
+ * Prepend a structured `[needs_input]` header to a foreground tool result whose
+ * child yielded an Asking block. Called AFTER `annotateChainResult` has stamped
+ * `result.continuation`, so the chain ID is always available when one exists
+ * (#4297 F-C1). No-op when the child did not yield.
+ */
+export function prependNeedsInputHeader(
+  result: ToolResult & ContinuationResultFields & { _needsInput?: SubagentResult['needsInput'] },
+): void {
+  const ni = result._needsInput;
+  if (ni === undefined) return;
+  delete result._needsInput;
+  const chainLine = result.continuation?.chainId
+    ? `Chain ID (pass as continuation_chain_id to resume): ${result.continuation.chainId}`
+    : 'No chain ID available — re-dispatch a fresh agent with the child\'s summary and your answer.';
+  result.content =
+    `[needs_input] This child yielded a question to you instead of completing.\n\n` +
+    `Question: ${ni.question}\n` +
+    (ni.assumption !== undefined ? `Assumption it resolves: ${ni.assumption}\n` : '') +
+    (ni.onceAnswered !== undefined ? `Once answered: ${ni.onceAnswered}\n` : '') +
+    `\n${chainLine}\n\n` +
+    `To answer, dispatch a new \`agent\` call with \`continuation_chain_id\` set to the chain id above and ` +
+    `include your answer as the prompt. If no chain id is shown, re-dispatch a fresh agent with the ` +
+    `child's summary and your answer as the prompt.\n\n---\n${result.content}`;
 }
