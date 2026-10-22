@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, SquarePen } from 'lucide-react';
 import { Sidebar } from './components/sidebar';
 import { getNavItem } from './lib/nav-registry';
 import { CommandPalette } from './components/command-palette';
@@ -310,6 +310,12 @@ function Dashboard() {
             )}
           </div>
           <div className="flex shrink-0 items-center gap-3">
+            {/* Phones: one-tap new chat (the sidebar button lives in the closed drawer). */}
+            <button type="button" onClick={() => void handleNewSession()} disabled={starting}
+              title="New chat" aria-label="New chat"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50 md:hidden">
+              <SquarePen className="h-4 w-4" />
+            </button>
             {activeNav === 'sessions' && selectedSession && (
               <SessionMeter totals={totals} className="hidden lg:flex" />
             )}
