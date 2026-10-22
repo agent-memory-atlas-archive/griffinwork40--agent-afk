@@ -77,7 +77,7 @@ function Dashboard() {
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
   useEffect(() => {
     if (isPinned) scrollToBottom();
-  }, [items.length, cmdItems.length, isPinned, scrollToBottom]);
+  }, [items, cmdItems.length, isPinned, scrollToBottom]);
 
   const handleNavigate = (nav: string) => {
     if (!getNavItem(nav)) return;
@@ -156,10 +156,11 @@ function Dashboard() {
     try {
       const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) });
       setSelectedSessionId(result.session.id);
+      await refreshSessions(); // the composer needs the new row; do not wait for the 5 s poll
     } catch {
       // best-effort
     }
-  }, [selectedModel]);
+  }, [selectedModel, refreshSessions]);
 
   // Abort controller ref: abort in-flight POSTs when the session changes.
   const abortRef = useRef<AbortController | null>(null);

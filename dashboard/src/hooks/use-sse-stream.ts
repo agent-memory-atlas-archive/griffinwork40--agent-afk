@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { getToken } from '@/lib/api';
+import { isLivePayload, type LiveClientEvent } from '@/types/live-wire';
 
 export type StreamStatus = 'connecting' | 'open' | 'reconnecting' | 'closed' | 'ended';
 
@@ -83,11 +84,16 @@ export function useSseStream(
   sessionId: string | null,
   revision = 0,
   onReset?: () => void,
+  onLive?: (event: LiveClientEvent) => void,
 ): UseSseStreamResult {
   const streamKey = `${sessionId ?? ''}:${revision}`;
   const [snapshot, setSnapshot] = useState<{ key: string; events: unknown[]; generation: number }>({ key: streamKey, events: [], generation: 0 });
   const onResetRef = useRef(onReset);
   onResetRef.current = onReset;
+  // Invariant: live_* frames go ONLY to onLive, never into `events` — they
+  // arrive at token rate and `events` is append-only for the session.
+  const onLiveRef = useRef(onLive);
+  onLiveRef.current = onLive;
   const [status, setStatus] = useState<StreamStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
 
@@ -128,6 +134,7 @@ export function useSseStream(
       // currently pending choices to the new subscriber after attachment.
       if (attemptRef.current > 0) {
         setSnapshot((prev) => ({ ...prev, events: [...prev.events, { type: 'choice_stream_boundary' }] }));
+        onLiveRef.current?.({ type: 'live_reset' });
       }
 
       let ended = false;
@@ -182,6 +189,14 @@ export function useSseStream(
           buffer += decoder.decode(value, { stream: true });
           const { events: frames, remainder } = parseSseChunk(buffer);
           buffer = remainder;
+          // One state update per network chunk, not per frame.
+          let appended: unknown[] = [];
+          const flushAppended = (): void => {
+            if (appended.length === 0) return;
+            const batch = appended;
+            appended = [];
+            setSnapshot((prev) => ({ ...prev, key: streamKey, events: [...prev.events, ...batch] }));
+          };
 
           for (const frame of frames) {
             if (frame.id !== undefined) lastEventIdRef.current = frame.id;
@@ -197,6 +212,7 @@ export function useSseStream(
             // Invariant: the terminal frame is consumed here and NOT forwarded
             // to callers, matching the behaviour in the original sse-client.ts.
             if (isSseEndFrame(payload)) {
+              flushAppended();
               ended = true;
               stopped = true;
               break outer;
@@ -206,12 +222,19 @@ export function useSseStream(
                 (payload as { reset?: unknown }).reset === true) {
               // Reset is nonterminal; IDs are opaque and generation-qualified.
               lastEventIdRef.current = frame.id;
+              appended = [];
               onResetRef.current?.();
+              onLiveRef.current?.({ type: 'live_reset' });
               setSnapshot((prev) => ({ key: streamKey, events: [], generation: prev.generation + 1 }));
               continue;
             }
-            setSnapshot((prev) => ({ ...prev, key: streamKey, events: [...prev.events, payload] }));
+            if (isLivePayload(payload)) {
+              onLiveRef.current?.(payload);
+              continue;
+            }
+            appended.push(payload);
           }
+          flushAppended();
         }
       } catch (err) {
         // Ignore AbortError (from stop/cleanup) — fall through to reconnect.

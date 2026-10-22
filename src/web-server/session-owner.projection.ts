@@ -4,7 +4,7 @@
 import { getSessionJournalPath } from '../paths.js';
 import { hydrateMessages, loadDisplayMessages, loadJournalFold } from '../agent/journal/index.js';
 import { hasToolResultBlock, messageText } from '../agent/content/user-authored.js';
-import { clip, MAX_TEXT_LEN, MAX_TOOL_INPUT_LEN } from '../agent/session-ledger-project.js';
+import { clip, MAX_ASSISTANT_TEXT_LEN, MAX_TEXT_LEN, MAX_TOOL_INPUT_LEN } from '../agent/session-ledger-project.js';
 import type { AgentSession } from '../agent/session/agent-session.js';
 import type { JournalMessage } from '../agent/journal/index.js';
 import type { LedgerPayload } from '../agent/session-ledger.js';
@@ -37,7 +37,7 @@ export function projectJournalMessages(messages: readonly JournalMessage[]): Led
     for (const block of message.content) {
       switch (block.type) {
         case 'text':
-          if (message.role === 'assistant') records.push({ kind: 'assistant', text: clip(block.text, MAX_TEXT_LEN) });
+          if (message.role === 'assistant') records.push({ kind: 'assistant', text: clip(block.text, MAX_ASSISTANT_TEXT_LEN) });
           break;
         case 'thinking':
           records.push({ kind: 'thinking', text: clip(block.thinking, MAX_TEXT_LEN) });

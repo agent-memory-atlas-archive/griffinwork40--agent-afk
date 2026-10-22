@@ -6,6 +6,8 @@ import { header, requireValidSessionId, SECURITY_HEADERS } from './routes.js';
 import { errorMessage } from '../utils/errors.js';
 import type { ChoiceBroker } from './choice-broker.js';
 import type { ChoiceSsePayload } from './shared/choice-wire.js';
+import type { LiveBroker } from './live-broker.js';
+import type { LiveSsePayload } from './shared/live-wire.js';
 
 const HEARTBEAT_MS = 15_000;
 
@@ -20,6 +22,7 @@ export async function handleStream(
   sessionId: string,
   streams?: Set<AbortController>,
   choices?: ChoiceBroker,
+  live?: LiveBroker,
 ): Promise<void> {
   if (!requireValidSessionId(res, sessionId)) return;
   res.writeHead(200, {
@@ -47,6 +50,20 @@ export async function handleStream(
     if (!closed) res.write(formatSseFrame({ data: event }));
   };
   const unsubscribe = choices?.subscribe(sessionId, writeChoice);
+  // Invariant: live text frames are id-less and held back until the durable
+  // replay has caught up, then a snapshot of the OPEN segments is written.
+  // Sending them earlier would let replayed older-turn `assistant{seg}`
+  // records match (and replace) the current turn's drafts. Sealed segments
+  // need no live copy: their durable records are already in the ledger tail.
+  let liveReady = false;
+  const writeLive = (event: LiveSsePayload): void => {
+    if (!closed && liveReady) res.write(formatSseFrame({ data: event }));
+  };
+  const writeLiveSnapshot = (): void => {
+    if (!live) return;
+    for (const frame of live.snapshot(sessionId)) writeLive(frame);
+  };
+  const unsubscribeLive = live?.subscribe(sessionId, writeLive);
   const heartbeat = setInterval(() => {
     if (!closed) res.write(': ping\n\n');
   }, HEARTBEAT_MS);
@@ -57,6 +74,7 @@ export async function handleStream(
     controller.abort();
     streams?.delete(controller);
     unsubscribe?.();
+    unsubscribeLive?.();
     res.end();
   };
   req.on('close', finish);
@@ -65,7 +83,11 @@ export async function handleStream(
     for await (const record of tailLedger(sessionId, {
       fromStart: true,
       signal: controller.signal,
-      onCaughtUp: () => { replay = false; },
+      onCaughtUp: () => {
+        replay = false;
+        liveReady = true;
+        writeLiveSnapshot();
+      },
       onGeneration: (next) => {
         const changed = generation !== undefined;
         const staleCursor = cursorGeneration !== undefined && cursorGeneration !== next;
@@ -74,6 +96,8 @@ export async function handleStream(
           // Subscription must precede replay to avoid losing live requests,
           // but its initial snapshot may now have been erased by this reset.
           choices?.replayPending(sessionId, writeChoice);
+          // The client dropped its drafts on reset; rebuild open segments.
+          writeLiveSnapshot();
         }
         generation = next;
         position = 0;
