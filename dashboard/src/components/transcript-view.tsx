@@ -2,7 +2,7 @@ import { useMemo, useCallback } from 'react';
 import { ThinkingPanel } from './thinking-panel';
 import { ToolCallCard } from './tool-call-card';
 import { SubagentTree } from './subagent-card';
-import { SessionMeter } from './session-meter';
+import type { SessionTotals } from './session-meter';
 import { buildTree } from '@/hooks/use-subagent-tree';
 import { SpineTranscript, useSpineSlots } from './transcript-spine';
 import {
@@ -15,9 +15,9 @@ import {
 } from './message-row';
 import type { TranscriptItem } from '@/lib/ledger-adapter';
 import type { ThinkingUiMode } from '@/types/command-wire';
-import type { SessionTotals } from './session-meter';
 import { TranscriptSessionContext } from '@/hooks/use-full-tool-result';
 import { liveStateOf } from '@/hooks/use-live-drafts';
+import { WorkingIndicator } from './working-indicator';
 
 interface TranscriptViewProps {
   items: TranscriptItem[];
@@ -154,7 +154,7 @@ export function TranscriptView({ sessionId, ...rest }: TranscriptViewProps) {
   );
 }
 
-function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false, onRetry, onEdit, isBusy, rewindIds }: Omit<TranscriptViewProps, 'sessionId'>) {
+function TranscriptBody({ items, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false, onRetry, onEdit, isBusy, rewindIds }: Omit<TranscriptViewProps, 'sessionId' | 'totals'>) {
   const ownIds = useMemo(() => newestRewindIds(items), [items]);
   const targets = rewindIds ?? ownIds;
   const optsFor = useCallback((item: TranscriptItem, isStreaming: boolean): RenderItemOpts => ({
@@ -186,14 +186,19 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
     [optsFor],
   );
 
+  // Determine if a working indicator should show. Show when:
+  // 1. The turn is active (agent running)
+  // 2. There are no live drafts yet (no streaming text for this turn)
+  // The last item in the visible list tells us what just happened.
+  const lastItem = visibleItems[visibleItems.length - 1];
+  const hasDraft = visibleItems.some((i) => liveStateOf(i) === 'streaming');
+  // Show "Writing…" after a tool group completed but before text arrives.
+  const lastWasTool = lastItem?.kind === 'tool' || lastItem?.kind === 'notice';
+  const workingPhase = lastWasTool ? 'writing' : 'thinking';
+  const showWorking = turnActive && !hasDraft;
+
   return (
     <div role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text" aria-busy={turnActive} className="flex flex-col gap-0 max-w-4xl mx-auto w-full [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-ring [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-ring">
-      {totals && (
-        <SessionMeter
-          totals={totals}
-          className="sticky top-0 z-10 mb-4 rounded-md border border-border bg-card px-3 py-1.5"
-        />
-      )}
       {items.length === 0 && hideEmptyState ? null : items.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
           No transcript items yet.
@@ -224,6 +229,11 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
             </div>
           );
         })
+      )}
+      {showWorking && (
+        <div className="py-2 px-1" data-testid="working-indicator">
+          <WorkingIndicator phase={workingPhase} />
+        </div>
       )}
     </div>
   );
