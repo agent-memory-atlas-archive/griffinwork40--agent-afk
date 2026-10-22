@@ -145,7 +145,8 @@ Renderer tests cover all kinds, unknown fallback, safety and clipboard behavior.
 |---|---|
 | `continue` | no-op |
 | `clear` | clear queue and replace command outputs with the confirmation; the nonterminal SSE reset clears the transcript on the existing connection |
-| `exit` | show inline notice (no effect on web in Stage 0) |
+| `exit` | show inline notice; dashboard calls `onSessionEnded` which deselects the session (no tab close) |
+| `navigate` | select the target session id in the dashboard (returned by `/fork` and `/resume <id>`) |
 | `forward` | re-POST original input to `/prompt` |
 | `rerun` | re-POST `control.input` to `/commands` |
 | `submit` | submit `control.message` as a new prompt |
@@ -177,6 +178,38 @@ side-car to `session-owner.ts`. Stats are initialized when a session is created 
 after each turn drains in `session-owner.autosave.ts`. This allows slash handlers that read
 `ctx.stats` (e.g. `/cost`, `/tokens`) to return accurate data without coupling the route to
 the autosave internals.
+
+## Stage 4: session lifecycle control
+
+`/fork`, `/resume`, and `/exit` (alias `/quit`) are now native web commands, handled by
+`src/web-server/session-owner.lifecycle.ts`. All three run inside the command route's
+`reserveTurn`/`releaseTurn` bracket.
+
+**`/fork`** — calls `forkStoredSession` (same helper the REPL uses) to write a sidecar fork,
+copies the message journal, then calls `SessionOwner.create()` with a resume config built from
+the fork sidecar. Returns `{ kind: 'navigate', sessionId }` pointing at the new session.
+Dashboard selects it. Clipboard and terminal-spawn paths are replaced by navigate; no
+`navigator.clipboard` is needed.
+
+**`/resume`** (no arg) — emits a structured `list` block of saved sessions via the Stage 2
+block helpers. Returns `continue`.
+
+**`/resume <id-or-name>`** — finds the stored session, guards against resuming the live session
+(same SDK-id check as the REPL), then calls `SessionOwner.create()` with `resumeConfigFor()`.
+Returns `{ kind: 'navigate', sessionId }`.
+
+**`/exit` / `/quit`** — persists the sidecar with `closeTime: true, exitReason: 'exit-command'`
+and returns `{ kind: 'exit' }`. Dashboard shows an inline notice and deselects the session.
+The session object stays in the owner map until the next server restart so in-flight SSE tails
+can drain.
+
+**Resume button** — `SessionCard` renders a hover-reveal "Resume" button for `mode === 'readonly'`
+sessions. Clicking it calls `handleResumeFromSidebar` in `app.tsx`, which issues
+`/resume <id>` through a live session and navigates to the result.
+
+**`useCommandControl` hook** — `composer.tsx` delegates all `CommandControl` dispatch to the
+`dashboard/src/hooks/use-command-control.ts` hook, which handles `navigate` and `exit` in
+addition to the existing kinds.
 
 ## Known limitations after Stage 2
 

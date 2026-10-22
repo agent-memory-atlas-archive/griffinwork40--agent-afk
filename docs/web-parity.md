@@ -41,7 +41,7 @@ Telegram adoption were added in Stage 1.
 | /todo | portable | TEXT | S0 + UX | todo panel above composer |
 | /goal | portable | TEXT | S0 + UX | goal chip in session header |
 | /name | portable | DONE | S1 | canonical rename updates sidebar and session title |
-| /fork | portable | GATED | S4 | new owned session + navigate; browser clipboard |
+| /fork | portable | DONE | S4 | creates new owned session + navigate control; dashboard selects the fork |
 | /changelog | portable | TEXT | S0 | text |
 | /bgsub, /bgsub:status, /bgsub:join, /bgsub:cancel | portable | TEXT | S0 + UX | jobs view (cancel route deferred) |
 | /tasks | partial | TEXT | S0 (list) → UX | subagent tree already in transcript; list as text |
@@ -66,7 +66,7 @@ Telegram adoption were added in Stage 1.
 | /export | portable | TEXT | S0 | download link (md/html) |
 | /handoffs, /handoffs:answer | portable | TEXT | DONE (view) | handoffs view exists; command form S0 |
 | /keys | portable | GATED | UX | web keyboard-shortcut sheet (?) |
-| /exit, /quit | session-control | GATED | S4 | close session tab |
+| /exit, /quit | session-control | DONE | S4 | marks session ended (sidecar closeTime); dashboard shows inline notice, deselects session |
 | /clear | session-control | DONE | S1 | resets conversation and command outputs across tabs; retains confirmation |
 | /compact | session-control | DONE | S1 → S3 | canonical compaction with buffered progress; live progress deferred |
 | /plan | session-control | GATED | S1 | mode toggle in composer; requires session-control service |
@@ -76,7 +76,7 @@ Telegram adoption were added in Stage 1.
 | /theme | session-control | GATED | UX | dashboard light/dark/auto theme |
 | /retry | session-control | GATED | S1 | retry action on last message; requires session-control service |
 | /model | partial | DONE (arg/read) | S1 → S3 (picker) | authoritative selector/header/sidebar updates; bare command lists aliases |
-| /resume | partial | GATED | S3 / S4 | picker, not a plain listing; intentionally not migrated in S2 |
+| /resume | partial | DONE | S4 | bare: structured list block; /resume <id>: creates owned resumed session + navigate; Resume button on sidebar cards |
 | /transcript | partial | TEXT | S0 | text; transcript view already exists |
 | /afk-md | partial | TEXT | S0 (show/reload/add) | `user`/`project` edit subcommands → UX editor |
 | /config | partial | TEXT | S1 (view/set) → UX | editable settings view |
@@ -107,7 +107,7 @@ Skill commands (plugin, user, builtin, marketplace): **DONE** via `classifySlash
 | Status line (model, context %, cost, mode, quota) | PARTIAL | UX | session header meter |
 | Model selector | DONE | S1 | create and authoritative mid-session switching |
 | Peer inbox delivery / idle wake | N/A | | REPL-owned sessions; web sessions read peers via panel |
-| Resume / continue a stored session | MISSING | S4 | |
+| Resume / continue a stored session | DONE | S4 | /resume <id> or sidebar Resume button; creates a new live session from stored sidecar |
 | Retry / edit a sent message | MISSING | S1 / S3 | |
 | Message timestamps | MISSING | UX | |
 | Terminal title, worktree exit picker | N/A | | tab title per session; worktree panel |
