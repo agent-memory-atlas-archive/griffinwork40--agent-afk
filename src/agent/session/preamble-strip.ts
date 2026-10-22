@@ -157,3 +157,12 @@ export function extractUserContent(text: string): string | undefined {
   if (!result || /^\s*\[[\w-]+[:\s]/.test(result)) return undefined;
   return result;
 }
+
+/**
+ * What the user typed in a history message: the text minus any framework
+ * preamble drained in front of it, or the text unchanged when it has none or
+ * nothing user-authored survives the strip.
+ */
+export function stripPreamble(text: string): string {
+  return isPreamble(text) ? (extractUserContent(text) ?? text) : text;
+}
