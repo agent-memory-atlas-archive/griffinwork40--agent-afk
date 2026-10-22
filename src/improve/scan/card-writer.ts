@@ -10,8 +10,14 @@
  *
  * ## Merge semantics (load-bearing — tested)
  *
- *   - `firstSeen` = MIN of existing and new observations.
- *   - `lastSeen`  = MAX of existing and new observations.
+ *   - `firstSeen` = MIN of existing and new observations, **only when new evidence is added**.
+ *                   On a merged-noop (evidence cap saturated or duplicate re-detection),
+ *                   `firstSeen` is preserved from disk.
+ *   - `lastSeen`  = MAX of existing and new observations, **only when new evidence is added**.
+ *                   On a merged-noop, `lastSeen` is preserved so regression detection is
+ *                   not triggered by re-detection alone.
+ *   - `sightingCount` = total merge calls (including merged-noops). Tracks recurrence
+ *                   independently of the evidence cap.
  *   - `evidence`  = union, deduped by `(sessionId, eventIndices[0])`.
  *   - `occurrenceCount` = length of merged evidence.
  *   - `notes`     = preserved verbatim from disk. The writer never touches
@@ -159,6 +165,7 @@ export function mergeCard(
       firstSeen: detection.observedAt,
       lastSeen: detection.observedAt,
       occurrenceCount: detection.evidence.length,
+      sightingCount: 1,
       evidence: detection.evidence,
       detail: detection.detail,
       notes: [],
@@ -200,6 +207,7 @@ export function mergeCard(
     firstSeen,
     lastSeen,
     occurrenceCount: mergedEvidence.length,
+    sightingCount: (existing.sightingCount ?? 0) + 1,
     evidence: mergedEvidence,
     detail: detection.detail, // replaced; see module JSDoc
     notes: existing.notes, // preserved verbatim

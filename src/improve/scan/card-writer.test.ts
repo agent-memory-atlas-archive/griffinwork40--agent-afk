@@ -228,6 +228,36 @@ describe('mergeCard (pure)', () => {
     expect(noop.occurrenceCount).toBe(1);
   });
 
+  it('increments sightingCount on every merge call, including merged-noops at evidence cap', () => {
+    // Create: sightingCount must be 1.
+    const created = mergeCard(undefined, makeDetection({ observedAt: '2026-05-22T10:00:00.000Z' }));
+    expect(created.sightingCount).toBe(1);
+
+    // Merged-noop (identical evidence, later wall-clock): sightingCount increments,
+    // but lastSeen must NOT advance (the existing merged-noop test pins this).
+    const noop = mergeCard(created, makeDetection({ observedAt: '2026-05-29T12:00:00.000Z' }));
+    expect(noop.sightingCount).toBe(2);
+    expect(noop.lastSeen).toBe('2026-05-22T10:00:00.000Z'); // unchanged
+
+    // Genuine new evidence: sightingCount increments AND lastSeen advances.
+    const updated = mergeCard(
+      noop,
+      makeDetection({
+        observedAt: '2026-06-01T09:00:00.000Z',
+        evidence: [
+          {
+            sessionId: 'sess-C',
+            tracePath: 'state/witness/sess-C/trace.jsonl',
+            eventIndices: [30, 32],
+            excerpt: 'third sighting new evidence',
+          },
+        ],
+      }),
+    );
+    expect(updated.sightingCount).toBe(3);
+    expect(updated.lastSeen).toBe('2026-06-01T09:00:00.000Z');
+  });
+
   it('DOES advance lastSeen when the re-detection adds genuinely new evidence', () => {
     const first = mergeCard(undefined, makeDetection({ observedAt: '2026-05-22T10:00:00.000Z' }));
     const updated = mergeCard(
