@@ -431,6 +431,12 @@ export class SubagentManager {
         childController,
         ...this.parentForkFields(),
         workspaceStore: this.workspaceStore, ...(options.nestedAgentAllowlist !== undefined ? { nestedAgentAllowlist: options.nestedAgentAllowlist } : {}),
+        // Yield enabled for foreground non-compose dispatches. Compose/DAG nodes
+        // are guarded by the fail-fast in dag-subagent.dispatch.ts; background
+        // children are deferred to v2. isNonInteractive defaults to true for all
+        // forks (set in assembleChildConfig), so this flag is meaningful only
+        // when the child is actually non-interactive.
+        yieldEnabled: true,
       });
       childConfig = applyContinuationSeed(childConfig, options); // D8: no-op unless a continuation
 

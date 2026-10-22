@@ -159,8 +159,29 @@ export function foregroundCompletionResult(
       parentModel,
     );
     const { content: cappedContent, capped: wasCapped } = capSubagentResult(assembled, parentSessionId, handle.id);
+
+    // When the child yielded an Asking block, prepend a structured header so
+    // the parent model can recognise the needs_input result without substring
+    // matching, and knows how to resume (chain or fresh re-dispatch).
+    let finalContent = cappedContent;
+    if (result.needsInput !== undefined) {
+      const ni = result.needsInput;
+      const chainLine = result.continuation?.chainId
+        ? `Chain ID (pass as continuation_chain_id to resume): ${result.continuation.chainId}`
+        : 'No chain ID available — re-dispatch a fresh agent with the child\'s summary and your answer.';
+      finalContent =
+        `[needs_input] This child yielded a question to you instead of completing.\n\n` +
+        `Question: ${ni.question}\n` +
+        (ni.assumption !== undefined ? `Assumption it resolves: ${ni.assumption}\n` : '') +
+        (ni.onceAnswered !== undefined ? `Once answered: ${ni.onceAnswered}\n` : '') +
+        `\n${chainLine}\n\n` +
+        `To answer, dispatch a new \`agent\` call with \`continuation_chain_id\` set to the chain id above and ` +
+        `include your answer as the prompt. If no chain id is shown, re-dispatch a fresh agent with the ` +
+        `child's summary and your answer as the prompt.\n\n---\n${cappedContent}`;
+    }
+
     const toolResult: ToolResult = {
-      content: cappedContent,
+      content: finalContent,
       ...incompleteToolResultFields(result.stopReason),
       ...(wasCapped ? { truncated: true } : {}),
     };
