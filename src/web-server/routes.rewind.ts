@@ -17,6 +17,12 @@
  * rewindConversation and rebuilds the ledger projection), but chooses the
  * target turn programmatically so the browser needs no interactive picker.
  *
+ * Invariant: retry and edit are CONVERSATION-ONLY rewinds of the newest
+ * prompt. The /rewind handler (core.rewind.ts) is invoked with the forced
+ * `conversation` mode argument so it never shows the mode picker and never
+ * previews or restores files; the only `choose` it then issues is the target
+ * picker, answered with '0' (newest-first list → most recent prompt).
+ *
  * Invariant: we look up the /rewind SlashCommand by name from the core
  * commands registry at call time. If it is absent (renamed, gated) we 501.
  * The lookup is cheap — the list is small and always in memory.
@@ -29,7 +35,9 @@ import { sendJson, requireValidSessionId } from './routes.js';
 import { createWebSlashContext } from './slash-context.web.js';
 import { BufferingWriter } from './writer.buffer.js';
 import { getStats } from './session-owner.slash.js';
+import { stripVTControlCharacters } from 'node:util';
 import { errorMessage } from '../utils/errors.js';
+import { isPreamble, extractUserContent } from '../agent/session/preamble-strip.js';
 
 function requireOwned(ctx: RouteContext, res: ServerResponse, id: string): boolean {
   if (ctx.owned.has(id)) return true;
@@ -43,7 +51,7 @@ function requireOwned(ctx: RouteContext, res: ServerResponse, id: string): boole
 /**
  * Handle POST /api/sessions/:id/rewind.
  *
- * Body: { mode: 'retry' } | { mode: 'edit', text: string }
+ * Body: { mode: 'retry', text?: string } | { mode: 'edit', text: string }
  */
 export async function handleRewind(
   ctx: RouteContext,
@@ -79,7 +87,12 @@ export async function handleRewind(
     });
     return;
   }
-  const editText = mode === 'edit' ? (typeof record?.['text'] === 'string' ? record['text'].trim() : '') : undefined;
+  // Edit requires text. Retry MAY carry the prompt as the browser displays it
+  // (the ledger's recorded `input`, i.e. what the user typed); the provider's
+  // reloaded history can lead with drained framework context that the strip
+  // heuristic does not always recognise, e.g. a bare `[placeholder-prevent] …`.
+  const bodyText = typeof record?.['text'] === 'string' ? record['text'].trim() : '';
+  const editText = mode === 'edit' ? bodyText : undefined;
   if (mode === 'edit' && !editText) {
     sendJson(res, 400, {
       error: 'bad_request',
@@ -110,21 +123,31 @@ export async function handleRewind(
   // Invariant: choose '0' always selects the most-recent user turn (newest-first list).
   const ctx2 = createWebSlashContext({ current: session }, stats, writer, stats.cwd ?? process.cwd());
   ctx2.choose = async () => '0';
+  const writerText = () => stripVTControlCharacters(writer.getChunks().join('')).trim();
 
   ctx.reserveTurn?.(sessionId);
   try {
-    const result = await ctx.executeSessionControl(sessionId, rewindCmd, ctx2, '');
+    const result = await ctx.executeSessionControl(sessionId, rewindCmd, ctx2, 'conversation');
 
-    // After the rewind, the conversation is backed up. Now submit the prompt.
-    const textToSend = mode === 'retry'
-      ? (result.result && typeof result.result === 'object' && 'message' in result.result
-          ? String((result.result as { message: string }).message)
-          : undefined)
-      : editText!;
+    // Only a successful conversation rewind returns a prefill result; every
+    // refusal path ('not-supported', 'turn-in-flight', nothing to rewind)
+    // returns 'continue'. Never submit after a refused rewind: an edit would
+    // APPEND instead of replacing, and a retry would duplicate the turn.
+    const reloaded = result.result && typeof result.result === 'object' && 'kind' in result.result && result.result.kind === 'prefill'
+      ? String((result.result as { message: string }).message)
+      : undefined;
+    if (reloaded === undefined) {
+      sendJson(res, 409, { error: 'rewind_failed', message: writerText() || 'Nothing to rewind.' });
+      return;
+    }
 
+    // The provider history holds the text as sent, which can lead with
+    // framework preamble ([placeholder-prevent], bridge context); resend only
+    // what the user typed, as the transcript projection displays it.
+    const original = isPreamble(reloaded) ? (extractUserContent(reloaded) ?? reloaded) : reloaded;
+    const textToSend = mode === 'retry' ? (bodyText || original.trim()) : editText!;
     if (!textToSend) {
-      // Rewind succeeded but we couldn't recover the original text — still success.
-      sendJson(res, 200, { ok: true, rewound: true });
+      sendJson(res, 409, { error: 'rewind_failed', message: 'Rewound, but the original prompt text could not be recovered.' });
       return;
     }
 

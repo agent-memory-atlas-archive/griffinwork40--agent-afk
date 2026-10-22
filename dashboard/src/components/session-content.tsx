@@ -3,7 +3,7 @@
  * transcript with client-local command outputs interleaved at their anchors.
  */
 
-import { TranscriptView } from './transcript-view';
+import { TranscriptView, newestRewindIds } from './transcript-view';
 import { CommandOutput } from './command-output';
 import { interleaveCommands } from '@/lib/interleave-commands';
 import type { CommandOutputItem } from '@/hooks/use-command-outputs';
@@ -150,6 +150,8 @@ function TranscriptWithCommands({
   // Contract: outputs render at their anchor (see interleave-commands), and
   // only the first transcript segment carries the session meter.
   const segments = interleaveCommands(items, cmdItems);
+  // Rewind targets span segments: only the newest prompt/answer overall.
+  const rewindIds = newestRewindIds(items);
   const leadsWithCommand = segments[0]?.kind !== 'transcript';
   return (
     <div className="flex flex-col gap-0 max-w-4xl mx-auto w-full px-1">
@@ -169,6 +171,7 @@ function TranscriptWithCommands({
             onRetry={onRetry}
             onEdit={onEdit}
             isBusy={isBusy}
+            rewindIds={rewindIds}
           />
         ) : (
           <div key={`c-${seg.item.key}`} className="px-2 py-3">

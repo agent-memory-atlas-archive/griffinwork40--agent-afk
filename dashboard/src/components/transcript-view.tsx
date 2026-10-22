@@ -38,6 +38,29 @@ interface TranscriptViewProps {
   onEdit?: (text: string) => void;
   /** Whether a turn is currently running (disables retry/edit buttons). */
   isBusy?: boolean;
+  /**
+   * Item ids that carry Edit / Retry. Invariant: the rewind route only ever
+   * rewinds the NEWEST prompt, so only the newest user item may offer Edit and
+   * only the newest assistant item may offer Retry — an Edit on an older
+   * message would rewind the latest turn and send the edit after the older
+   * history. Defaults to the newest user/assistant in `items`; split views
+   * (command interleaving) pass ids computed over the full transcript.
+   */
+  rewindIds?: RewindIds;
+}
+
+type RewindIds = { user?: string; assistant?: string; stopped?: string };
+
+/** Newest user and assistant item ids — the only rewindable targets. */
+export function newestRewindIds(items: readonly TranscriptItem[]): RewindIds {
+  const ids: RewindIds = {};
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]!;
+    if (item.kind === 'stopped' && !ids.user && !ids.stopped) ids.stopped = item.id; // newest turn only
+    if (item.kind === 'assistant' && !ids.user && !ids.assistant) ids.assistant = item.id; // newest turn only
+    if (item.kind === 'user') { ids.user = item.id; break; }
+  }
+  return ids;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +154,15 @@ export function TranscriptView({ sessionId, ...rest }: TranscriptViewProps) {
   );
 }
 
-function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false, onRetry, onEdit, isBusy }: Omit<TranscriptViewProps, 'sessionId'>) {
+function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false, onRetry, onEdit, isBusy, rewindIds }: Omit<TranscriptViewProps, 'sessionId'>) {
+  const ownIds = useMemo(() => newestRewindIds(items), [items]);
+  const targets = rewindIds ?? ownIds;
+  const optsFor = useCallback((item: TranscriptItem, isStreaming: boolean): RenderItemOpts => ({
+    isStreaming,
+    isBusy,
+    ...(item.id === targets.assistant || item.id === targets.stopped ? { onRetry } : {}),
+    ...(item.id === targets.user ? { onEdit } : {}),
+  }), [targets.user, targets.assistant, targets.stopped, onRetry, onEdit, isBusy]);
   // Filter only the render projection, before either grouping path. Never mutate
   // the ledger-backed array: toggling back on restores old and new thinking.
   const visibleItems = useMemo(() => thinkingUi === 'off'
@@ -148,11 +179,11 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
           {isTurnStart && (
             <div className="my-6 border-t border-border/40" aria-hidden="true" />
           )}
-          <div className="py-2 px-1">{renderTextItem(item, { isStreaming: streaming, onRetry, onEdit, isBusy })}</div>
+          <div className="py-2 px-1">{renderTextItem(item, optsFor(item, streaming))}</div>
         </div>
       );
     },
-    [onRetry, onEdit, isBusy],
+    [optsFor],
   );
 
   return (
@@ -181,7 +212,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
                   <div className="my-6 border-t border-border/40" aria-hidden="true" />
                 )}
                 <div className="py-2 px-1">
-                  {renderNonSubagentItem(item, { isStreaming: streaming, onRetry, onEdit, isBusy })}
+                  {renderNonSubagentItem(item, optsFor(item, streaming))}
                 </div>
               </div>
             );

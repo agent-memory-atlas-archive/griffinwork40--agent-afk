@@ -15,8 +15,12 @@ import { useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 
 export interface UseRewindResult {
-  /** Rewind to just before the last user turn and resend it verbatim. */
-  retry: () => Promise<void>;
+  /**
+   * Rewind to just before the last user turn and resend it. `text` is that
+   * prompt as displayed (what the user typed); the server falls back to the
+   * rewound history text when omitted.
+   */
+  retry: (text?: string) => Promise<void>;
   /**
    * Rewind to just before the last user turn and send a different text.
    * This implements "edit and resend" for the most recent user message.
@@ -25,11 +29,11 @@ export interface UseRewindResult {
 }
 
 export function useRewind(sessionId: string, isBusy: boolean): UseRewindResult {
-  const retry = useCallback(async () => {
+  const retry = useCallback(async (text?: string) => {
     if (isBusy) return;
     await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}/rewind`, {
       method: 'POST',
-      body: JSON.stringify({ mode: 'retry' }),
+      body: JSON.stringify(text?.trim() ? { mode: 'retry', text } : { mode: 'retry' }),
     });
   }, [sessionId, isBusy]);
 

@@ -24,7 +24,7 @@ import { useSessionUrl } from './hooks/use-session-url';
 import { SessionContent } from './components/session-content';
 import { ChoiceDialog } from './components/choice-dialog';
 import { CommandProgress } from './components/command-progress';
-import { apiFetch } from './lib/api';
+import { apiFetch, ApiError } from './lib/api';
 import type { CommandResponse, ThinkingUiMode } from './types/command-wire';
 import { useRewind } from './hooks/use-rewind';
 import { useTabNotification } from './hooks/use-tab-notification';
@@ -112,6 +112,12 @@ function Dashboard() {
     sessionTitle: selectedSession?.title,
     isSelected: true,
   });
+
+  // A refused rewind (409) must surface, never fail silently.
+  const rewindFailed = (err: unknown) => {
+    const message = err instanceof ApiError && typeof err.body?.['message'] === 'string' ? err.body['message'] : err instanceof Error ? err.message : '';
+    toast(message ? `Could not rewind: ${message}` : 'Could not rewind', 'info');
+  };
 
   const [selectedModel, setSelectedModel] = useState<string>();
   const currentModel = selectedSession?.model ?? selectedModel;
@@ -334,8 +340,8 @@ function Dashboard() {
                   onNewSession={() => void handleNewSession()}
                   starting={starting}
                   onSuggest={(text) => { if (selectedSessionId) setPrefill({ text, nonce: Date.now(), sessionId: selectedSessionId }); }}
-                  onRetry={() => void retry()}
-                  onEdit={(text) => void editAndResend(text)}
+                  onRetry={() => void retry(lastUserText(items)).catch(rewindFailed)}
+                  onEdit={(text) => void editAndResend(text).catch(rewindFailed)}
                   isBusy={isBusy}
                 />
               )}
@@ -409,4 +415,10 @@ function StreamStatusDot({ status }: { status: string }) {
     return <span className="size-2 rounded-full bg-muted-foreground" title="Session ended" />;
   }
   return null;
+}
+
+/** The newest user prompt as displayed (the ledger's typed `input`). */
+function lastUserText(items: readonly { kind: string; text?: string }[]): string | undefined {
+  for (let i = items.length - 1; i >= 0; i--) if (items[i]!.kind === 'user') return items[i]!.text;
+  return undefined;
 }
