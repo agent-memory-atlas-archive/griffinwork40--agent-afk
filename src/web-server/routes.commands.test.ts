@@ -255,6 +255,33 @@ describe('handleCommand', () => {
     ], control: { kind: 'continue' } } });
   });
 
+  it('preserves structured output order together with owner metadata and clear control', async () => {
+    mockCreateWebSlashContext.mockImplementation((_ref, _stats, writer) => ({
+      out: (writer as BufferingWriter).asWriterInterface(),
+    }));
+    const executeSessionControl = vi.fn(async (_id, _cmd, { out }: { out: Writer }) => {
+      out.raw('before');
+      out.block!({ kind: 'keyValue', entries: [{ key: 'State', value: 'cleared' }], text: 'State: cleared\n', ansi: 'State: cleared\n' });
+      out.raw('after');
+      return { result: 'continue' as const, control: { kind: 'clear' as const }, session: { model: 'sonnet', name: 'Merged session', thinkingUi: 'off' as const } };
+    });
+    const ctx = makeCtx({ executeSessionControl });
+    const { res, json } = makeRes();
+    await handleCommand(ctx, res, SESSION_ID, { input: '/clear' });
+    expect(json()).toEqual({ status: 200, body: {
+      blocks: [
+        { kind: 'text', text: 'before', ansi: 'before' },
+        { kind: 'keyValue', entries: [{ key: 'State', value: 'cleared' }], text: 'State: cleared\n', ansi: 'State: cleared\n' },
+        { kind: 'text', text: 'after', ansi: 'after' },
+      ],
+      control: { kind: 'clear' },
+      session: { model: 'sonnet', name: 'Merged session', thinkingUi: 'off' },
+    } });
+    expect(FAKE_CMD.handler).not.toHaveBeenCalled();
+    expect(ctx.reserveTurn).toHaveBeenCalledExactlyOnceWith(SESSION_ID);
+    expect(ctx.releaseTurn).toHaveBeenCalledExactlyOnceWith(SESSION_ID);
+  });
+
   it.each(['/clear', '/model', '/name', '/thinking', '/fast', '/compact'])('routes %s through owner adapter with exactly one reservation', async (name) => {
     const cmd = { ...FAKE_CMD, name };
     mockLookup.mockReturnValue(cmd);

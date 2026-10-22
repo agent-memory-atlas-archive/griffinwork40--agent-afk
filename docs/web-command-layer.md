@@ -144,7 +144,7 @@ Renderer tests cover all kinds, unknown fallback, safety and clipboard behavior.
 | `control.kind` | Dashboard action |
 |---|---|
 | `continue` | no-op |
-| `clear` | reset transcript/queue and replace command outputs with the clear confirmation; reconnect without an old cursor |
+| `clear` | clear queue and replace command outputs with the confirmation; the nonterminal SSE reset clears the transcript on the existing connection |
 | `exit` | show inline notice (no effect on web in Stage 0) |
 | `forward` | re-POST original input to `/prompt` |
 | `rerun` | re-POST `control.input` to `/commands` |
