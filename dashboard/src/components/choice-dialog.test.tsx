@@ -42,6 +42,28 @@ it('focuses the default, arrow-selects choices, traps Tab and restores focus aft
   before.remove();
 });
 
+it('bounds long catalogs with an independently scrollable choices region and pointer selection', async () => {
+  vi.mocked(apiFetch).mockResolvedValue({});
+  const done = vi.fn();
+  const options = Array.from({ length: 40 }, (_, index) => ({ value: `model-${index}`, label: `Model ${index}` }));
+  render(<ChoiceDialog sessionId="long" request={{ ...request, default: 'model-39', options }} onAnswered={done} />);
+  const dialog = screen.getByRole('dialog');
+  const choices = screen.getByRole('radiogroup', { name: 'Choices' });
+  expect(dialog.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'flex-col', 'max-h-[calc(100dvh-2rem)]']));
+  expect(choices.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-h-0', 'overflow-y-auto']));
+  // Only the option list scrolls: the title and both footer actions remain outside it.
+  expect(choices.contains(screen.getByRole('heading', { name: request.title }))).toBe(false);
+  expect(choices.contains(screen.getByRole('button', { name: 'Select' }))).toBe(false);
+  expect(choices.contains(screen.getByRole('button', { name: 'Cancel' }))).toBe(false);
+  expect(screen.getAllByRole('radio')).toHaveLength(40);
+  fireEvent.click(screen.getByRole('radio', { name: /^Model 0$/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+  await waitFor(() => expect(done).toHaveBeenCalledOnce());
+  expect(apiFetch).toHaveBeenCalledWith('/api/sessions/long/choices/corr%20%2F%201', {
+    method: 'POST', body: JSON.stringify({ value: 'model-0' }),
+  });
+});
+
 it('Escape cancels only cancellable choices and failed submissions retain the dialog', async () => {
   vi.mocked(apiFetch).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({});
   const done = vi.fn();

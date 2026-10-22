@@ -88,9 +88,9 @@ export function ChoiceDialog({ sessionId, request, onAnswered }: ChoiceDialogPro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div ref={dialogRef} role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="choice-title"
         aria-describedby={error ? 'choice-error' : undefined} onKeyDown={onKeyDown}
-        className="w-full max-w-lg rounded-lg border bg-background p-5 shadow-xl">
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col rounded-lg border bg-background p-5 shadow-xl">
         <h2 id="choice-title" className="text-lg font-semibold">{request.title}</h2>
-        <div role="radiogroup" aria-label="Choices" className="mt-4 flex flex-col gap-2">
+        <div role="radiogroup" aria-label="Choices" className="mt-4 flex min-h-0 flex-col gap-2 overflow-y-auto">
           {request.options.map((option, index) => (
             <button key={option.value} ref={(element) => { optionsRef.current[index] = element; }}
               type="button" role="radio" aria-checked={selected === index} tabIndex={selected === index ? 0 : -1}
