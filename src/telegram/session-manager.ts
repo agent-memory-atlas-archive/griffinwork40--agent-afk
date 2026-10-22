@@ -493,6 +493,41 @@ export class SessionManager {
     const data = this.sessionData.get(key); if (data) delete data.sessionId;
   }
 
+  /** Live accumulating stats for a route (shared slash-command context). */
+  getStats(target: RouteTarget): SessionStats { return this._getOrCreateStats(toRoute(target)); }
+
+  /** Record a live model change so restarts/rebuilds keep it (no session teardown). */
+  noteModel(target: RouteTarget, model: AgentModelInput): void {
+    const data = this.sessionData.get(routeKey(toRoute(target)));
+    if (data) data.model = model;
+  }
+
+  /**
+   * Contract: chat-level lifecycle around the shared reset-in-place /clear
+   * (session-control clearConversation). The AgentSession object, its
+   * bg-injection/notifier route keys and its cwd survive; the conversation id,
+   * name, stats and staged resume do not. Call before the reset (it reads the
+   * old sessionId) and {@link finishConversationReset} after it.
+   */
+  beginConversationReset(target: RouteTarget): void {
+    const key = routeKey(toRoute(target));
+    clearElicitationRouteForKey(key, this.sessionStats, this.sessionData);
+    try { archiveRegistryHandle(this.options.registry ?? sessionRegistry, key); } catch { /* best-effort */ }
+    this.pendingResume.delete(key);
+    this.autosaveFailureLogged.delete(key);
+  }
+
+  /** Re-point persisted identity at the reset session's (possibly not yet minted) id. */
+  finishConversationReset(target: RouteTarget): void {
+    const route = toRoute(target);
+    const key = routeKey(route);
+    const data = this.sessionData.get(key);
+    const sid = this.sessions.get(key)?.sessionId;
+    if (data) { if (sid) data.sessionId = sid; else delete data.sessionId; data.lastActivity = new Date().toISOString(); }
+    if (sid) setElicitationRoute(sid, route);
+    if (data) { try { this._ensureRegistryHandle(route, data); } catch { /* non-fatal */ } }
+  }
+
   /**
    * Reset a route's session (clear history).
    *
