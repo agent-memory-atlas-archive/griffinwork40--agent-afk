@@ -11,8 +11,19 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+> 5.329.0 was tagged but never became installable: the npm registry left it stuck in staging (npm/cli#9889). This release is the first installable build of everything listed under 5.329.0, plus the changes below.
+
+### Added
+- Stage 0 of web/CLI parity: run native slash commands in afk web (#4246) (12e9e6e58)
+
 ### Fixed
-- republish of 5.329.0, which the npm registry left stuck in staging and never served (npm/cli#9889); no code changes, so 5.329.1 is the first installable build of everything listed under 5.329.0 (1c1353c1e)
+- removeEventListener on abort, unconditional parseLocation assertions, AbortSignal tests, DEFAULT_LSP_CMD constant (#4241) (db873a09d)
+- emit mcp_server_status OutputEvent for embedder health UI (#4256) (bb6c99325)
+- reject TS1xxx syntax errors before baseline comparison (#3773) (#4260) (52e75bea0)
+- remove pnpm version: 9 from live-provider-tests.yml (#4236) (808fbfb7c)
+
+### Changed
+- pin Scenario 2 reconciliation – unknown→confirmed lifecycle (#4257) (2efeacc47)
 
 ## [5.329.0] - 2026-10-22
 
