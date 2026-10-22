@@ -181,7 +181,10 @@ describe('grouped bash rows — danger-chip and path shortening', () => {
    * so the test does not depend on `toolLaneWidth()` / terminal geometry.
    */
   it('shortens an absolute-path command word even when danger-chip styling fires', () => {
-    const homeDir = process.env['HOME'] ?? '/Users/testuser';
+    // Use a synthetic POSIX path so collapseFsPaths (which matches the
+    // /path/with/3+/segments regex) works portably on Windows CI where
+    // process.env.HOME is a Windows backslash path that the regex cannot match.
+    const homeDir = '/tmp/afk-test-home';
     // Build three ToolEntry-shaped objects — the minimal shape that
     // styleGroupedTargets reads (toolUseId, toolName, toolInput, prefix).
     const entries: ToolEntry[] = [0, 1, 2].map((i) => ({
@@ -190,6 +193,8 @@ describe('grouped bash rows — danger-chip and path shortening', () => {
       toolInput: `${homeDir}/bin/mytool --flag arg`,
       prefix: `▸ bash ("${homeDir}/bin/mytool --flag arg")`,
       result: makeResult('ok'),
+      kind: 'tool' as const,
+      startedAt: 0,
     }));
     // 120 cols gives plenty of room for the argument preview to appear.
     const row = stripAnsi(formatGroupedToolResults('bash', entries, 120));
@@ -209,6 +214,8 @@ describe('grouped bash rows — danger-chip and path shortening', () => {
       toolInput: `cd /tmp\nrm -rf scratch`,
       prefix: `▸ bash ("cd /tmp && rm -rf scratch")`,
       result: makeResult('ok'),
+      kind: 'tool' as const,
+      startedAt: 0,
     }));
     const row = stripAnsi(formatGroupedToolResults('bash', entries, 120));
     // Newlines must be flattened — a raw LF in the render row would break
