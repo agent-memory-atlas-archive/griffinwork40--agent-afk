@@ -164,6 +164,7 @@ describe('EffectStore — Scenario 2 reconciliation: unknown → confirmed (#371
     // that accidentally carried reconciledAt forward would be invisible if
     // we only checked the in-memory return value above.
     const readBack = (await store.query({ status: 'unknown' }))[0];
+    expect(readBack).toBeDefined();                        // guards the roundtrip
     expect(readBack?.reconciledAt).toBeUndefined();
 
     const confirmed = await store.updateStatus({ id: pending.id, status: 'confirmed' });
