@@ -3,9 +3,7 @@
  *
  * Fetches the model list from GET /api/models (with a static fallback) and
  * renders a controlled <select>. Fires onSelect only on deliberate changes.
- *
- * Port of src/web-server/frontend/model-selector.ts to React + Tailwind.
- * The badge helper is a bonus used by SessionCard.
+ * Uses the same ordered, deduped data as the /model picker (via groups).
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -63,19 +61,24 @@ interface ModelSelectorProps {
   disabled?: boolean;
 }
 
+interface ModelGroup {
+  label: string;
+  rows: Array<{ id: string; name: string; aliases: string[] }>;
+}
+
 export function ModelSelector({ onSelect, current, className, disabled }: ModelSelectorProps) {
   const [models, setModels] = useState<readonly ModelInfo[]>(DEFAULT_MODELS);
   const [serverDefault, setServerDefault] = useState<string>();
 
-  // Fetch the real model list once.
+  // Fetch the real model list once — use groups for deduped ordered data.
   useEffect(() => {
     let cancelled = false;
-    apiFetch<{ models: ModelInfo[]; default?: string }>('/api/models')
+    apiFetch<{ models: ModelInfo[]; groups?: ModelGroup[]; default?: string }>('/api/models')
       .then((data) => {
-        if (!cancelled) {
-          if (data.models?.length > 0) setModels(data.models);
-          setServerDefault(data.default);
-        }
+        if (cancelled) return;
+        // Prefer flat models list (already deduped and ordered by the server).
+        if (data.models?.length > 0) setModels(data.models);
+        if (data.default) setServerDefault(data.default);
       })
       .catch(() => {
         // Swallow -- fallback list is already set.
