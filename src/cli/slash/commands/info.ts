@@ -11,6 +11,7 @@
  * referenced in each other's output.
  */
 
+import { randomUUID } from 'node:crypto';
 import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
 import { formatCost, formatTokens } from '../../format-utils.js';
@@ -82,6 +83,22 @@ const modelCmd: SlashCommand = {
     const target = args.trim();
     if (target) {
       await switchModel(ctx, target);
+      return 'continue';
+    }
+
+    if (ctx.choose) {
+      const options = MODEL_ALIASES_HINT.map((alias) => ({
+        value: alias,
+        label: isModelAvailable(alias) ? alias : `${alias} (needs sign-in)`,
+      }));
+      const choice = await ctx.choose({
+        corrId: randomUUID(), title: 'Switch model', options,
+        default: String(ctx.stats.model), cancellable: true,
+      });
+      // Surface adapters should validate too; never trust an unrecognized reply.
+      if (choice !== null && options.some((option) => option.value === choice)) {
+        await switchModel(ctx, choice);
+      }
       return 'continue';
     }
 

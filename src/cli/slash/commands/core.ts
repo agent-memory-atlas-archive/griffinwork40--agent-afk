@@ -6,6 +6,7 @@
  * modules are removed.
  */
 
+import { randomUUID } from 'node:crypto';
 import ora from 'ora';
 import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
@@ -62,13 +63,19 @@ const compactCmd: SlashCommand = {
     // a user typing during compaction couldn't see their own keystrokes.
     // Explicit non-TTY surfaces receive text progress; legacy contexts without
     // capability declarations retain their original bare-ora fallback.
-    const compositor = ctx.getCompositor?.() ?? null;
+    const compositor = ctx.progress ? null : (ctx.getCompositor?.() ?? null);
+    const corrId = randomUUID();
+    let progressActive = false;
     let spinner: ReturnType<typeof ora> | null = null;
     let spinnerActive = false;
     // Single stop point reused on every exit path below (success and catch)
     // so the two flavors of "turn the spinner off" can never drift out of
     // sync — a spinner left enabled is a worse bug than the race it replaces.
     const stopSpinner = (): void => {
+      if (progressActive) {
+        progressActive = false;
+        ctx.progress?.({ corrId, phase: 'end', label: 'Summarizing earlier turns...' });
+      }
       if (!spinnerActive) return;
       if (compositor) {
         compositor.setSpinner({ enabled: false });
@@ -80,6 +87,11 @@ const compactCmd: SlashCommand = {
     try {
       const result = await compactConversation(ctx.session.current, (phase) => {
         if (phase === 'end') { stopSpinner(); return; }
+        if (ctx.progress) {
+          progressActive = true;
+          ctx.progress({ corrId, phase: 'start', label: 'Summarizing earlier turns...' });
+          return;
+        }
         // Progress starts only after PreCompact permits it. Explicit non-TTY
         // surfaces capture text; legacy REPL contexts keep their ora fallback.
         if (compositor) {
@@ -148,6 +160,7 @@ const compactCmd: SlashCommand = {
 
 const rewindCmd: SlashCommand = {
   name: '/rewind',
+  requires: ['sessionControl', 'choose'],
   summary: 'Edit a previous message (rewind the conversation)',
   hint: 'When you want to go back and re-ask an earlier prompt — pick a message, the conversation rewinds to it, and its text loads into the input to edit and resend. (Also: press Esc twice at an empty prompt.)',
   async handler(ctx) {
@@ -158,26 +171,33 @@ const rewindCmd: SlashCommand = {
       return 'continue';
     }
 
-    // renderSelector drives raw stdin directly, so release the persistent
-    // compositor's keypress listener first and re-arm it after (the selector
-    // contract — see input/selectors.ts). getCompositor is null on non-TTY.
-    const compositor = ctx.getCompositor?.() ?? null;
-    compositor?.suspendInput();
     let choice: number | ':cancel' | null;
-    try {
-      choice = await renderSelector(
-        targets.map((t) => t.preview),
-        new AbortController().signal,
-      );
-    } finally {
-      compositor?.resumeInput();
+    if (ctx.choose) {
+      const options = targets.map((target, index) => ({ value: String(index), label: target.preview }));
+      const selected = await ctx.choose({
+        corrId: randomUUID(), title: 'Rewind to a message', options, cancellable: true,
+      });
+      if (selected === null) return 'continue';
+      choice = options.findIndex((option) => option.value === selected);
+      if (choice < 0) return 'continue';
+    } else {
+      // Legacy contexts retain the raw selector until they install an adapter.
+      const compositor = ctx.getCompositor?.() ?? null;
+      compositor?.suspendInput();
+      try {
+        choice = await renderSelector(
+          targets.map((t) => t.preview),
+          new AbortController().signal,
+        );
+      } finally {
+        compositor?.resumeInput();
+      }
+      if (choice === null) {
+        ctx.out.info('Rewind requires an interactive terminal.');
+        return 'continue';
+      }
+      if (choice === ':cancel') return 'continue';
     }
-
-    if (choice === null) {
-      ctx.out.info('Rewind requires an interactive terminal.');
-      return 'continue';
-    }
-    if (choice === ':cancel') return 'continue';
 
     const target = targets[choice];
     if (!target) return 'continue';

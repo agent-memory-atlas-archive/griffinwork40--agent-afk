@@ -4,6 +4,8 @@ import { tailLedger } from '../agent/session-ledger.js';
 import { formatSseFrame, SSE_END_FRAME } from './sse-protocol.js';
 import { header, requireValidSessionId, SECURITY_HEADERS } from './routes.js';
 import { errorMessage } from '../utils/errors.js';
+import type { ChoiceBroker } from './choice-broker.js';
+import type { ChoiceSsePayload } from './shared/choice-wire.js';
 
 const HEARTBEAT_MS = 15_000;
 
@@ -17,6 +19,7 @@ export async function handleStream(
   res: ServerResponse,
   sessionId: string,
   streams?: Set<AbortController>,
+  choices?: ChoiceBroker,
 ): Promise<void> {
   if (!requireValidSessionId(res, sessionId)) return;
   res.writeHead(200, {
@@ -39,6 +42,11 @@ export async function handleStream(
   const controller = new AbortController();
   streams?.add(controller);
   let closed = false;
+  // Id-less ephemeral notifications never advance the durable ledger cursor.
+  const writeChoice = (event: ChoiceSsePayload): void => {
+    if (!closed) res.write(formatSseFrame({ data: event }));
+  };
+  const unsubscribe = choices?.subscribe(sessionId, writeChoice);
   const heartbeat = setInterval(() => {
     if (!closed) res.write(': ping\n\n');
   }, HEARTBEAT_MS);
@@ -48,6 +56,7 @@ export async function handleStream(
     clearInterval(heartbeat);
     controller.abort();
     streams?.delete(controller);
+    unsubscribe?.();
     res.end();
   };
   req.on('close', finish);
@@ -62,6 +71,9 @@ export async function handleStream(
         const staleCursor = cursorGeneration !== undefined && cursorGeneration !== next;
         if (!closed && (changed || staleCursor)) {
           res.write(formatSseFrame({ data: { reset: true } }));
+          // Subscription must precede replay to avoid losing live requests,
+          // but its initial snapshot may now have been erased by this reset.
+          choices?.replayPending(sessionId, writeChoice);
         }
         generation = next;
         position = 0;
@@ -75,6 +87,7 @@ export async function handleStream(
       res.write(formatSseFrame({ id: `${generation}:${position}`, data: { record, replay } }));
     }
     if (!closed && !controller.signal.aborted) {
+      choices?.cancelSession(sessionId);
       res.write(formatSseFrame({ data: SSE_END_FRAME }));
     }
   } catch (err) {

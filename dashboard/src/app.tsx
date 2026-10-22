@@ -21,6 +21,8 @@ import { useScrollPin } from './hooks/use-scroll-pin';
 import { useQueue } from './hooks/use-queue';
 import { useCommandOutputs } from './hooks/use-command-outputs';
 import { SessionContent } from './components/session-content';
+import { ChoiceDialog } from './components/choice-dialog';
+import { CommandProgress } from './components/command-progress';
 import { apiFetch } from './lib/api';
 import type { CommandResponse, ThinkingUiMode } from './types/command-wire';
 
@@ -48,7 +50,7 @@ function Dashboard() {
   const resetEpochs = useRef<Record<string, number>>({});
   const clearStartedAt = useRef<Record<string, number>>({});
   const pendingClearReset = useRef<Record<string, boolean>>({});
-  const { items, totals, status, turnActive, liveTurns } = useTranscript(selectedSessionId, () => {
+  const { items, totals, status, turnActive, liveTurns, choices, progress } = useTranscript(selectedSessionId, () => {
     if (!selectedSessionId) return;
     resetEpochs.current[selectedSessionId] = (resetEpochs.current[selectedSessionId] ?? 0) + 1;
     clearCmdItems(selectedSessionId, pendingClearReset.current[selectedSessionId]);
@@ -62,6 +64,15 @@ function Dashboard() {
   // Per-session client-local command output items (not persisted; see use-command-outputs).
   const { itemsFor: cmdItemsFor, addItem: addCmdItem, clearItems: clearCmdItems } = useCommandOutputs();
   const cmdItems = cmdItemsFor(selectedSessionId);
+  const [answeredChoice, setAnsweredChoice] = useState<string | null>(null);
+  const activeChoice = status === 'open' && selectedSession?.mode === 'live'
+    ? choices.find((choice) => `${selectedSessionId}:${choice.corrId}` !== answeredChoice) : undefined;
+  useEffect(() => { setAnsweredChoice(null); }, [selectedSessionId]);
+  useEffect(() => {
+    if (answeredChoice && !choices.some((choice) => `${selectedSessionId}:${choice.corrId}` === answeredChoice)) {
+      setAnsweredChoice(null);
+    }
+  }, [choices, selectedSessionId, answeredChoice]);
 
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
   useEffect(() => {
@@ -251,6 +262,8 @@ function Dashboard() {
                   thinkingUi={selectedSession?.thinkingUi}
                 />
               )}
+              {activeNav === 'sessions' && selectedSession && status === 'open' &&
+                <CommandProgress progress={progress} />}
               {activeNav === 'memory' && <MemoryView />}
               {activeNav === 'schedules' && <SchedulesView />}
               {activeNav === 'jobs' && <BgJobsView />}
@@ -285,6 +298,9 @@ function Dashboard() {
           </div>
         </div>
       </main>
+      {activeNav === 'sessions' && selectedSessionId && activeChoice &&
+        <ChoiceDialog key={`${selectedSessionId}:${activeChoice.corrId}`} sessionId={selectedSessionId}
+          request={activeChoice} onAnswered={() => setAnsweredChoice(`${selectedSessionId}:${activeChoice.corrId}`)} />}
     </div>
   );
 }

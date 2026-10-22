@@ -5,6 +5,26 @@ import { useSseStream } from './use-sse-stream';
 vi.mock('@/lib/api', () => ({ getToken: () => 'token' }));
 afterEach(() => vi.unstubAllGlobals());
 
+it('drops stale ephemeral requests on reconnect but retains ledger history and new snapshots', async () => {
+  let old!: ReadableStreamDefaultController<Uint8Array>;
+  let fresh!: ReadableStreamDefaultController<Uint8Array>;
+  const fetch = vi.fn().mockResolvedValueOnce({ ok: true,
+    body: new ReadableStream<Uint8Array>({ start(controller) { old = controller; } }),
+  }).mockResolvedValueOnce({ ok: true,
+    body: new ReadableStream<Uint8Array>({ start(controller) { fresh = controller; } }),
+  });
+  vi.stubGlobal('fetch', fetch);
+  const { result } = renderHook(() => useSseStream('one'));
+  await waitFor(() => expect(result.current.status).toBe('open'));
+  act(() => old.enqueue(new TextEncoder().encode('data: {"type":"choice_request","request":{"corrId":"old"}}\n\n')));
+  await waitFor(() => expect(result.current.events).toHaveLength(1));
+  act(() => old.close());
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2), { timeout: 2000 });
+  expect(result.current.events).toContainEqual({ type: 'choice_stream_boundary' });
+  act(() => fresh.enqueue(new TextEncoder().encode('data: {"type":"choice_request","request":{"corrId":"new"}}\n\n')));
+  await waitFor(() => expect(result.current.events).toHaveLength(3));
+});
+
 it('drops pre-reset payloads and resumes with the new opaque cursor without reopening at reset', async () => {
   let controller!: ReadableStreamDefaultController<Uint8Array>;
   const fetch = vi.fn().mockResolvedValueOnce({

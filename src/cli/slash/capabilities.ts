@@ -3,6 +3,8 @@ import type { SlashCommand } from './types.js';
 
 export type SurfaceCapability =
   | 'tty'
+  | 'choose'
+  | 'progress'
   | 'sessionControl'
   | 'permissionMode'
   | 'conversationRetry'
@@ -18,6 +20,7 @@ export type SurfaceCapability =
 const LEGACY_REQUIREMENTS: Readonly<Record<string, readonly SurfaceCapability[]>> = {
   '/clear': ['sessionControl'],
   '/compact': ['sessionControl'],
+  '/rewind': ['sessionControl', 'choose'],
   '/model': ['sessionControl'],
   '/name': ['sessionControl'],
   '/thinking': ['sessionControl'],
@@ -61,11 +64,13 @@ export function missingCapabilities(
 
 /** Fresh set per context: callers cannot mutate another session's declaration. */
 export function webCapabilities(): ReadonlySet<SurfaceCapability> {
-  return new Set<SurfaceCapability>(['sessionControl']);
+  return new Set<SurfaceCapability>(['sessionControl', 'choose', 'progress']);
 }
 
 export function capabilityReason(capability: SurfaceCapability): string {
   switch (capability) {
+    case 'choose': return 'requires choice interaction support';
+    case 'progress': return 'requires progress reporting support';
     case 'tty': return 'requires terminal interaction; use the REPL or browser-native controls';
     case 'sessionControl': return 'requires session-control support';
     case 'permissionMode': return 'requires permission-mode integration; use the REPL for now';

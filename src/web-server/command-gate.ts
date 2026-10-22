@@ -9,7 +9,6 @@ import {
 
 /** Temporary lifecycle/picker deferrals, removed when Stages 3/4 land. */
 const DEFERRED: ReadonlyMap<string, string> = new Map([
-  ['/rewind', 'not on the web yet: needs an interactive picker; use the REPL for now'],
   ['/fork', 'not on the web yet: forking a session is coming; use the REPL for now'],
   ['/resume', 'not on the web yet: open past sessions from the sidebar (read-only for now)'],
   ['/exit', 'not applicable on the web: close the tab or start a new session'],

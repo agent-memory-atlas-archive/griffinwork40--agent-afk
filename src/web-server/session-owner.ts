@@ -99,6 +99,12 @@ export class SessionOwner {
   /** Per-session sidecar autosave, so web sessions show up in `/resume`. */
   private readonly autosavers = new Map<string, SessionAutosaver>();
   private readonly controls = new Map<string, WebSessionControl>();
+  private cancelChoices?: (sessionId: string) => void;
+
+  /** Web-server instance owns the broker; no process-wide singleton. */
+  setChoiceCancellation(cancel: ((sessionId: string) => void) | undefined): void {
+    this.cancelChoices = cancel;
+  }
 
   constructor(private readonly options: SessionOwnerOptions) {}
 
@@ -163,9 +169,11 @@ export class SessionOwner {
     // Keep them alive through SessionEnd hooks and child draining, even when
     // close rejects; coalesce repeated/concurrent closes into one teardown.
     const close = session.close.bind(session);
+    let ownedId: string | undefined;
     let closing: Promise<void> | undefined;
     session.close = () => closing ??= (async () => {
       try { await close(); } finally {
+        if (ownedId !== undefined) this.cancelChoices?.(ownedId);
         try { wiring.memoryStore.close(); } finally { wiring.workspaceStore.close(); }
       }
     })();
@@ -198,6 +206,7 @@ export class SessionOwner {
       throw error;
     });
     const id = metadata.sessionId ?? session.sessionId;
+    ownedId = id;
     if (id === undefined) {
       await session.close().catch(() => {});
       throw new Error('session initialized without an id');
@@ -354,6 +363,7 @@ export class SessionOwner {
   async interrupt(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`session ${sessionId} is not owned by this process`);
+    this.cancelChoices?.(sessionId);
     await session.interrupt();
   }
 
@@ -384,6 +394,7 @@ export class SessionOwner {
    * is strictly worse than best-effort teardown.
    */
   async closeAll(): Promise<void> {
+    for (const id of this.sessions.keys()) this.cancelChoices?.(id);
     const all = [...this.sessions.values()];
     const mcps = [...this.mcpManagers.values()];
     const controls = [...this.controls.values()];

@@ -45,6 +45,8 @@ import { handleListBgJobs, handleGetBgJob } from './routes.bg-jobs.js';
 import { handleGetConfig } from './routes.config.js';
 import { handleListHandoffs, handleAnswerHandoff } from './routes.handoffs.js';
 import { handleCommand } from './routes.commands.js';
+import { ChoiceBroker } from './choice-broker.js';
+import { handleChoiceAnswer } from './routes.choices.js';
 import { errorMessage } from '../utils/errors.js';
 
 export const DEFAULT_WEB_PORT = 4141;
@@ -103,6 +105,8 @@ export interface WebServerHandle {
    */
   openUrl: string;
   bridge: WebElicitationBridge;
+  /** Server-scoped choice broker, exposed for in-process integrations and tests. */
+  choiceBroker: ChoiceBroker;
   stop: () => Promise<void>;
 }
 
@@ -141,6 +145,8 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
   const owned = options.owned ?? options.owner?.owned ?? new Set<string>();
   const bridge = new WebElicitationBridge();
   bridge.install();
+  const choiceBroker = new ChoiceBroker();
+  options.owner?.setChoiceCancellation?.((id) => choiceBroker.cancelSession(id));
 
   /** Abort controllers for in-flight SSE streams, so shutdown can end them. */
   const streams = new Set<AbortController>();
@@ -148,6 +154,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
   const ctx: RouteContext = {
     owned,
     bridge,
+    choiceBroker,
     submitPrompt:
       options.submitPrompt ??
       (options.owner
@@ -206,8 +213,11 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
     url: `http://${displayHost}:${port}/?token=${token}`,
     openUrl: `http://${displayHost}:${port}/?k=${nonces.mint()}`,
     bridge,
+    choiceBroker,
     stop: async () => {
       bridge.uninstall();
+      choiceBroker.cancelAll();
+      options.owner?.setChoiceCancellation?.(undefined);
       // Invariant: abort live SSE streams BEFORE awaiting `server.close()`.
       // `close()` stops accepting new connections but waits for existing ones
       // to end, and an event-stream response never ends on its own — it tails
@@ -300,7 +310,7 @@ async function dispatch(
 
   const streamMatch = /^\/api\/sessions\/([^/]+)\/stream$/.exec(path);
   if (streamMatch?.[1] && method === 'GET') {
-    await handleStream(req, res, decodeURIComponent(streamMatch[1]), streams);
+    await handleStream(req, res, decodeURIComponent(streamMatch[1]), streams, ctx.choiceBroker);
     return;
   }
 
@@ -319,6 +329,12 @@ async function dispatch(
   const commandMatch = /^\/api\/sessions\/([^/]+)\/commands$/.exec(path);
   if (commandMatch?.[1] && method === 'POST') {
     await handleCommand(ctx, res, decodeURIComponent(commandMatch[1]), await readBody(req));
+    return;
+  }
+
+  const choiceMatch = /^\/api\/sessions\/([^/]+)\/choices\/([^/]+)$/.exec(path);
+  if (choiceMatch?.[1] && choiceMatch[2] && method === 'POST') {
+    handleChoiceAnswer(ctx, res, decodeURIComponent(choiceMatch[1]), decodeURIComponent(choiceMatch[2]), await readBody(req));
     return;
   }
 

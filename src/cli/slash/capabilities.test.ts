@@ -43,13 +43,13 @@ describe('positive surface capabilities', () => {
   });
 
   it('does not advertise absent terminal or owner facilities on the web', () => {
-    expect([...webCapabilities()]).toEqual(['sessionControl']);
+    expect([...webCapabilities()]).toEqual(['sessionControl', 'choose', 'progress']);
     expect(webCapabilities()).not.toBe(webCapabilities());
   });
 
   it('gives every requirement a human-readable reason', () => {
     const capabilities: SurfaceCapability[] = [
-      'tty', 'sessionControl', 'permissionMode', 'conversationRetry',
+      'tty', 'choose', 'progress', 'sessionControl', 'permissionMode', 'conversationRetry',
       'hostCredentials', 'shellJobs', 'consoleOutput',
     ];
     for (const capability of capabilities) expect(capabilityReason(capability)).toMatch(/requires/);
@@ -95,7 +95,7 @@ describe('positive surface capabilities', () => {
     const ctx = createWebSlashContext({} as SessionRef, stats, new BufferingWriter(), '/project');
     expect(ctx.stats).toBe(stats);
     expect(ctx.stats.cwd).toBe('/project');
-    expect([...ctx.capabilities!]).toEqual(['sessionControl']);
+    expect([...ctx.capabilities!]).toEqual(['sessionControl', 'choose', 'progress']);
     expect(ctx.getCompositor).toBeUndefined();
     ctx.stats.name = 'renamed';
     expect(stats.name).toBe('renamed');

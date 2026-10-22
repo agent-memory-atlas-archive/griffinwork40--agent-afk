@@ -4,6 +4,9 @@ import { createSessionStats } from '../../slash/session-stats.js';
 import { createConsoleWriter } from '../../slash/writer.js';
 import { dispatch, register, resetRegistry } from '../../slash/registry.js';
 import { FastModeController } from '../../../agent/fast-mode.js';
+import { renderSelector } from '../../input/selectors.js';
+import type { SlashContext } from '../../slash/types.js';
+vi.mock('../../input/selectors.js', () => ({ renderSelector: vi.fn() }));
 
 type ContextArgs = Parameters<typeof createReplSlashContext>[0];
 const originalStdinTty = process.stdin.isTTY;
@@ -47,11 +50,28 @@ describe('REPL surface declaration', () => {
     setTty(stdin, stdout);
     const ctx = makeContext();
     expect(ctx.capabilities?.has('tty')).toBe(tty);
-    expect([...ctx.capabilities!].filter((capability) => capability !== 'tty').sort()).toEqual([
+    expect(ctx.capabilities?.has('choose')).toBe(tty);
+    expect(typeof ctx.choose).toBe(tty ? 'function' : 'undefined');
+    expect(typeof ctx.progress).toBe('function');
+    expect([...ctx.capabilities!].filter((capability) => capability !== 'tty' && capability !== 'choose').sort()).toEqual([
       'consoleOutput', 'conversationRetry', 'hostCredentials',
-      'permissionMode', 'sessionControl', 'shellJobs',
+      'permissionMode', 'progress', 'sessionControl', 'shellJobs',
     ]);
     expect(ctx.capabilities).not.toBe(makeContext().capabilities);
+  });
+
+  it('uses the compositor installed after bootstrap for choices and progress', async () => {
+    setTty(true, true);
+    const ctx = makeContext();
+    const compositor = { suspendInput: vi.fn(), resumeInput: vi.fn(), setSpinner: vi.fn() };
+    ctx.getCompositor = () => compositor as unknown as ReturnType<NonNullable<SlashContext['getCompositor']>>;
+    vi.mocked(renderSelector).mockResolvedValue(0);
+    expect(await ctx.choose?.({ corrId: 'pick', title: 'Pick', options: [{ value: 'v', label: 'Label' }] })).toBe('v');
+    expect(compositor.suspendInput).toHaveBeenCalledOnce();
+    expect(compositor.resumeInput).toHaveBeenCalledOnce();
+    ctx.progress?.({ corrId: 'work', phase: 'start', label: 'Working' });
+    ctx.progress?.({ corrId: 'work', phase: 'end', label: 'Done' });
+    expect(compositor.setSpinner.mock.calls).toEqual([[{ enabled: true }], [{ enabled: false }]]);
   });
 
   it('gates terminal commands on non-TTY REPLs while allowing owner commands', async () => {

@@ -7,6 +7,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getSessionLedgerDir, getSessionLedgerPath } from '../paths.js';
 import { handleStream } from './stream-route.js';
 import { parseSseChunk } from './sse-protocol.js';
+import { ChoiceBroker } from './choice-broker.js';
 
 const id = 'reset-stream';
 const record = (text: string) => JSON.stringify({ v: 1, ts: Date.now(), kind: 'assistant', text }) + '\n';
@@ -15,11 +16,11 @@ function replace(text: string) {
   writeFileSync(`${file}.next`, record(text));
   renameSync(`${file}.next`, file);
 }
-function connect(lastEventId?: string) {
+function connect(lastEventId?: string, choices?: ChoiceBroker) {
   const req = Object.assign(new EventEmitter(), { headers: { ...(lastEventId ? { 'last-event-id': lastEventId } : {}) } });
   let raw = '';
   const res = { writeHead: vi.fn(), flushHeaders: vi.fn(), write: (chunk: string) => { raw += chunk; }, end: vi.fn() };
-  const done = handleStream(req as IncomingMessage, res as unknown as ServerResponse, id);
+  const done = handleStream(req as IncomingMessage, res as unknown as ServerResponse, id, undefined, choices);
   return {
     res, done,
     frames: () => parseSseChunk(raw).events.map((e) => ({ id: e.id, data: JSON.parse(e.data) })),
@@ -52,6 +53,35 @@ describe('stream clear generations (real disk tailers)', () => {
         expect(frames.some((f) => f.data.end)).toBe(false);
       }
     } finally { tabs.forEach((tab) => tab.disconnect()); await Promise.all(tabs.map((tab) => tab.done)); }
+  });
+
+  it('restores the active choice after a stale-cursor reset, keeping it answerable', async () => {
+    writeFileSync(getSessionLedgerPath(id), record('old'));
+    const first = connect();
+    await vi.waitFor(() => expect(first.frames()).toHaveLength(1));
+    const oldCursor = first.frames()[0]!.id!;
+    first.disconnect(); await first.done;
+    replace('new');
+    const choices = new ChoiceBroker();
+    const request = { corrId: 'active', title: 'Pick', options: [{ value: 'yes', label: 'Yes' }], cancellable: true };
+    const answer = choices.choose(id, request);
+    const tab = connect(oldCursor, choices);
+    try {
+      await vi.waitFor(() => expect(tab.frames().some((f) => f.data.record?.text === 'new')).toBe(true));
+      // Model the browser reset reducer, not just the existence of a request:
+      // a pre-reset snapshot must not be the only copy of an active choice.
+      const visible = new Map<string, unknown>();
+      for (const { data } of tab.frames()) {
+        if (data.reset) visible.clear();
+        if (data.type === 'choice_request') visible.set(data.request.corrId, data.request);
+      }
+      expect(visible.get(request.corrId)).toEqual(request);
+      const resetIndex = tab.frames().findIndex((f) => f.data.reset);
+      expect(tab.frames().slice(resetIndex + 1).some((f) => f.data.type === 'choice_request' && !f.id)).toBe(true);
+      expect(choices.answer(id, request.corrId, 'yes')).toBe('answered');
+      expect(await answer).toBe('yes');
+      expect(tab.frames().at(-1)?.data).toEqual({ type: 'choice_settled', corrId: request.corrId });
+    } finally { tab.disconnect(); await tab.done; choices.cancelAll(); }
   });
 
   it('rebases an old-generation reconnect cursor, then resumes the new generation without duplicates', async () => {

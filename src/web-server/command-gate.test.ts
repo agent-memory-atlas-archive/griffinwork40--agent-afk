@@ -32,7 +32,7 @@ describe('web command capability gate', () => {
     expect(gateReason(name)).toMatch(/requires/);
   });
 
-  it.each(['/rewind', '/fork', '/resume', '/exit', '/quit'])(
+  it.each(['/fork', '/resume', '/exit', '/quit'])(
     'retains only picker/lifecycle deferral for %s', (name) => {
       expect(isGated(name)).toBe(true);
       expect(gateReason(name)).toBeTypeOf('string');

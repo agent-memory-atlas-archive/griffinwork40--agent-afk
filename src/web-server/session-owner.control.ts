@@ -6,7 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { clearConversation } from '../agent/session-control/index.js';
 import { FastModeController } from '../agent/fast-mode.js';
 import { resolveModelId } from '../agent/session/model-resolution.js';
-import { SessionLedgerWriter } from '../agent/session-ledger.js';
+import { SessionLedgerWriter, type LedgerPayload } from '../agent/session-ledger.js';
+import { projectJournalMessages, readProjectionMessages } from './session-owner.projection.js';
 import { getSessionLedgerDir, getSessionLedgerPath } from '../paths.js';
 import { recordTurn } from '../cli/slash/session-stats.js';
 import { saveSession } from '../cli/session-store.js';
@@ -82,7 +83,9 @@ export class WebSessionControl {
       return { result: 'continue', control: { kind: 'clear' } };
     }
     Object.assign(ctx, this.context());
-    const result = await cmd.handler(ctx, args);
+    const result = cmd.name === '/rewind'
+      ? await this.executeRewind(cmd, ctx, args)
+      : await cmd.handler(ctx, args);
     this.stats.sessionId = this.id;
     this.onMetadata({ model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}) });
     if (cmd.name === '/model' || cmd.name === '/name' || cmd.name === '/thinking') {
@@ -91,6 +94,27 @@ export class WebSessionControl {
       return { result, session: { model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}), ...(cmd.name === '/thinking' ? { thinkingUi: this.stats.thinkingUi ?? 'live' } : {}) } };
     }
     return { result };
+  }
+
+  /** Observe the actual provider result, not the handler's caught 'continue'.
+   * The route already owns the session reservation throughout this call.
+   */
+  private async executeRewind(cmd: SlashCommand, ctx: SlashContext, args: string): Promise<SessionControlResult['result']> {
+    const rewind = this.session.rewindConversation;
+    this.session.rewindConversation = async (index) => {
+      await readProjectionMessages(this.session); // fail closed BEFORE provider mutation
+      const result = await rewind.call(this.session, index);
+      if (result.rewound) {
+        const retained = projectJournalMessages(await readProjectionMessages(this.session));
+        // Unlike clear, rewind doesn't seal the AgentSession's same-id writer.
+        await this.session.sealEventLedger();
+        await this.resetProjection(retained);
+        this.persist();
+      }
+      return result;
+    };
+    try { return await cmd.handler(ctx, args); }
+    finally { this.session.rewindConversation = rewind; }
   }
 
   /** Stable browser filename, CURRENT provider journal for /resume. */
@@ -103,12 +127,13 @@ export class WebSessionControl {
    * When ids match the provider remains the sole writer. Only distinct provider
    * ids need a second, browser-owned projection.
    */
-  private async resetProjection(): Promise<void> {
+  private async resetProjection(retained: readonly LedgerPayload[] = []): Promise<void> {
     await this.projection?.close('reset');
     mkdirSync(getSessionLedgerDir(this.id), { recursive: true });
     const path = getSessionLedgerPath(this.id);
     const temporary = `${path}.${randomUUID()}.reset`;
-    writeFileSync(temporary, JSON.stringify({ v: 1, ts: Date.now(), kind: 'meta', sessionId: this.id, model: String(this.stats.model), ...(this.stats.cwd ? { cwd: this.stats.cwd } : {}) }) + '\n', { mode: 0o600 });
+    const records: LedgerPayload[] = [{ kind: 'meta', sessionId: this.id, model: String(this.stats.model), ...(this.stats.cwd ? { cwd: this.stats.cwd } : {}) }, ...retained];
+    writeFileSync(temporary, records.map((record) => JSON.stringify({ v: 1, ts: Date.now(), ...record })).join('\n') + '\n', { mode: 0o600 });
     renameSync(temporary, path);
     this.projection = this.session.sessionId !== this.id ? new SessionLedgerWriter(this.id) : undefined;
     if (this.bound) return;

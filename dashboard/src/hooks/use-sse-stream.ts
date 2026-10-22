@@ -123,6 +123,12 @@ export function useSseStream(
       if (stopped) return;
 
       setStatus(attemptRef.current === 0 ? 'connecting' : 'reconnecting');
+      // Ephemeral choices/progress cannot use the ledger cursor. A reconnect
+      // invalidates the previous connection's sidebands; the server snapshots
+      // currently pending choices to the new subscriber after attachment.
+      if (attemptRef.current > 0) {
+        setSnapshot((prev) => ({ ...prev, events: [...prev.events, { type: 'choice_stream_boundary' }] }));
+      }
 
       let ended = false;
       const controller = new AbortController();

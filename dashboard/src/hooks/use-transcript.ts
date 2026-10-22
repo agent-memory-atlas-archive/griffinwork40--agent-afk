@@ -15,6 +15,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSseStream } from '@/hooks/use-sse-stream';
+import { useChoiceProgress } from '@/hooks/use-choice-progress';
+import type { ChoiceRequest, CommandProgress } from '@/hooks/use-choice-progress';
 import type { StreamStatus } from '@/hooks/use-sse-stream';
 import {
   accumulateTotals,
@@ -49,6 +51,8 @@ export interface UseTranscriptResult {
    * the initial replay burst on session load.
    */
   liveTurns: number;
+  choices: ChoiceRequest[];
+  progress: CommandProgress[];
   /** Drop the old generation and refetch from the server's clear boundary. */
   clear: () => void;
 }
@@ -57,6 +61,7 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revision = sessionId ? revisions[sessionId] ?? 0 : 0;
   const { events, status, error, generation } = useSseStream(sessionId, revision, onReset);
+  const { choices, progress } = useChoiceProgress(events);
 
   const [items, setItems] = useState<TranscriptItem[]>([]);
   const [totals, setTotals] = useState<SessionTotals>(EMPTY_TOTALS);
@@ -108,7 +113,10 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
 
     for (const raw of newEvents) {
       // Each SSE frame is { record: LedgerRecordLike, replay: boolean }.
-      const frame = raw as { record?: unknown; replay?: boolean };
+      const frame = raw as { record?: unknown; replay?: boolean; type?: string };
+      // Sideband choice/progress frames are not ledger records.
+      if (frame.type === 'choice_request' || frame.type === 'choice_settled' ||
+          frame.type === 'choice_stream_boundary' || frame.type === 'progress') continue;
       const record = (frame.record ?? raw) as LedgerRecordLike;
       const isReplay = frame.replay === true;
 
@@ -170,5 +178,5 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
     }
   }, [events, generation]);
 
-  return { items, totals, status, error, turnActive, liveTurns, clear };
+  return { items, totals, status, error, turnActive, liveTurns, clear, choices, progress };
 }

@@ -46,6 +46,7 @@ import type { BufferingWriter } from './writer.buffer.js';
 import type { Writer } from '../cli/slash/types.js';
 
 import { handleCommand, normalizeSlashResult } from './routes.commands.js';
+import { ChoiceBroker } from './choice-broker.js';
 
 // --- helpers ---
 
@@ -344,6 +345,48 @@ describe('handleCommand', () => {
     const { res } = makeRes();
     await handleCommand(ctx, res, SESSION_ID, { input: '/help' });
     expect(order).toEqual(['reserve', 'handler', 'release']);
+  });
+
+  it('wires choose/progress to the broker and command result remains serialized', async () => {
+    const choiceBroker = new ChoiceBroker();
+    const notices = vi.fn();
+    choiceBroker.subscribe(SESSION_ID, notices);
+    mockCreateWebSlashContext.mockReturnValue({ out: {} });
+    FAKE_CMD.handler = vi.fn().mockImplementation(async (context: {
+      choose: (request: { corrId: string; title: string; options: { value: string; label: string }[] }) => Promise<string | null>;
+      progress: (event: { corrId: string; phase: 'end'; label: string }) => void;
+    }) => {
+      const selection = await context.choose({ corrId: 'prompt-1', title: 'Choose', options: [{ value: 'yes', label: 'Yes' }] });
+      context.progress({ corrId: 'prompt-1', phase: 'end', label: selection ?? 'cancelled' });
+      return 'continue';
+    });
+    const result = makeRes();
+    const pending = handleCommand(makeCtx({ choiceBroker }), result.res, SESSION_ID, { input: '/help' });
+    await vi.waitFor(() => expect(notices).toHaveBeenCalledWith({ type: 'choice_request', request: expect.objectContaining({ corrId: 'prompt-1' }) }));
+    expect(choiceBroker.answer(SESSION_ID, 'prompt-1', 'yes')).toBe('answered');
+    await pending;
+    expect(result.json().status).toBe(200);
+    expect(notices).toHaveBeenCalledWith({ type: 'progress', corrId: 'prompt-1', phase: 'end', label: 'yes' });
+  });
+
+  it('aborting the HTTP command response cancels pending choice and releases the turn', async () => {
+    const { EventEmitter } = await import('node:events');
+    const choiceBroker = new ChoiceBroker();
+    mockCreateWebSlashContext.mockReturnValue({ out: {} });
+    FAKE_CMD.handler = vi.fn().mockImplementation((context: { choose: (request: unknown) => Promise<string | null> }) =>
+      context.choose({ corrId: 'disconnect', title: 'Choose', options: [{ value: 'yes', label: 'Yes' }] }).then(() => 'continue'));
+    const response = Object.assign(new EventEmitter(), {
+      writableEnded: false,
+      writeHead() {},
+      end() { this.writableEnded = true; },
+    }) as unknown as ServerResponse;
+    const ctx = makeCtx({ choiceBroker });
+    const pending = handleCommand(ctx, response, SESSION_ID, { input: '/help' });
+    await vi.waitFor(() => expect(choiceBroker.answer('other', 'disconnect', 'yes')).toBe('wrong_session'));
+    response.emit('close');
+    await pending;
+    expect(choiceBroker.answer(SESSION_ID, 'disconnect', 'yes')).toBe('unknown');
+    expect(ctx.releaseTurn).toHaveBeenCalledOnce();
   });
 });
 

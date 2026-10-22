@@ -1,5 +1,6 @@
 import type { SlashContext } from '../../slash/types.js';
-import { webCapabilities, type SurfaceCapability } from '../../slash/capabilities.js';
+import type { SurfaceCapability } from '../../slash/capabilities.js';
+import { createReplInteractions } from '../../slash/interaction.repl.js';
 import type { SessionRef } from '../../../agent/session-ref.js';
 import type { SessionStats } from '../../slash/types.js';
 import type { StatusLine } from '../../status-line.js';
@@ -53,7 +54,7 @@ export function createReplSlashContext(a: {
   // Start with the shared session-control declaration and add the facilities
   // the REPL owner wires (including its shell registry and submit consumer).
   const capabilities = new Set<SurfaceCapability>([
-    ...webCapabilities(), 'permissionMode', 'conversationRetry',
+    'sessionControl', 'progress', 'permissionMode', 'conversationRetry',
     'hostCredentials', 'shellJobs', 'consoleOutput',
   ]);
   // Piped REPLs retain owner facilities, but cannot promise terminal input and
@@ -120,5 +121,13 @@ export function createReplSlashContext(a: {
     // Expose mcpManager so `/mcp auth complete` can call completeAuth().
     ...(a.mcpManager !== undefined ? { mcpManager: a.mcpManager } : {}),
   };
+  const interactions = createReplInteractions({
+    out: a.writer, getCompositor: () => slashCtx.getCompositor?.() ?? null,
+  });
+  slashCtx.progress = interactions.progress;
+  if (capabilities.has('tty')) {
+    capabilities.add('choose');
+    slashCtx.choose = interactions.choose;
+  }
   return slashCtx;
 }

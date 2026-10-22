@@ -62,6 +62,43 @@ function record(stream: number, id: number, text: string) {
 }
 
 describe('Dashboard session controls', () => {
+  it('shows SSE choice dialog and inline progress, submits answer and dismisses via settlement', async () => {
+    await selectFirst();
+    const send = (event: unknown) => streams[0]!.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`));
+    act(() => {
+      send({ type: 'choice_request', request: { corrId: 'pick', title: 'Select model', options: [
+        { value: 'haiku', label: 'Haiku' }, { value: 'sonnet', label: 'Sonnet' },
+      ], cancellable: true } });
+      send({ type: 'progress', corrId: 'compact', phase: 'start', label: 'Compacting', fraction: 0.3 });
+    });
+    expect(await screen.findByRole('dialog', { name: 'Select model' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('Compacting');
+    fireEvent.click(screen.getByRole('radio', { name: 'Sonnet' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/sessions/one/choices/pick', {
+      method: 'POST', body: JSON.stringify({ value: 'sonnet' }),
+    }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Select model' })).toBeNull());
+    act(() => {
+      send({ type: 'choice_settled', corrId: 'pick' });
+      send({ type: 'progress', corrId: 'compact', phase: 'end', label: 'Compacting' });
+    });
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
+
+  it('settlement from another tab and navigation both dismiss stale choices', async () => {
+    await selectFirst();
+    const frame = 'data: {"type":"choice_request","request":{"corrId":"remote","title":"Remote choice","options":[{"value":"yes","label":"Yes"}]}}\n\n';
+    act(() => streams[0]!.enqueue(new TextEncoder().encode(frame)));
+    await screen.findByRole('dialog', { name: 'Remote choice' });
+    act(() => streams[0]!.enqueue(new TextEncoder().encode('data: {"type":"choice_settled","corrId":"remote"}\n\n')));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Remote choice' })).toBeNull());
+    act(() => streams[0]!.enqueue(new TextEncoder().encode(frame)));
+    await screen.findByRole('dialog', { name: 'Remote choice' });
+    await act(async () => fireEvent.click(screen.getAllByText('Second session')[0]!.closest('button')!));
+    expect(screen.queryByRole('dialog', { name: 'Remote choice' })).toBeNull();
+  });
+
   it('clear response before SSE reset retains fresh confirmation without reopening the reader', async () => {
     const ta = await selectFirst();
     act(() => {

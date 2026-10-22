@@ -25,6 +25,8 @@ export interface RouteContext {
   /** Session ids created inside THIS process — the only ones we can drive. */
   owned: Set<string>;
   bridge: WebElicitationBridge;
+  /** Per-server ephemeral interactive choice broker. */
+  choiceBroker?: import('./choice-broker.js').ChoiceBroker;
   /** Submit a prompt to an owned session. */
   submitPrompt: (sessionId: string, text: string) => void;
   /** Submit a pre-built skill-invocation message (ContentBlockParam[]). */
@@ -502,6 +504,7 @@ export async function handleInterrupt(
     return;
   }
   try {
+    ctx.choiceBroker?.cancelSession(sessionId);
     await ctx.interrupt(sessionId);
     sendJson(res, 200, { ok: true });
   } catch (error) {

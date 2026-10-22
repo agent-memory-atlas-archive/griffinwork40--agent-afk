@@ -8,6 +8,7 @@
  */
 
 import type { OutputBlock } from './output-blocks.js';
+import type { Choose, ProgressEvent } from './interaction.js';
 import type { SessionRef } from '../../agent/session-ref.js';
 import type { SurfaceCapability } from './capabilities.js';
 export type { SurfaceCapability } from './capabilities.js';
@@ -209,6 +210,9 @@ export interface UiSurface {
 export interface SlashContext {
   /** Explicit surface support. Absent on legacy contexts during migration. */
   capabilities?: ReadonlySet<SurfaceCapability>;
+  /** Surface adapters own presentation and cancellation; handlers use JSON-safe messages. */
+  choose?: Choose;
+  progress?: (event: ProgressEvent) => void;
   session: SessionRef;
   stats: SessionStats;
   out: Writer;

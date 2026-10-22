@@ -111,6 +111,11 @@ export async function handleCommand(
 
   // 6. Reserve turn synchronously (no await between isBusy and this call).
   ctx.reserveTurn(sessionId);
+  // IncomingMessage.close also fires after the POST body is consumed; only the
+  // response's premature close means the waiting browser command went away.
+  const disconnected = new AbortController();
+  const onDisconnect = (): void => { if (!res.writableEnded) disconnected.abort(); };
+  res.on?.('close', onDisconnect);
 
   try {
     // Ensure registry is initialized (idempotent memo).
@@ -179,6 +184,11 @@ export async function handleCommand(
       : buildOptionalSessionRef(undefined);
     const writer = new BufferingWriter();
     const slashCtx = createWebSlashContext(sessionRef, stats, writer, cwd);
+    if (ctx.choiceBroker) {
+      const broker = ctx.choiceBroker;
+      slashCtx.choose = (request) => broker.choose(sessionId, request, disconnected.signal);
+      slashCtx.progress = (event) => { broker.progress(sessionId, event); };
+    }
 
     // The owner wraps canonical handlers with persistent accounting and a
     // provider-backed fast controller. This route alone owns the reservation.
@@ -193,6 +203,7 @@ export async function handleCommand(
     const message = err instanceof Error ? err.message : String(err);
     sendJson(res, 500, { error: 'command_execution_failed', message });
   } finally {
+    res.off?.('close', onDisconnect);
     // Invariant: releaseTurn fires for ALL return paths inside the try block
     // (including gated 409, session_not_ready 503, and thrown exceptions).
     // The 501/400/409 pre-try early returns do not call reserveTurn, so they
