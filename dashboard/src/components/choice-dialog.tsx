@@ -159,7 +159,10 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
     filterRef.current?.focus();
     return () => {
       mounted.current = false;
-      previousFocusRef.current?.focus();
+      // Defer focus so React's commit (removing the dialog from DOM) runs first.
+      const textarea = document.querySelector<HTMLElement>('textarea');
+      const target = textarea ?? previousFocusRef.current;
+      setTimeout(() => { target?.focus(); }, 0);
     };
   }, []);
 
@@ -180,8 +183,19 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
     if (event.key === 'Escape') {
       event.stopPropagation();
       event.preventDefault();
-      // Cancel without emitting an empty /model block — submit null.
-      if (!busy) void answer(null);
+      if (!busy) {
+        // Dismiss UI immediately so the session becomes interactive again.
+        // Then POST null to the server in the background to unblock the coroutine.
+        const textarea = document.querySelector<HTMLElement>('textarea');
+        const target = textarea ?? previousFocusRef.current;
+        onAnswered();
+        setTimeout(() => { target?.focus(); }, 0);
+        // Fire-and-forget: let the server know the choice was cancelled.
+        void apiFetch(
+          `/api/sessions/${encodeURIComponent(sessionId)}/choices/${encodeURIComponent(request.corrId)}`,
+          { method: 'POST', body: JSON.stringify({ value: null }) },
+        ).catch(() => undefined);
+      }
     }
   }
 

@@ -53,7 +53,7 @@ function buildGroups(
   commands: SlashCommand[],
   query: string,
   recentNames: string[],
-  maxTotal = 8,
+  maxTotal = 12,
 ): CommandGroup[] {
   const q = query.trim().toLowerCase();
   const isFiltering = q.length > 0;
@@ -72,8 +72,10 @@ function buildGroups(
   const skillsGroup: SlashCommand[] = [];
   const seen = new Set<string>();
 
-  // 1. Chat (core) group — pinned first, in declaration order.
+  // 1. Chat (core) group — pinned first, in declaration order (max 7 to leave room for recent).
+  const CORE_MAX = 7;
   for (const name of CORE_COMMAND_NAMES) {
+    if (coreGroup.length >= CORE_MAX) break;
     const cmd = commands.find((c) => c.name === name);
     if (cmd) { coreGroup.push(cmd); seen.add(cmd.name); }
   }
@@ -123,10 +125,10 @@ export function SlashAutocomplete({
   const [recentNames, setRecentNames] = useState<string[]>([]);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Load recently-used commands once on mount.
+  // Refresh recently-used list whenever the autocomplete becomes visible.
   useEffect(() => {
-    setRecentNames(readRecentCommands());
-  }, []);
+    if (visible) setRecentNames(readRecentCommands());
+  }, [visible]);
 
   const groups = buildGroups(commands, query, recentNames);
   // Flat list for keyboard navigation.

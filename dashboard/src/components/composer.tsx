@@ -251,6 +251,7 @@ export function Composer({
       if (trimmed.startsWith('/')) {
         const cmds = await fetchCommands();
         const token = trimmed.split(/\s+/)[0]!;
+        recordRecentCommand(token);
         const cmd = findCommand(cmds, token);
 
         if (cmd?.kind === 'skill') {
