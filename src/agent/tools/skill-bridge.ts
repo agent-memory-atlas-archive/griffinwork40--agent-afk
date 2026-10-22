@@ -22,6 +22,9 @@ import { loadSkillPrompts } from '../../skills/_lib/prompt-loader.js';
 import { scanSkillsFromDir } from '../../skills/user-skills.js';
 import { scanLocalPlugins } from '../plugins-scanner.js';
 import { loadPluginEntrypoints, registerPluginHook } from '../plugins/load-entrypoints.js';
+import { makeDefaultStateStore } from '../providers/shared/provider-stores.js';
+import { sendToSession } from '../peer/send.js';
+import { readLivePresenceFiles } from '../awareness/presence.js';
 import { extractPluginSkills, resolveKnownToolNames } from '../plugins/tool-injector.js';
 import { extractPluginCommands } from '../plugins/command-files.js';
 import { readPluginManifest } from '../plugins/plugin-manifest.js';
@@ -622,6 +625,22 @@ export async function ensurePluginEntrypointsLoaded(): Promise<void> {
       deriveSessionFacet,
       loadStoredSession,
       registerHook: registerPluginHook,
+      // State store: bound methods from a lazily-created default store so
+      // plugins share the same SQLite handle as the rest of the host process.
+      ...(() => {
+        const store = makeDefaultStateStore();
+        return {
+          stateGet: store.get.bind(store),
+          statePut: store.put.bind(store),
+          stateCas: store.cas.bind(store),
+          stateDel: store.del.bind(store),
+          stateInsertIfAbsent: store.insertIfAbsent.bind(store),
+          stateQuery: store.query.bind(store),
+        };
+      })(),
+      // Peer messaging: thin wrappers over the peer send layer.
+      listSessions: () => readLivePresenceFiles(),
+      sendToSession,
     },
   });
 }

@@ -28,6 +28,22 @@ import {
 } from '../facets/index.js';
 import { createHookRegistry } from '../hooks.js';
 import type { HookContext } from '../hooks.js';
+import type { StateStore } from '../state/state-store.js';
+import type { SendInput, SendToSessionResult } from '../peer/send.js';
+import type { PresenceRecord } from '../awareness/presence.js';
+
+// Minimal stubs for the new optional state/peer fields.
+const stubStateStore = {
+  get: ((_ns: string, _key: string) => null) as StateStore['get'],
+  put: ((_ns: string, _key: string, _v: unknown) => ({ version: 1, created: true })) as StateStore['put'],
+  cas: ((_ns: string, _key: string, _ev: number, _v: unknown) => ({ matched: false })) as StateStore['cas'],
+  del: ((_ns: string, _key: string) => ({ deleted: false })) as StateStore['del'],
+  insertIfAbsent: ((_ns: string, _key: string, _v: unknown) => ({ version: 1, created: false })) as StateStore['insertIfAbsent'],
+  query: ((_ns: string) => []) as StateStore['query'],
+};
+const stubListSessions = (): Promise<PresenceRecord[]> => Promise.resolve([]);
+const stubSendToSession = (_input: SendInput): Promise<SendToSessionResult> =>
+  Promise.resolve({ status: 'refused', reason: 'unknown-target', detail: 'stub' });
 
 // The full host-injected API, mirroring skill-bridge.ensurePluginEntrypointsLoaded.
 // `discoverPluginSkillBodies` is stubbed here (its real wiring is type-checked at
@@ -48,6 +64,14 @@ const fullApi: PluginApi = {
   listSessionIds,
   deriveSessionFacet,
   loadStoredSession,
+  stateGet: stubStateStore.get,
+  statePut: stubStateStore.put,
+  stateCas: stubStateStore.cas,
+  stateDel: stubStateStore.del,
+  stateInsertIfAbsent: stubStateStore.insertIfAbsent,
+  stateQuery: stubStateStore.query,
+  listSessions: stubListSessions,
+  sendToSession: stubSendToSession,
 };
 
 let dir: string;
@@ -197,6 +221,14 @@ describe('loadPluginEntrypoints', () => {
         `    listSessionIdsType: typeof api.listSessionIds,\n` +
         `    deriveSessionFacetType: typeof api.deriveSessionFacet,\n` +
         `    loadStoredSessionType: typeof api.loadStoredSession,\n` +
+        `    stateGetType: typeof api.stateGet,\n` +
+        `    statePutType: typeof api.statePut,\n` +
+        `    stateCasType: typeof api.stateCas,\n` +
+        `    stateDelType: typeof api.stateDel,\n` +
+        `    stateInsertIfAbsentType: typeof api.stateInsertIfAbsent,\n` +
+        `    stateQueryType: typeof api.stateQuery,\n` +
+        `    listSessionsType: typeof api.listSessions,\n` +
+        `    sendToSessionType: typeof api.sendToSession,\n` +
         `  };\n` +
         `};\n`,
     );
@@ -216,6 +248,14 @@ describe('loadPluginEntrypoints', () => {
       expect(probe?.listSessionIdsType).toBe('function');
       expect(probe?.deriveSessionFacetType).toBe('function');
       expect(probe?.loadStoredSessionType).toBe('function');
+      expect(probe?.stateGetType).toBe('function');
+      expect(probe?.statePutType).toBe('function');
+      expect(probe?.stateCasType).toBe('function');
+      expect(probe?.stateDelType).toBe('function');
+      expect(probe?.stateInsertIfAbsentType).toBe('function');
+      expect(probe?.stateQueryType).toBe('function');
+      expect(probe?.listSessionsType).toBe('function');
+      expect(probe?.sendToSessionType).toBe('function');
     } finally {
       delete store.__afkApiProbe;
     }

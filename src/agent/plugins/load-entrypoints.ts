@@ -17,6 +17,9 @@ import { isAbsolute, resolve as resolvePath } from 'path';
 import { pathToFileURL } from 'url';
 import type { SdkPluginConfig } from '../types/sdk-types.js';
 import type { HarnessHookEvent, HookHandler, HookRegistry, RegisterOptions } from '../hooks.js';
+import type { StateStore } from '../state/state-store.js';
+import type { SendInput, SendToSessionResult } from '../peer/send.js';
+import type { PresenceRecord } from '../awareness/presence.js';
 
 /**
  * Host runtime API injected into a plugin entrypoint's default-export function.
@@ -65,6 +68,44 @@ export type PluginApi = Pick<
     typeof import('../../paths.js'),
     'getAgentFrameworkDir' | 'getSkillsDir' | 'getSessionsDir'
   > & {
+    /**
+     * Durable cross-session key-value store operations. Optional: only present
+     * when the host wires a StateStore instance at plugin activation time.
+     * Plugins that need persistence should guard: `if (!api.stateGet) return`.
+     */
+    stateGet?: (namespace: string, key: string) => ReturnType<StateStore['get']>;
+    statePut?: (
+      namespace: string,
+      key: string,
+      value: unknown,
+      opts?: Parameters<StateStore['put']>[3],
+    ) => ReturnType<StateStore['put']>;
+    stateCas?: (
+      namespace: string,
+      key: string,
+      expectedVersion: number,
+      value: unknown,
+      opts?: Parameters<StateStore['cas']>[4],
+    ) => ReturnType<StateStore['cas']>;
+    stateDel?: (namespace: string, key: string) => ReturnType<StateStore['del']>;
+    stateInsertIfAbsent?: (
+      namespace: string,
+      key: string,
+      value: unknown,
+      opts?: Parameters<StateStore['insertIfAbsent']>[3],
+    ) => ReturnType<StateStore['insertIfAbsent']>;
+    stateQuery?: (
+      namespace: string,
+      opts?: Parameters<StateStore['query']>[1],
+    ) => ReturnType<StateStore['query']>;
+    /**
+     * Peer session messaging. Optional: only present when the host wires a
+     * caller session id at plugin activation time.
+     * `listSessions` returns the live presence records (excluding self).
+     * `sendToSession` sends a message to a named peer session.
+     */
+    listSessions?: () => Promise<PresenceRecord[]>;
+    sendToSession?: (input: SendInput) => Promise<SendToSessionResult>;
     /**
      * Declare a handler to be installed on each future session registry.
      * Activation runs once per entrypoint path per process, not once per session;
