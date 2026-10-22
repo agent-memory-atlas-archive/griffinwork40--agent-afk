@@ -10,17 +10,24 @@
  * (or `scroll`). Call `scrollToBottom()` whenever new items are added — the
  * hook decides whether to act based on the current pin state.
  *
- * Invariant: `showScrollButton` is true ONLY when the user is scrolled far
- * enough up AND new content has arrived since they left the bottom. Scrolling
- * up without new content (e.g. reading history) does not show the pill.
- * Scrolling to the bottom clears the new-content flag and hides the pill.
+ * Invariant: `showScrollButton` is true whenever the user is scrolled far
+ * enough up (best-in-class: always show ↓ so the user can get back). The
+ * `hasNewContent` flag is layered on top: the label expands to "New messages"
+ * only when content arrived while the user was scrolled up. Scrolling to the
+ * bottom clears both flags and hides the pill.
+ *
+ * History: D4 set showScrollButton = hasNewContent && scrolledUp, which hid
+ * the button when the user scrolled up through a FINISHED answer with no new
+ * content arriving — no way back to the bottom without manual scroll. Fix:
+ * expose `isScrolledUp` separately; the pill is always visible when scrolled
+ * up, and the label "New messages" is added only when hasNewContent is true.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const PINNED_THRESHOLD_PX = 50;
 
-/** Distance from bottom beyond which the pill can appear (if new content). */
+/** Distance from bottom beyond which the jump button appears. */
 const SHOW_BUTTON_THRESHOLD_PX = 200;
 
 export interface UseScrollPinResult {
@@ -31,13 +38,19 @@ export interface UseScrollPinResult {
   /** Whether the container is currently pinned to the bottom. */
   isPinned: boolean;
   /**
-   * True when the user is scrolled up AND new content has arrived since they
-   * left the bottom. Cleared when the user scrolls back to the bottom.
+   * True whenever the user is scrolled far enough up (≥ SHOW_BUTTON_THRESHOLD_PX
+   * from the bottom). The jump button is visible whenever this is true.
    */
   showScrollButton: boolean;
   /**
+   * True when the user is scrolled up AND new content has arrived since they
+   * left the bottom. Cleared when the user scrolls back to the bottom.
+   * Use to expand the button label to "New messages".
+   */
+  hasNewContent: boolean;
+  /**
    * Call whenever new content is appended. If the user is currently scrolled
-   * up, this arms the pill so it becomes visible.
+   * up, this arms the "New messages" label.
    */
   notifyNewContent: () => void;
 }
@@ -45,9 +58,11 @@ export interface UseScrollPinResult {
 export function useScrollPin(): UseScrollPinResult {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isPinned, setIsPinned] = useState(true);
+  // True when the user is far enough from the bottom.
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
   // True only when new content arrived while the user was scrolled up.
   const [hasNewContent, setHasNewContent] = useState(false);
-  // True when the user is far enough from the bottom (independent of new content).
+  // Ref mirror of isScrolledUp for use inside notifyNewContent callback.
   const scrolledUpRef = useRef(false);
 
   // Track pin state and button visibility on scroll.
@@ -59,8 +74,10 @@ export function useScrollPin(): UseScrollPinResult {
       if (el === null) return;
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const pinned = distanceFromBottom <= PINNED_THRESHOLD_PX;
-      scrolledUpRef.current = distanceFromBottom > SHOW_BUTTON_THRESHOLD_PX;
+      const scrolledUp = distanceFromBottom > SHOW_BUTTON_THRESHOLD_PX;
+      scrolledUpRef.current = scrolledUp;
       setIsPinned(pinned);
+      setIsScrolledUp(scrolledUp);
       // Clear the new-content flag when user returns near the bottom.
       if (pinned) setHasNewContent(false);
     }
@@ -77,11 +94,9 @@ export function useScrollPin(): UseScrollPinResult {
   }, []);
 
   const notifyNewContent = useCallback(() => {
-    // Only arm the pill if the user is actually scrolled up.
+    // Only arm the "New messages" label if the user is actually scrolled up.
     if (scrolledUpRef.current) setHasNewContent(true);
   }, []);
 
-  const showScrollButton = hasNewContent && scrolledUpRef.current;
-
-  return { containerRef, scrollToBottom, isPinned, showScrollButton, notifyNewContent };
+  return { containerRef, scrollToBottom, isPinned, showScrollButton: isScrolledUp, hasNewContent, notifyNewContent };
 }

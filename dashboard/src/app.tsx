@@ -66,7 +66,7 @@ function Dashboard() {
     prevTurnsRef.current = 0;
     abortRef.current?.abort();
   });
-  const { containerRef, scrollToBottom, isPinned, showScrollButton, notifyNewContent } = useScrollPin();
+  const { containerRef, scrollToBottom, isPinned, showScrollButton, hasNewContent, notifyNewContent } = useScrollPin();
 
   // Per-tab command outputs survive reload without sending local UI state to the server.
   const { itemsFor: cmdItemsFor, addItem: addCmdItem, clearItems: clearCmdItems } = useCommandOutputs();
@@ -365,9 +365,13 @@ function Dashboard() {
             {activeNav === 'sessions' && selectedSession && selectedSession.mode === 'live' && (
               <div className="relative shrink-0 pb-[env(safe-area-inset-bottom)]" data-testid="composer-dock">
                 {showScrollButton && (
-                  <button onClick={scrollToBottom}
-                    className="absolute -top-10 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-3 py-2 text-xs font-medium text-primary-foreground shadow-lg">
-                    <ArrowDown className="size-3" /> New messages
+                  <button
+                    onClick={scrollToBottom}
+                    aria-label={hasNewContent ? 'New messages' : 'Jump to latest'}
+                    className="absolute -top-10 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-3 py-2 text-xs font-medium text-primary-foreground shadow-lg"
+                  >
+                    <ArrowDown className="size-3" />
+                    {hasNewContent ? 'New messages' : 'Jump to latest'}
                   </button>
                 )}
                 {approvals.length > 0 && (
