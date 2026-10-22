@@ -5,7 +5,7 @@
 
 ## Invariants
 
-- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:` (reinforced 2026-09-18)
+- **INV-001** (2026-09-17, spine-init): Long comment blocks (≥15 lines) must open with `// Invariant:`, `// Contract:`, or `// History:` (reinforced 2026-10-22)
 - **INV-002** (2026-09-17, spine-init): Every DECSTBM emit must be bracketed by `\x1b[s`/`\x1b[u` save/restore or carry a comment explaining why cursor-home is safe at that site (DEC VT spec: CSI r always homes the cursor to (1,1)) (`src/cli/status-line.ts:286-290`)
 - **INV-003** (2026-09-17, spine-init): Before first `log-update.render()` of a session, cursor must be at the target row (typically `stdout.rows - 1`)
 - **INV-004** (2026-09-17, spine-init): Lifecycle flag must be set synchronously before any `await` that could trigger interval timer or resize handler re-entry
@@ -87,6 +87,10 @@
 - **REJ-009** (2026-09-22, spine-audit): Path-approval hook is NOT a security boundary against an adversarial model — it only intercepts typed file tools. Bash has known bypasses (interpreter scripts, variable assembly, /proc/self/fd, brace expansion). OS-level sandboxing required for adversarial containment (`src/agent/tools/hooks/path-approval-hook.ts:9-17`)
 - **REJ-010** (2026-09-23, 9b0972da-73c1-42b1-a75c-12d1ef18452a): Do not apply named-agent tool restrictions via provider override; wire canUseTool callback into SubagentDAGNode instead. (reinforced 2026-10-22)
 - **REJ-011** (2026-09-23, 71ae57b4-d945-46ad-9edb-b437c9fd8008): Do not apply named-agent model defaults via inline definition lookups in compose-executor; flow through resolveComposeNodeAgent() return object.
+- **REJ-012** (2026-10-22, 7fc669ea-df1f-4086-8387-6a49a6499e4e): Do not POST a null answer to dismiss a pending client choice dialog; dismiss client-side via onAnswered() and let the server timeout the pending choice (`dashboard/src/components/choice-dialog.tsx:183-190`) (reinforced 2026-10-22)
+- **REJ-013** (2026-10-22, 50fb7518-0e7b-4a4c-9997-b5e3e1265905): Do not dismiss a client-side choice dialog by POSTing a null answer; dismiss client-side via onAnswered() and let the server timeout the pending choice (`dashboard/src/components/choice-dialog.tsx:183-190`) (reinforced 2026-10-22)
+- **REJ-014** (2026-10-22, ed0e5af6-c36c-4b10-8d9b-1d4eaa0a68cd): Do not use Tailwind opacity/muted tokens for text on inline-styled dark code backgrounds (e.g. Shiki #24292e); opacity blends against the page background, not the code background, failing axe contrast. Use an explicit literal colour verified ≥4.5:1 against the actual code background (`dashboard/src/
+- **REJ-015** (2026-10-22, 8fdd89bc-b626-4fbb-8331-bdce7d308ce1): Do not focus a dialog-owned or unmounting element as a focus-restore target synchronously during close; defer focus restoration with setTimeout(0) so React's commit removes the dialog before focus is moved (choice-dialog.tsx:162-165, 186-191) (reinforced 2026-10-22)
 
 
 ## Taste Calls Made
@@ -107,3 +111,7 @@
 - **TST-014** (2026-10-04, 7f2a9a14-4c2e-4dba-be19-3acac006e56d): Shadow-verify skill offers two modes: default (sample 2–3 claims, latency-optimized) and --findings-list (exhaustive verification of pre-existing findings doc with numbered checklist and terminal gate verdicts: VERIFIED/PARTIAL/BLOCKED). Scale caps: 50 items default, 30 items --findings-list mode (`src/bundled-plugins/awa-bundled/skills/shadow-verify/SKILL.md:15-21, 35-37`) (reinforced 2026-10-06)
 - **TST-015** (2026-10-22, eae23bd5-f57c-4bfc-bbdd-97f27f9d389e): Model option labels include the alias plus resolved model name (e.g. 'medium · Claude Sonnet 4.6'); clients must match on the id field, never on substring/regex against label text (src/dashboard/src/app.test.tsx:60-68)
 - **TST-016** (2026-10-22, 986b6bd1-314b-4a18-a10c-185a2e905614): Slash-command autocomplete refreshes its recently-used list on each visibility transition (useEffect keyed on `visible`) rather than once on mount, so newly recorded commands appear without remounting (`dashboard/src/components/slash-autocomplete.tsx:126-129`) (reinforced 2026-10-22)
+- **TST-017** (2026-10-22, 25f93885-9776-483b-b749-4858c6bc0f3d): Accent text used for low-contrast-sensitive labels on dark backgrounds should meet ≥4.5:1 WCAG contrast; use text-brand/80 rather than text-brand/60 (dashboard/src/components/message-row.tsx:69-70) (reinforced 2026-10-22)
+- **TST-018** (2026-10-22, 8821dad9-1317-4a8a-9fcd-f4c2a32d6914): Dashboard accent text on dark backgrounds should use text-brand/80 (or higher opacity) to meet ≥4.5:1 WCAG contrast; text-brand/60 measured ~3.1:1 and fails (`dashboard/src/components/message-row.tsx:69-70`)
+- **TST-019** (2026-10-22, e0d27ca4-46d2-42f2-b31a-17f88cb555cb): Dark code-block background (#24292e) fails WCAG contrast for muted-foreground labels; use text-foreground/60 (≥4.5:1) for line-number/gutter text in dashboard/src/components/code-block.tsx:98-100
+- **TST-020** (2026-10-22, ed0e5af6-c36c-4b10-8d9b-1d4eaa0a68cd): For text on Shiki/code-block dark backgrounds where token-based contrast is unreliable, prefer an explicit literal hex colour verified ≥4.5:1 against the actual inline-style background over Tailwind opacity utilities (`dashboard/src/components/code-block.tsx:98-102`)
