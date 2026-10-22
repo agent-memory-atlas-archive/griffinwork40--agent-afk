@@ -298,7 +298,7 @@ function Dashboard() {
                   {selectedSession.title ?? 'New session'}
                 </h1>
                 {selectedSession.model && (
-                  <span className="hidden shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block" title="Session model">
+                  <span className="hidden shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground sm:inline-block" title="Session model">
                     {selectedSession.model}
                   </span>
                 )}

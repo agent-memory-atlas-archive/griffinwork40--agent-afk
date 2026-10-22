@@ -89,7 +89,7 @@ export function WorkingIndicator({ phase = 'thinking', toolName, className }: Wo
       </span>
 
       <span
-        className="font-mono text-xs text-muted-foreground/60"
+        className="font-mono text-xs text-muted-foreground"
         aria-hidden="true"
       >
         {elapsed}s
