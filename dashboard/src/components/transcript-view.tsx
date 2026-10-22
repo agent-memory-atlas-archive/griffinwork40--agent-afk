@@ -111,7 +111,7 @@ export function TranscriptView({ sessionId, ...rest }: TranscriptViewProps) {
   );
 }
 
-function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, hideEmptyState = false }: Omit<TranscriptViewProps, 'sessionId'>) {
+function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false }: Omit<TranscriptViewProps, 'sessionId'>) {
   // Filter only the render projection, before either grouping path. Never mutate
   // the ledger-backed array: toggling back on restores old and new thinking.
   const visibleItems = useMemo(() => thinkingUi === 'off'
