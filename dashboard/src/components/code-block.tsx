@@ -121,7 +121,7 @@ export const CodeBlock = memo(function CodeBlock({ code, language }: CodeBlockPr
           // no <style> tags. React applies `style` props through CSSOM, which is
           // always permitted regardless of the style-src CSP directive.
           <div
-            className="overflow-x-auto p-3 font-mono text-xs leading-5"
+            className="overflow-x-auto whitespace-pre p-3 font-mono text-xs leading-5"
             // Scrollable code regions must be keyboard-reachable (axe: scrollable-region-focusable).
             tabIndex={0}
             aria-label={language ? `${language} code block` : 'code block'}
