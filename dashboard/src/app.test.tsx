@@ -84,8 +84,8 @@ async function renderAndSelect() {
 // New session includes model
 // ---------------------------------------------------------------------------
 
-describe('App — new session includes model', () => {
-  it('POSTs {model} when creating a new session', async () => {
+describe('App — new session honors server model', () => {
+  it('omits model until the user chooses one', async () => {
     vi.mocked(api.apiFetch).mockResolvedValue({ session: { id: 'new-sess' } });
 
     render(<App />);
@@ -102,8 +102,7 @@ describe('App — new session includes model', () => {
       const body = JSON.parse(
         (sessionCall![1] as { body?: string })?.body ?? '{}',
       ) as { model?: string };
-      expect(body.model).toBeTruthy();
-      expect(typeof body.model).toBe('string');
+      expect(body).not.toHaveProperty('model');
     });
   });
 });

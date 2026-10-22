@@ -124,8 +124,8 @@ function requireOwned(ctx: RouteContext, res: ServerResponse, id: string): boole
   return false;
 }
 
-export async function handleListSessions(ctx: RouteContext, res: ServerResponse): Promise<void> {
-  const sessions = await listWebSessions(ctx.owned);
+export async function handleListSessions(ctx: RouteContext, res: ServerResponse, ownedModels: ReadonlyMap<string, string> = new Map()): Promise<void> {
+  const sessions = (await listWebSessions(ctx.owned)).map((session) => ({ ...session, ...(ownedModels.has(session.id) ? { model: ownedModels.get(session.id) } : {}) }));
   sendJson(res, 200, { sessions });
 }
 

@@ -1,34 +1,37 @@
-/**
- * Model-list route for the `afk web` surface.
- *
- * Contract: this handler is dispatched from `server.ts` after bearer-token
- * and Origin checks have already passed. The list is intentionally static —
- * no dynamic model discovery, no disk reads.
- */
-
+/** Authenticated model catalogue for the web surface; no provider requests. */
 import type { ServerResponse } from 'node:http';
 import { sendJson } from './routes.js';
+import { loadConfig } from '../cli/config.js';
+import { getSlotBindings, resolveModelInput, SLOT_NAMES, MODEL_ALIASES_HINT } from '../agent/session/model-slots.js';
 
-/** A single model option surfaced to the browser. */
 export interface ModelInfo {
-  /** Short identifier sent to createSession and the API. */
   id: string;
-  /** Human-readable label shown in the selector. */
   label: string;
 }
 
-// Contract: this list matches the tier ids recognised by the afk config
-// resolution layer (providerForModel). Only tiers a default install can
-// actually reach are listed — vendor-specific full model names are not
-// surfaced here because they change with provider releases and would need
-// dynamic discovery.
-const MODELS: readonly ModelInfo[] = [
-  { id: 'sonnet', label: 'Sonnet' },
-  { id: 'haiku', label: 'Haiku' },
-  { id: 'opus', label: 'Opus' },
-];
+/** Resolve aliases in display copy too, so a rebound tier never mislabels its model. */
+function modelLabel(id: string): string {
+  const resolved = resolveModelInput(id) ?? id;
+  const claude = /^claude-(haiku|sonnet|opus|fable)-(\d+)(?:-(\d+))?/.exec(resolved);
+  const name = claude
+    ? `Claude ${claude[1]![0]!.toUpperCase()}${claude[1]!.slice(1)} ${claude[2]}${claude[3] ? `.${claude[3]}` : ''}`
+    : resolved;
+  const display = id.endsWith('_1m') ? `${name} (1M context)` : name;
+  return id === resolved ? display : `${id} · ${display}`;
+}
 
-/** `GET /api/models` — return the static model list. */
-export function handleListModels(res: ServerResponse): void {
-  sendJson(res, 200, { models: MODELS });
+/** `default` is the owner's launch model, not a browser-side guess. */
+export function handleListModels(res: ServerResponse, defaultModel?: string): void {
+  const selected = defaultModel ?? String(loadConfig().model);
+  const bindings = getSlotBindings();
+  const ids = new Set([
+    selected, 'sonnet', 'haiku', 'opus',
+    ...MODEL_ALIASES_HINT.filter((id) => !SLOT_NAMES.includes(id as typeof SLOT_NAMES[number])),
+    ...SLOT_NAMES.filter((slot) => bindings[slot].id.length > 0),
+    ...Object.values(bindings).flatMap((binding) => binding.name ? [binding.name] : []),
+  ]);
+  sendJson(res, 200, {
+    models: [...ids].map((id) => ({ id, label: modelLabel(id) })),
+    default: selected,
+  });
 }

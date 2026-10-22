@@ -6,6 +6,12 @@ import { apiFetch } from '@/lib/api';
 vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }));
 afterEach(() => vi.clearAllMocks());
 
+it('shows resolved catalogue labels in the model choice dialog', async () => {
+  vi.mocked(apiFetch).mockResolvedValue({ models: [{ id: 'haiku', label: 'haiku · Claude Haiku 5.5' }] });
+  render(<ChoiceDialog sessionId="one" onAnswered={vi.fn()} request={{ corrId: 'model', title: 'Select model', options: [{ value: 'haiku', label: 'haiku' }] }} />);
+  expect(await screen.findByRole('radio', { name: 'haiku · Claude Haiku 5.5' })).toBeTruthy();
+});
+
 const request = {
   corrId: 'corr / 1', title: 'Pick a revision', cancellable: true,
   default: 'two',

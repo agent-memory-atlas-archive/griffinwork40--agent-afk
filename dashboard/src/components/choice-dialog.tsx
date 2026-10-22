@@ -14,6 +14,15 @@ export function ChoiceDialog({ sessionId, request, onAnswered }: ChoiceDialogPro
     ? 0 : request.options.findIndex((o) => o.value === request.default));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [modelLabels, setModelLabels] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!/model/i.test(request.title)) return;
+    let cancelled = false;
+    apiFetch<{ models: { id: string; label: string }[] }>('/api/models').then((data) => {
+      if (!cancelled && data?.models) setModelLabels(Object.fromEntries(data.models.map((model) => [model.id, model.label])));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [request.title]);
   const dialogRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -96,7 +105,7 @@ export function ChoiceDialog({ sessionId, request, onAnswered }: ChoiceDialogPro
               type="button" role="radio" aria-checked={selected === index} tabIndex={selected === index ? 0 : -1}
               disabled={busy} onClick={() => setSelected(index)}
               className={`rounded-md border p-3 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring ${selected === index ? 'border-brand bg-accent' : 'border-border'}`}>
-              <span className="font-medium">{option.label}</span>
+              <span className="font-medium">{modelLabels[option.value] ?? option.label}</span>
               {option.description && <span className="mt-1 block text-muted-foreground">{option.description}</span>}
             </button>
           ))}

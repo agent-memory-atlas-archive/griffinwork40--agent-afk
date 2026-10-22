@@ -22,6 +22,7 @@ import type { UseQueueResult } from '@/hooks/use-queue';
 import { useCommandControl } from '@/hooks/use-command-control';
 
 interface ComposerProps {
+  prefill?: { text: string; nonce: number };
   sessionId: string;
   sessionMode: 'live' | 'readonly';
   isBusy: boolean;
@@ -107,6 +108,7 @@ function commandErrorMessage(err: unknown, token: string): string {
 
 /** Main prompt composer — textarea + send/stop controls. */
 export function Composer({
+  prefill,
   sessionId,
   sessionMode,
   isBusy,
@@ -124,6 +126,9 @@ export function Composer({
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [acActiveIdx, setAcActiveIdx] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (prefill) { setText(prefill.text); textareaRef.current?.focus(); }
+  }, [prefill]);
   const lifetimeRef = useRef({ active: true });
   useEffect(() => {
     const lifetime = { active: true };

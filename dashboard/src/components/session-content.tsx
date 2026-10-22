@@ -22,7 +22,13 @@ export function SessionContent({
   status,
   turnActive,
   thinkingUi,
+  onNewSession,
+  starting,
+  onSuggest,
 }: {
+  onNewSession?: () => void;
+  starting?: boolean;
+  onSuggest?: (text: string) => void;
   loading: boolean;
   sessions: SessionSummary[];
   selectedSession: SessionSummary | undefined;
@@ -43,16 +49,7 @@ export function SessionContent({
       </div>
     );
   }
-  if (!loading && sessions.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
-        <p className="text-sm">
-          No sessions found. Start one with{' '}
-          <code className="rounded bg-secondary px-1 font-mono">afk web</code>
-        </p>
-      </div>
-    );
-  }
+
   if (selectedSession && (items.length > 0 || cmdItems.length > 0)) {
     return (
       <TranscriptWithCommands
@@ -75,7 +72,23 @@ export function SessionContent({
               <span className="text-sm">Connecting to session...</span>
             </>
           ) : selectedSession.mode === 'live' ? (
-            <span className="text-sm">New session. Send a message to start.</span>
+            <div className="mx-auto w-full max-w-xl px-5 py-10 text-center">
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">What can we work on?</h2>
+              <p className="mt-3 text-sm leading-relaxed">Ask a question, explore your project, or turn an idea into working code.</p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                {[
+                  ['Explore this project', 'Give me a concise overview of this project and its architecture.'],
+                  ['Find a bug', 'Help me investigate a bug. Ask me what is going wrong first.'],
+                  ['Plan a feature', 'Help me plan a new feature. Ask me what I want to build.'],
+                  ['Review my changes', 'Review my current changes for correctness and potential risks.'],
+                ].map(([label, text]) => (
+                  <button key={label} onClick={() => onSuggest?.(text!)}
+                    className="rounded-xl border bg-card p-4 text-left text-sm font-medium text-foreground transition-colors hover:border-brand/60 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : (
             <span className="text-sm">No transcript data</span>
           )}
@@ -85,7 +98,16 @@ export function SessionContent({
   }
   return (
     <div className="flex h-full items-center justify-center text-muted-foreground">
-      <p className="text-sm">Select a session from the sidebar</p>
+      <div className="max-w-lg px-6 py-12 text-center">
+        <img src="/brand-mark.svg" alt="" className="mx-auto mb-6 size-12" />
+        <h2 className="text-3xl font-semibold tracking-tight text-foreground">Your next idea starts here</h2>
+        <p className="mt-4 text-sm leading-relaxed">Chat with an agent that can explore your project, explain code, and help you get things done. You stay in control.</p>
+        <button onClick={onNewSession} disabled={starting}
+          className="mt-7 min-h-11 rounded-xl bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand/90 disabled:opacity-60">
+          {starting ? 'Starting…' : 'New chat'}
+        </button>
+        {sessions.length > 0 && <p className="mt-4 text-xs">Or continue a conversation from the sidebar.</p>}
+      </div>
     </div>
   );
 }

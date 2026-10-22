@@ -45,7 +45,7 @@ describe('POST /api/sessions/:id/resume', () => {
     const r = fakeRes();
     await handleResumeSession(ctxWith(async () => { throw new Error('boom'); }), r.res, 'old-1');
     expect(r.status()).toBe(500);
-    expect(r.body()).toMatchObject({ error: 'resume_failed', message: 'boom' });
+    expect(r.body()).toMatchObject({ error: 'resume_failed', message: 'Failed to resume session.' });
   });
 
   it('501 on an attach-only server', async () => {

@@ -3,7 +3,7 @@ import type { SessionSummary, SessionStatusGroup } from '@/types/api';
 
 const statusConfig: Record<
   SessionStatusGroup,
-  { label: string; className: string; pulse?: boolean }
+  { label: string; className: string }
 > = {
   'needs-input': {
     label: 'Needs Input',
@@ -11,10 +11,9 @@ const statusConfig: Record<
       'bg-status-blocked/20 text-status-blocked border-status-blocked/30',
   },
   active: {
-    label: 'Running',
+    label: 'Idle',
     className:
       'bg-status-running/20 text-status-running border-status-running/30',
-    pulse: true,
   },
   completed: {
     label: 'Done',
@@ -34,8 +33,10 @@ export function classifySession(
 export function SessionStatusBadge({
   status,
   className,
+  running = false,
 }: {
   status: SessionStatusGroup;
+  running?: boolean;
   className?: string;
 }) {
   const config = statusConfig[status];
@@ -47,10 +48,10 @@ export function SessionStatusBadge({
         className,
       )}
     >
-      {config.pulse && (
+      {status === 'active' && running && (
         <span className="size-1.5 animate-pulse rounded-full bg-current" />
       )}
-      {config.label}
+      {status === 'active' && running ? 'Running' : config.label}
     </span>
   );
 }
