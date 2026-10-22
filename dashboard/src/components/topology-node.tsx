@@ -10,7 +10,9 @@
  * nodes whose `isActive` is false. Root and tool nodes are always expanded.
  */
 
-import { useState } from 'react';
+import { useState, useContext } from 'react';
+import { toolSummary } from '@/lib/tool-summary';
+import { ToolSummaryCwd } from '@/lib/tool-summary-context';
 import {
   FileSearch,
   FilePen,
@@ -177,6 +179,8 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
       (node.sourceId !== undefined && node.outputUnavailable === true));
   const [outputOpen, setOutputOpen] = useState(false);
 
+  const cwd = useContext(ToolSummaryCwd);
+  const summary = toolSummary(node.label, node.preview ?? '', cwd);
   const hasChildren = node.children.length > 0;
   const isAgent = node.kind === 'agent';
 
@@ -188,16 +192,20 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
       {/* ── Header row ─────────────────────────────────────── */}
       <div
         className={cn(
-          'flex items-center gap-1.5 py-0.5 group',
+          'flex flex-wrap items-center gap-1.5 py-1 group rounded focus-visible:outline-2 focus-visible:outline-ring',
           isCollapsible && 'cursor-pointer select-none',
         )}
         onClick={isCollapsible ? () => setExpanded(e => !e) : undefined}
         role={isCollapsible ? 'button' : undefined}
+        tabIndex={isCollapsible ? 0 : undefined}
+        onKeyDown={isCollapsible ? e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v); }
+        } : undefined}
         aria-expanded={isCollapsible ? expanded : undefined}
       >
         {/* Collapse chevron — only on collapsible agent nodes */}
         {isCollapsible ? (
-          <ChevronIcon className="h-3 w-3 shrink-0 text-muted-foreground/50" />
+          <ChevronIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
         ) : (
           <span className="h-3 w-3 shrink-0" aria-hidden />
         )}
@@ -210,12 +218,16 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
           className={cn(
             'text-[12px] font-mono leading-none',
             node.status === 'cancelled' && 'opacity-50',
-            node.status === 'error'     && 'text-status-failed',
+            node.status === 'error'     && 'text-foreground',
             node.status === 'running'   && 'text-foreground',
             node.status === 'ok'        && 'text-foreground/80',
           )}
         >
           {node.label}
+        </span>
+
+        <span className="text-[10px] text-foreground shrink-0">
+          {node.status === 'ok' ? '✓ Done' : node.status === 'error' ? '! Error' : node.status === 'cancelled' ? '— Cancelled' : '◌ Running'}
         </span>
 
         {/* ── Badges ── */}
@@ -254,6 +266,7 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
             {formatSpineCost(node.costUsd)}
           </span>
         )}
+        {summary && <span title={summary} className="min-w-0 basis-full pl-5 truncate font-mono text-xs text-foreground" data-tool-summary>{summary}</span>}
       </div>
 
       {/* ── Output (tool nodes) ─────────────────────────────── */}
@@ -263,12 +276,12 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
             type="button"
             onClick={() => setOutputOpen((v) => !v)}
             aria-expanded={outputOpen}
-            className="text-[10px] text-muted-foreground/70 hover:text-foreground"
+            className="text-[10px] text-muted-foreground hover:text-foreground rounded focus-visible:outline-2 focus-visible:outline-ring"
           >
             {outputOpen ? 'Hide output' : 'Output'}
           </button>
           {outputOpen && (
-            <div className="mt-0.5 mb-1 max-h-96 overflow-y-auto rounded border border-border/50 bg-card px-2 py-1">
+            <div className="mt-0.5 mb-1 rounded border border-border/50 bg-card px-2 py-1">
               <FullToolOutput
                 toolUseId={node.sourceId}
                 preview={node.output}
@@ -277,13 +290,6 @@ export function TopologyNode({ node, depth = 0, isLast: _isLast = false }: Topol
               />
             </div>
           )}
-        </div>
-      )}
-
-      {/* ── Preview line (agents only) ─────────────────────── */}
-      {isAgent && node.preview && (
-        <div className="pl-5 text-[11px] italic text-muted-foreground/60 line-clamp-1 leading-tight">
-          {node.preview}
         </div>
       )}
 

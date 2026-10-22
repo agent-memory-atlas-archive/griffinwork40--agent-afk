@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -62,7 +63,7 @@ const components: Components = {
 };
 
 /** Renders markdown with GFM support (tables, task lists, strikethrough). */
-export function MarkdownContent({ text, className }: { text: string; className?: string }) {
+export const MarkdownContent = memo(function MarkdownContent({ text, className }: { text: string; className?: string }) {
   return (
     <div className={cn('text-sm text-foreground', className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -70,4 +71,4 @@ export function MarkdownContent({ text, className }: { text: string; className?:
       </ReactMarkdown>
     </div>
   );
-}
+});
