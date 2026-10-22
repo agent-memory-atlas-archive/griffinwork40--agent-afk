@@ -71,8 +71,23 @@ export function useCommandOutputs(): UseCommandOutputsResult {
   const addItem = useCallback(
     (sessionId: string, input: string, response: CommandResponse, afterCount: number) => {
       const cleared = response.control.kind === 'clear';
+      const hasContent = response.blocks.some((b) => b.text.trim().length > 0);
+      // When a /model switch succeeds the server returns a session metadata
+      // payload but the blocks are empty (the command handler writes to a REPL
+      // writer that is discarded server-side for the web path).  Synthesise a
+      // single concise confirmation line so the user sees feedback without an
+      // empty block being left in the transcript.
+      const effectiveResponse: CommandResponse = (!hasContent && response.session?.model)
+        ? {
+            ...response,
+            blocks: [{ text: `Switched to ${response.session.model}`, ansi: '' }],
+          }
+        : response;
+      // Drop entirely when there is nothing to show and no meaningful metadata.
+      const effectiveContent = effectiveResponse.blocks.some((b) => b.text.trim().length > 0);
+      if (!effectiveContent && response.control.kind === 'continue') return;
       const item: CommandOutputItem = {
-        key: ++nextKey, input, response, afterCount: cleared ? 0 : afterCount,
+        key: ++nextKey, input, response: effectiveResponse, afterCount: cleared ? 0 : afterCount,
       };
       // Keep the clear confirmation, but discard all previous local outputs.
       setBySession((prev) => ({

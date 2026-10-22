@@ -5,10 +5,44 @@ import { getSessionJournalPath } from '../paths.js';
 import { hydrateMessages, loadDisplayMessages, loadJournalFold } from '../agent/journal/index.js';
 import { hasToolResultBlock, messageText } from '../agent/content/user-authored.js';
 import { clip, MAX_ASSISTANT_TEXT_LEN, MAX_TEXT_LEN, MAX_TOOL_INPUT_LEN } from '../agent/session-ledger-project.js';
+import { readLedger } from '../agent/session-ledger.js';
 import { isPreamble, extractUserContent } from '../agent/session/preamble-strip.js';
 import type { AgentSession } from '../agent/session/agent-session.js';
 import type { JournalMessage } from '../agent/journal/index.js';
 import type { LedgerPayload } from '../agent/session-ledger.js';
+
+/**
+ * Read cost totals accumulated across all `done` records in a session ledger.
+ *
+ * Contract: called BEFORE the ledger is archived/replaced so that Retry and
+ * /rewind can carry billing metadata into the rebuilt projection.  The journal
+ * itself contains no billing data (journals record conversation content only),
+ * so this is the sole source of truth for per-turn cost after a rewind.
+ *
+ * Never throws — a missing or unreadable ledger simply returns zero totals.
+ */
+export async function readLedgerCostTotals(sessionId: string): Promise<{
+  costUsd: number;
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+}> {
+  const totals = { costUsd: 0, durationMs: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+  try {
+    for await (const rec of readLedger(sessionId)) {
+      if (rec.kind !== 'done') continue;
+      if (typeof rec.costUsd === 'number') totals.costUsd += rec.costUsd;
+      if (typeof rec.durationMs === 'number') totals.durationMs += rec.durationMs;
+      if (typeof rec.inputTokens === 'number') totals.inputTokens += rec.inputTokens;
+      if (typeof rec.outputTokens === 'number') totals.outputTokens += rec.outputTokens;
+      if (typeof rec.cacheReadTokens === 'number') totals.cacheReadTokens += rec.cacheReadTokens;
+    }
+  } catch {
+    // Unreadable ledger — return whatever was accumulated so far.
+  }
+  return totals;
+}
 
 /** Check BEFORE mutation too: a disabled/failed journal cannot safely rewind web. */
 export async function readProjectionMessages(session: AgentSession): Promise<JournalMessage[]> {
@@ -23,7 +57,32 @@ export async function readProjectionMessages(session: AgentSession): Promise<Jou
   return hydrateMessages(loadDisplayMessages(id));
 }
 
-export function projectJournalMessages(messages: readonly JournalMessage[]): LedgerPayload[] {
+/**
+ * Per-turn cost totals from the pre-rewind ledger.  When provided, the cost is
+ * distributed across the projected `done` records so the browser meter does not
+ * reset to zero after Retry or /rewind.
+ *
+ * Contract: the totals come from `readLedgerCostTotals`, which sums every
+ * `done` record in the CURRENT ledger BEFORE it is archived.  After the rewind,
+ * the new ledger starts empty, so without this injection the header meter drops
+ * to $0 even though the underlying API cost was already incurred.
+ *
+ * Distribution strategy: attribute all cost to the LAST `done` record in the
+ * retained projection, matching the shape of a real ledger where a multi-tool
+ * turn accumulates all billing in one `done` event.
+ */
+export type LedgerCostTotals = {
+  costUsd: number;
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+};
+
+export function projectJournalMessages(
+  messages: readonly JournalMessage[],
+  priorCost?: LedgerCostTotals,
+): LedgerPayload[] {
   const records: LedgerPayload[] = [];
   const tools = new Map<string, string>();
   let turn = false;
@@ -63,7 +122,21 @@ export function projectJournalMessages(messages: readonly JournalMessage[]): Led
       }
     }
   }
-  // Journals contain no billing/duration metadata. Do not fabricate it.
-  if (turn) records.push({ kind: 'done' });
+  if (!turn) return records;
+  // Invariant: carry pre-rewind billing totals into the LAST done record so the
+  // browser meter shows the cumulative session cost rather than resetting to $0.
+  // Journals hold no billing metadata, so we inject it from the archived ledger.
+  if (priorCost && priorCost.costUsd > 0) {
+    records.push({
+      kind: 'done',
+      costUsd: priorCost.costUsd,
+      ...(priorCost.durationMs > 0 ? { durationMs: priorCost.durationMs } : {}),
+      ...(priorCost.inputTokens > 0 ? { inputTokens: priorCost.inputTokens } : {}),
+      ...(priorCost.outputTokens > 0 ? { outputTokens: priorCost.outputTokens } : {}),
+      ...(priorCost.cacheReadTokens > 0 ? { cacheReadTokens: priorCost.cacheReadTokens } : {}),
+    });
+  } else {
+    records.push({ kind: 'done' });
+  }
   return records;
 }

@@ -22,9 +22,19 @@ const components: Components = {
   ul: ({ children }) => (
     <ul className="mb-2 pl-6 list-disc list-outside space-y-0.5">{children}</ul>
   ),
-  ol: ({ children }) => (
-    <ol className="mb-2 pl-6 list-decimal list-outside space-y-0.5">{children}</ol>
-  ),
+  // Contract: ordered-list marker width grows with item count. pl-6 fits up to
+  // 2-digit markers; pl-9 adds ~12px for the 3-digit "100."/"183." width.
+  // react-markdown passes `start` (the first item's start number) as a prop;
+  // we count children to infer the max marker width rather than relying on
+  // `start` alone, because a list could start at 90 and grow past 100.
+  ol: ({ children, start }) => {
+    const count = Array.isArray(children) ? children.length : 1;
+    const maxIndex = (typeof start === 'number' ? start : 1) + count - 1;
+    const padding = maxIndex >= 100 ? 'pl-9' : 'pl-6';
+    return (
+      <ol className={`mb-2 ${padding} list-decimal list-outside space-y-0.5`}>{children}</ol>
+    );
+  },
   li: ({ children }) => <li className="text-[15px] leading-relaxed">{children}</li>,
   blockquote: ({ children }) => (
     <blockquote className="mb-2 border-l-2 border-brand/50 pl-3 italic text-muted-foreground">
