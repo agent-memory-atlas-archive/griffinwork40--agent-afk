@@ -204,6 +204,16 @@ function applyToolResult(record: LedgerRecordLike, toolIndex?: ToolIndex): Trans
   return undefined;
 }
 
+/**
+ * A turn ended: any tool still 'running' (no tool_result recorded, e.g. a
+ * pre-Wave-1 ledger or a call without a toolUseId) is settled to 'ok'.
+ * Mutates in place; the terminal record's own item triggers the re-render.
+ */
+export function settleRunningTools(toolIndex?: ToolIndex): void {
+  if (toolIndex === undefined) return;
+  for (const item of toolIndex.values()) if (item.status === 'running') item.status = 'ok';
+}
+
 // ---------------------------------------------------------------------------
 // Core converter
 // ---------------------------------------------------------------------------
@@ -264,11 +274,12 @@ export function ledgerRecordToItem(
         name: str(record['toolName']) ?? 'tool',
         toolUseId,
         inputPreview: input,
-        // Contract: status 'ok' is inferred. The ledger records that a tool
-        // started; a corresponding tool_result arrives separately (Wave 1+).
-        // Absence of output here is a gap in the record, not evidence that the
-        // tool produced nothing — hence outputUnavailable.
-        status: 'ok',
+        // Contract: a tool is 'running' until its tool_result (matched by
+        // toolUseId) or the turn's terminal record (`done`/`error`, see
+        // settleRunningTools) arrives. Absence of output here is a gap in the
+        // record, not evidence that the tool produced nothing — hence
+        // outputUnavailable.
+        status: 'running',
         outputUnavailable: true,
       };
 
@@ -299,9 +310,11 @@ export function ledgerRecordToItem(
     }
 
     case 'error':
+      settleRunningTools(toolIndex);
       return { kind: 'error', id: nextId('e'), message: str(record['message']) ?? 'error' };
 
     case 'done': {
+      settleRunningTools(toolIndex);
       const stopReason = str(record['stopReason']);
       const stopped = stopReason === 'interrupted';
       const cost = record['costUsd'];

@@ -17,7 +17,8 @@ import type { TranscriptItem } from '@/lib/ledger-adapter';
 import type { ThinkingUiMode } from '@/types/command-wire';
 import { TranscriptSessionContext } from '@/hooks/use-full-tool-result';
 import { liveStateOf } from '@/hooks/use-live-drafts';
-import { WorkingIndicator } from './working-indicator';
+import { WorkingIndicator, type WorkingPhase } from './working-indicator';
+import { fenceSafeLength } from './streaming-text';
 
 interface TranscriptViewProps {
   items: TranscriptItem[];
@@ -141,6 +142,33 @@ function renderTextItem(item: TranscriptItem, isStreamingOrOpts: boolean | Rende
   }
 }
 
+/** True when a streaming draft has text the user can actually see. */
+function hasVisibleText(item: TranscriptItem): boolean {
+  if (item.kind !== 'assistant' && item.kind !== 'thinking') return false;
+  return item.text.slice(0, fenceSafeLength(item.text)).trim().length > 0;
+}
+
+/**
+ * Working-indicator state. Shown while the turn is active until a streaming
+ * draft has VISIBLE text (an empty / whitespace / held-back-fence draft does
+ * not count: that produced a blank screen for 13 s). Phase: 'running' while
+ * the newest tool row has no result yet, 'writing' after a tool finished,
+ * else 'thinking'.
+ */
+export function workingState(items: readonly TranscriptItem[], turnActive: boolean): { showWorking: boolean; workingPhase: WorkingPhase; runningTool?: string } {
+  const hasDraft = items.some((i) => liveStateOf(i) === 'streaming' && hasVisibleText(i));
+  const lastItem = items[items.length - 1];
+  let runningTool: string | undefined;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === 'user') break;
+    if (it.kind === 'tool' && it.status === 'running') { runningTool = it.name; break; }
+  }
+  const lastWasTool = lastItem?.kind === 'tool' || lastItem?.kind === 'notice';
+  const workingPhase: WorkingPhase = runningTool ? 'running' : lastWasTool ? 'writing' : 'thinking';
+  return { showWorking: turnActive && !hasDraft, workingPhase, ...(runningTool ? { runningTool } : {}) };
+}
+
 // ---------------------------------------------------------------------------
 // Main view
 // ---------------------------------------------------------------------------
@@ -186,16 +214,7 @@ function TranscriptBody({ items, thinkingUi = 'live', spineMode = true, turnActi
     [optsFor],
   );
 
-  // Determine if a working indicator should show. Show when:
-  // 1. The turn is active (agent running)
-  // 2. There are no live drafts yet (no streaming text for this turn)
-  // The last item in the visible list tells us what just happened.
-  const lastItem = visibleItems[visibleItems.length - 1];
-  const hasDraft = visibleItems.some((i) => liveStateOf(i) === 'streaming');
-  // Show "Writing…" after a tool group completed but before text arrives.
-  const lastWasTool = lastItem?.kind === 'tool' || lastItem?.kind === 'notice';
-  const workingPhase = lastWasTool ? 'writing' : 'thinking';
-  const showWorking = turnActive && !hasDraft;
+  const { showWorking, workingPhase, runningTool } = workingState(visibleItems, turnActive);
 
   return (
     <div role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions text" aria-busy={turnActive} className="flex flex-col gap-0 max-w-4xl mx-auto w-full [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-ring [&_a:focus-visible]:outline-2 [&_a:focus-visible]:outline-ring">
@@ -232,7 +251,7 @@ function TranscriptBody({ items, thinkingUi = 'live', spineMode = true, turnActi
       )}
       {showWorking && (
         <div className="py-2 px-1" data-testid="working-indicator">
-          <WorkingIndicator phase={workingPhase} />
+          <WorkingIndicator phase={workingPhase} {...(runningTool ? { toolName: runningTool } : {})} />
         </div>
       )}
     </div>
