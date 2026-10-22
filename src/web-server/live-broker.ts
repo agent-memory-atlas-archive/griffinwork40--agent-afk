@@ -21,6 +21,8 @@ export const LIVE_BATCH_MS = 50;
 interface PendingDelta { seg: number; part: LivePart; offset: number; text: string }
 
 interface SessionLive {
+  /** Per-session turn sequence (survives endTurn via `turnSeq`). */
+  turn: number;
   tracker: SegmentTracker;
   pending: PendingDelta[];
   timer: ReturnType<typeof setTimeout> | undefined;
@@ -37,6 +39,10 @@ export interface LiveSink {
 export class LiveBroker implements LiveSink {
   private readonly sessions = new Map<string, SessionLive>();
   private readonly subscribers = new Map<string, Set<Subscriber>>();
+  // Monotonic per-session turn counter. Lives outside `sessions` (dropped at
+  // endTurn) so turn N+1 never reuses turn N's number: clients key drafts on
+  // `turn:part:seg` because `seg` restarts at 0 every turn.
+  private readonly turnSeq = new Map<string, number>();
 
   constructor(private readonly batchMs = LIVE_BATCH_MS) {}
 
@@ -55,7 +61,7 @@ export class LiveBroker implements LiveSink {
   snapshot(sessionId: string): LiveSsePayload[] {
     const live = this.sessions.get(sessionId);
     if (!live) return [];
-    return live.tracker.openSegments().map((s) => ({ type: 'live_snapshot', seg: s.seg, part: s.part, text: s.text }));
+    return live.tracker.openSegments().map((s) => ({ type: 'live_snapshot', turn: live.turn, seg: s.seg, part: s.part, text: s.text }));
   }
 
   beginTurn(sessionId: string): void {
@@ -63,6 +69,9 @@ export class LiveBroker implements LiveSink {
     this.flushPending(sessionId, live);
     live.tracker.beginTurn();
     live.ended = undefined;
+    const turn = (this.turnSeq.get(sessionId) ?? 0) + 1;
+    this.turnSeq.set(sessionId, turn);
+    live.turn = turn;
   }
 
   observe(sessionId: string, event: OutputEvent): void {
@@ -79,17 +88,18 @@ export class LiveBroker implements LiveSink {
     for (const step of live.tracker.flush()) this.apply(sessionId, live, step);
     this.flushPending(sessionId, live);
     this.sessions.delete(sessionId);
-    this.publish(sessionId, { type: 'live_end', reason: final });
+    this.publish(sessionId, { type: 'live_end', turn: live.turn, reason: final });
   }
 
   cancelAll(): void {
     for (const live of this.sessions.values()) clearTimeout(live.timer);
     this.sessions.clear();
     this.subscribers.clear();
+    this.turnSeq.clear();
   }
 
   private create(sessionId: string): SessionLive {
-    const live: SessionLive = { tracker: new SegmentTracker(), pending: [], timer: undefined, ended: undefined };
+    const live: SessionLive = { turn: this.turnSeq.get(sessionId) ?? 0, tracker: new SegmentTracker(), pending: [], timer: undefined, ended: undefined };
     this.sessions.set(sessionId, live);
     return live;
   }
@@ -111,8 +121,8 @@ export class LiveBroker implements LiveSink {
     }
     // Ordering: pending deltas of a segment go out before its seal/reset.
     this.flushPending(sessionId, live);
-    if (step.op === 'seal') this.publish(sessionId, { type: 'live_seal', seg: step.seg, part: step.part });
-    else this.publish(sessionId, { type: 'live_snapshot', seg: step.seg, part: step.part, text: '' });
+    if (step.op === 'seal') this.publish(sessionId, { type: 'live_seal', turn: live.turn, seg: step.seg, part: step.part });
+    else this.publish(sessionId, { type: 'live_snapshot', turn: live.turn, seg: step.seg, part: step.part, text: '' });
   }
 
   private flushPending(sessionId: string, live: SessionLive): void {
@@ -120,7 +130,7 @@ export class LiveBroker implements LiveSink {
     live.timer = undefined;
     const batch = live.pending;
     live.pending = [];
-    for (const d of batch) this.publish(sessionId, { type: 'live_delta', ...d });
+    for (const d of batch) this.publish(sessionId, { type: 'live_delta', turn: live.turn, ...d });
   }
 
   private publish(sessionId: string, event: LiveSsePayload): void {

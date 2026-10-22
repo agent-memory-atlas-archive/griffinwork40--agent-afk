@@ -34,3 +34,31 @@ describe.each([true, false])('thinking display (spineMode=%s)', (spineMode) => {
     expect(screen.getByText('Original reasoning')).toBeTruthy();
   });
 });
+
+describe('workingState (indicator visibility + phase)', () => {
+  it('keeps the indicator while the streaming draft has no visible text, hides it once text shows', async () => {
+    const { workingState } = await import('./transcript-view');
+    const user = { kind: 'user' as const, id: 'u', text: 'q' };
+    const empty = { kind: 'assistant' as const, id: 'd', text: '', live: 'streaming' };
+    const fence = { kind: 'assistant' as const, id: 'd', text: '```ty', live: 'streaming' };
+    const shown = { kind: 'assistant' as const, id: 'd', text: 'Hello', live: 'streaming' };
+    expect(workingState([user, empty], true).showWorking).toBe(true);
+    expect(workingState([user, fence], true).showWorking).toBe(true);
+    expect(workingState([user, shown], true).showWorking).toBe(false);
+  });
+
+  it('reports Running <tool> while the newest tool has no result, then Writing', async () => {
+    const { workingState } = await import('./transcript-view');
+    const user = { kind: 'user' as const, id: 'u', text: 'q' };
+    const tool = { kind: 'tool' as const, id: 't', name: 'bash', inputPreview: 'sleep 4', status: 'running' as const };
+    expect(workingState([user, tool], true)).toMatchObject({ showWorking: true, workingPhase: 'running', runningTool: 'bash' });
+    expect(workingState([user, { ...tool, status: 'ok' as const }], true)).toMatchObject({ workingPhase: 'writing' });
+  });
+
+  it('renders "Running bash" in the indicator', async () => {
+    const { TranscriptView: View } = await import('./transcript-view');
+    const { render: r } = await import('@testing-library/react');
+    const { container } = r(<View turnActive items={[{ kind: 'user', id: 'u', text: 'q' }, { kind: 'tool', id: 't', name: 'bash', inputPreview: 'sleep 4', status: 'running' }]} />);
+    expect(container.querySelector('[data-testid="working-indicator"]')?.textContent).toContain('Running bash');
+  });
+});

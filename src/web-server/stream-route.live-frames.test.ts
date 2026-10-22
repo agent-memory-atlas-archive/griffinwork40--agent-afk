@@ -43,11 +43,11 @@ describe('handleStream live frames', () => {
       await vi.waitFor(() => expect(tab.frames().some((f) => f.data.type === 'live_snapshot')).toBe(true));
       const frames = tab.frames();
       expect(frames[0]!.data.record.text).toBe('old answer');
-      expect(frames[1]).toEqual({ id: undefined, data: { type: 'live_snapshot', seg: 0, part: 'text', text: 'Hel' } });
+      expect(frames[1]).toEqual({ id: undefined, data: { type: 'live_snapshot', turn: 1, seg: 0, part: 'text', text: 'Hel' } });
       live.observe(id, text('lo'));
       await vi.waitFor(() => expect(tab.frames().some((f) => f.data.type === 'live_delta')).toBe(true));
       const delta = tab.frames().find((f) => f.data.type === 'live_delta')!;
-      expect(delta).toEqual({ id: undefined, data: { type: 'live_delta', seg: 0, part: 'text', offset: 3, text: 'lo' } });
+      expect(delta).toEqual({ id: undefined, data: { type: 'live_delta', turn: 1, seg: 0, part: 'text', offset: 3, text: 'lo' } });
       // The durable cursor is still the ledger frame's id.
       appendFileSync(getSessionLedgerPath(id), record('next'));
       await vi.waitFor(() => expect(tab.frames().filter((f) => f.id).length).toBe(2));

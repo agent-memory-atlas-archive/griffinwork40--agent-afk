@@ -1,12 +1,14 @@
 /**
  * Live draft text for the turn in progress.
  *
- * Invariant: drafts are a render-only overlay. They are keyed by `part:seg`
- * (numbered by the server's SegmentTracker, the same numbering the durable
- * ledger records carry) and always render AFTER every durable item. When the
- * durable `assistant`/`thinking` record with the same seg arrives, `claim`
- * hands its item id to the durable item and drops the draft, so React keeps
- * the same DOM node (no remount, no flicker). Rules:
+ * Invariant: drafts are a render-only overlay. They are keyed by
+ * `turn:part:seg` (seg numbered by the server's SegmentTracker, the same
+ * numbering the durable ledger records carry; turn by the live broker, since
+ * seg restarts at 0 every turn) and always render AFTER every durable item.
+ * When the durable `assistant`/`thinking` record with the same part:seg
+ * arrives, `claim` hands the OLDEST matching draft's id to the durable item
+ * (durable records carry no turn, and a late turn-N record must never claim
+ * turn N+1's draft) and drops it, so React keeps the same DOM node. Rules:
  *   - `live_reset` (reconnect / ledger reset) clears drafts; the server's next
  *     `live_snapshot` rebuilds the open segments;
  *   - a `live_delta` whose offset does not continue the draft is a gap: the
@@ -26,6 +28,7 @@ export type LiveState = 'streaming' | 'sealed' | 'interrupted';
 
 interface Draft {
   id: string;
+  turn: number;
   seg: number;
   part: LivePart;
   text: string;
@@ -41,7 +44,19 @@ export function liveStateOf(item: TranscriptItem): LiveState | undefined {
 }
 
 let draftCounter = 0;
-const key = (part: LivePart, seg: number): string => `${part}:${seg}`;
+const key = (turn: number, part: LivePart, seg: number): string => `${turn}:${part}:${seg}`;
+/** Old servers (pre turn field) number every frame turn 0. */
+const turnOf = (event: { turn?: number }): number => event.turn ?? 0;
+
+/** Oldest draft for part:seg (lowest turn): durable records arrive in turn order. */
+function oldest(map: Map<string, Draft>, part: LivePart, seg: number): [string, Draft] | undefined {
+  let best: [string, Draft] | undefined;
+  for (const entry of map) {
+    const d = entry[1];
+    if (d.part === part && d.seg === seg && (!best || d.turn < best[1].turn)) best = entry;
+  }
+  return best;
+}
 
 function toItem(d: Draft): LiveTranscriptItem {
   return d.part === 'text'
@@ -73,13 +88,15 @@ export function useLiveDrafts(): UseLiveDraftsResult {
   const draftsRef = useRef(new Map<string, Draft>());
   const interruptedRef = useRef(new Map<string, Draft>());
   const claimedRef = useRef(new Set<string>());
+  // Newest turn seen in a live frame, and whether its live_end arrived.
+  const liveTurnRef = useRef<{ turn: number; ended: boolean } | undefined>(undefined);
   const [drafts, setDrafts] = useState<LiveTranscriptItem[]>([]);
   const cancelRef = useRef<(() => void) | undefined>(undefined);
 
   const publishNow = useCallback(() => {
     cancelRef.current?.();
     cancelRef.current = undefined;
-    const all = [...interruptedRef.current.values(), ...[...draftsRef.current.values()].sort((a, b) => a.seg - b.seg)];
+    const all = [...interruptedRef.current.values(), ...[...draftsRef.current.values()].sort((a, b) => a.turn - b.turn || a.seg - b.seg)];
     setDrafts(all.filter((d) => d.text.length > 0).map(toItem));
   }, []);
   const publish = useCallback(() => {
@@ -90,24 +107,33 @@ export function useLiveDrafts(): UseLiveDraftsResult {
 
   const onLive = useCallback((event: LiveClientEvent) => {
     const map = draftsRef.current;
+    if (event.type !== 'live_reset') {
+      const turn = turnOf(event);
+      const cur = liveTurnRef.current;
+      if (!cur || turn > cur.turn) liveTurnRef.current = { turn, ended: false };
+    }
     switch (event.type) {
       case 'live_reset':
+        // Reconnect / ledger reset / server restart (turn numbers restart):
+        // the next snapshot rebuilds open segments, so turn state starts over.
         map.clear();
+        claimedRef.current.clear();
+        liveTurnRef.current = undefined;
         break;
       case 'live_snapshot': {
-        const k = key(event.part, event.seg);
+        const k = key(turnOf(event), event.part, event.seg);
         if (claimedRef.current.has(k)) return;
         const prev = map.get(k);
-        map.set(k, { id: prev?.id ?? `live-${++draftCounter}`, seg: event.seg, part: event.part,
+        map.set(k, { id: prev?.id ?? `live-${++draftCounter}`, turn: turnOf(event), seg: event.seg, part: event.part,
           text: event.text, state: 'streaming', stale: false });
         break;
       }
       case 'live_delta': {
-        const k = key(event.part, event.seg);
+        const k = key(turnOf(event), event.part, event.seg);
         if (claimedRef.current.has(k)) return;
         let d = map.get(k);
         if (!d && event.offset === 0) {
-          d = { id: `live-${++draftCounter}`, seg: event.seg, part: event.part, text: '', state: 'streaming', stale: false };
+          d = { id: `live-${++draftCounter}`, turn: turnOf(event), seg: event.seg, part: event.part, text: '', state: 'streaming', stale: false };
           map.set(k, d);
         }
         if (!d || d.stale) return;
@@ -118,40 +144,57 @@ export function useLiveDrafts(): UseLiveDraftsResult {
         break;
       }
       case 'live_seal': {
-        const d = map.get(key(event.part, event.seg));
+        const d = map.get(key(turnOf(event), event.part, event.seg));
         if (d) d.state = 'sealed';
         break;
       }
-      case 'live_end':
-        claimedRef.current.clear();
-        if (event.reason === 'aborted') {
-          for (const [k, d] of map) interruptedRef.current.set(k, { ...d, state: 'interrupted' });
-          map.clear();
-        } else {
-          // done/error: drafts stay until their durable records claim them.
-          for (const d of map.values()) d.state = 'sealed';
+      case 'live_end': {
+        const turn = turnOf(event);
+        if (liveTurnRef.current?.turn === turn) liveTurnRef.current.ended = true;
+        // Older turns' claims can never be hit again (frames are turn-ordered).
+        for (const k of claimedRef.current) if (Number(k.split(':')[0]) < turn) claimedRef.current.delete(k);
+        for (const [k, d] of map) {
+          if (d.turn > turn) continue; // a next turn's draft is not ended by this frame
+          if (event.reason === 'aborted') {
+            interruptedRef.current.set(k, { ...d, state: 'interrupted' });
+            map.delete(k);
+          } else {
+            // done/error: drafts stay until their durable records claim them.
+            d.state = 'sealed';
+          }
         }
         break;
+      }
     }
     publish();
   }, [publish]);
 
   const claim = useCallback((part: LivePart, seg: number): string | undefined => {
-    const k = key(part, seg);
     // An interrupted turn's late durable flush matches its own draft first.
-    const source = interruptedRef.current.has(k) ? interruptedRef.current : draftsRef.current;
-    const d = source.get(k);
-    if (!d) return undefined;
-    source.delete(k);
-    if (source === draftsRef.current) claimedRef.current.add(k);
+    const found = oldest(interruptedRef.current, part, seg) ?? oldest(draftsRef.current, part, seg);
+    if (!found) {
+      // Durable-before-live: guard the still-running turn's segment so its
+      // late live frames cannot raise a duplicate draft. Never guard an ended
+      // turn: the next turn reuses the same part:seg under a new turn number.
+      const cur = liveTurnRef.current;
+      if (cur && !cur.ended) claimedRef.current.add(key(cur.turn, part, seg));
+      return undefined;
+    }
+    const [k, d] = found;
+    if (interruptedRef.current.get(k) === d) interruptedRef.current.delete(k);
+    else { draftsRef.current.delete(k); claimedRef.current.add(k); }
     publishNow();
     return d.id;
   }, [publishNow]);
 
   const settle = useCallback(() => {
+    // Only drafts of turns whose live_end arrived: a next turn's sealed
+    // (pre-tool) draft must survive the previous turn's late `done`.
+    const cur = liveTurnRef.current;
     let changed = false;
     for (const [k, d] of draftsRef.current) {
-      if (d.state === 'sealed') { draftsRef.current.delete(k); changed = true; }
+      const ended = !cur || d.turn < cur.turn || cur.ended;
+      if (d.state === 'sealed' && ended) { draftsRef.current.delete(k); changed = true; }
     }
     if (changed) publishNow();
   }, [publishNow]);
@@ -160,6 +203,7 @@ export function useLiveDrafts(): UseLiveDraftsResult {
     draftsRef.current.clear();
     claimedRef.current.clear();
     interruptedRef.current.clear();
+    liveTurnRef.current = undefined;
     publishNow();
   }, [publishNow]);
 

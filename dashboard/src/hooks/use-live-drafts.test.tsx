@@ -87,6 +87,63 @@ describe('live drafts', () => {
   });
 });
 
+describe('live drafts across back-to-back turns', () => {
+  // Observed server order (probe .afk/probe-frames.json): live_seal, live_end,
+  // THEN the durable assistant{seg} record (ledger tail poll), THEN done.
+  it('streams turns 1, 2 and 3 live: each turn\'s draft grows before its durable record', async () => {
+    const s = stream();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(s.response));
+    const { result } = renderHook(() => useTranscript('s1'));
+    await waitFor(() => expect(result.current.status).toBe('open'));
+    let id = 0;
+    const draftText = () => result.current.items.filter((i) => (i as { live?: string }).live === 'streaming').map((i) => (i as { text?: string }).text).join('');
+    for (let turn = 1; turn <= 3; turn++) {
+      act(() => { s.record(`g:${id++}`, { kind: 'user', text: `q${turn}` }); });
+      const seen: string[] = [];
+      let off = 0;
+      for (const piece of [`T${turn}a`, 'bb', 'cc']) {
+        act(() => { s.live({ type: 'live_delta', turn, seg: 0, part: 'text', offset: off, text: piece }); });
+        off += piece.length;
+        await waitFor(() => expect(draftText().length).toBe(off));
+        seen.push(draftText());
+      }
+      expect(new Set(seen).size).toBe(3);
+      act(() => {
+        s.live({ type: 'live_seal', turn, seg: 0, part: 'text' });
+        s.live({ type: 'live_end', turn, reason: 'done' });
+      });
+      act(() => {
+        s.record(`g:${id++}`, { kind: 'assistant', seg: 0, text: `T${turn}abbcc` });
+        s.record(`g:${id++}`, { kind: 'done' });
+      });
+      await waitFor(() => expect(result.current.turnActive).toBe(false));
+    }
+    expect(texts(result.current.items.filter((i) => i.kind !== 'notice'))).toEqual([
+      'user:q1', 'assistant:T1abbcc', 'user:q2', 'assistant:T2abbcc', 'user:q3', 'assistant:T3abbcc']);
+  });
+
+  it('a late durable record of turn N claims turn N\'s draft, not turn N+1\'s', async () => {
+    const s = stream();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(s.response));
+    const { result } = renderHook(() => useTranscript('s1'));
+    await waitFor(() => expect(result.current.status).toBe('open'));
+    act(() => {
+      s.record('g:0', { kind: 'user', text: 'q1' });
+      s.live({ type: 'live_delta', turn: 1, seg: 0, part: 'text', offset: 0, text: 'ONE' });
+      s.live({ type: 'live_end', turn: 1, reason: 'done' });
+      s.live({ type: 'live_delta', turn: 2, seg: 0, part: 'text', offset: 0, text: 'TWO' });
+    });
+    await waitFor(() => expect(texts(result.current.items)).toEqual(['user:q1', 'assistant:ONE', 'assistant:TWO']));
+    const twoId = result.current.items[2]!.id;
+    act(() => { s.record('g:1', { kind: 'assistant', seg: 0, text: 'ONE' }); });
+    await waitFor(() => expect(result.current.items.filter((i) => i.kind === 'assistant')).toHaveLength(2));
+    const two = result.current.items.find((i) => i.id === twoId) as { live?: string; text?: string };
+    expect(two.live).toBe('streaming');
+    act(() => { s.live({ type: 'live_delta', turn: 2, seg: 0, part: 'text', offset: 3, text: '!!' }); });
+    await waitFor(() => expect((result.current.items.find((i) => i.id === twoId) as { text?: string }).text).toBe('TWO!!'));
+  });
+});
+
 describe('draft -> durable handover in the DOM', () => {
   it('keeps the same DOM node when the durable record replaces the draft, and durable text is not animated', () => {
     const draft = [{ kind: 'assistant' as const, id: 'live-1', text: 'Hello wor', live: 'streaming' }];
