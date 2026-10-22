@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Plus, ArrowDown } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
 import { Sidebar } from './components/sidebar';
 import { getNavItem } from './lib/nav-registry';
 import { CommandPalette } from './components/command-palette';
@@ -66,7 +66,7 @@ function Dashboard() {
     prevTurnsRef.current = 0;
     abortRef.current?.abort();
   });
-  const { containerRef, scrollToBottom, isPinned, showScrollButton } = useScrollPin();
+  const { containerRef, scrollToBottom, isPinned, showScrollButton, notifyNewContent } = useScrollPin();
 
   // Per-tab command outputs survive reload without sending local UI state to the server.
   const { itemsFor: cmdItemsFor, addItem: addCmdItem, clearItems: clearCmdItems } = useCommandOutputs();
@@ -83,9 +83,12 @@ function Dashboard() {
 
 
   // Auto-scroll when new transcript items arrive and user is pinned to the bottom.
+  // When not pinned, arm the "New messages" pill so the user knows content arrived.
   useEffect(() => {
     if (isPinned) scrollToBottom();
-  }, [items, cmdItems.length, isPinned, scrollToBottom]);
+    else notifyNewContent();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, cmdItems.length]);
   useEffect(() => { scrollToBottom(); }, [selectedSessionId, scrollToBottom]);
   useEffect(() => { if (selectedSessionId) setActiveNav('sessions'); }, [selectedSessionId]);
 
@@ -288,32 +291,25 @@ function Dashboard() {
               className="md:hidden"
               onClick={() => setMobileSidebarOpen(true)}
             />
-            <h1 className="text-sm font-medium text-muted-foreground">
-              {getNavItem(activeNav)?.title}
-            </h1>
-            {activeNav === 'sessions' && selectedSession && (
+            {activeNav === 'sessions' && selectedSession ? (
               <>
                 <StreamStatusDot status={status} />
+                <h1 className="min-w-0 truncate text-sm font-medium text-foreground" title={selectedSession.title ?? undefined}>
+                  {selectedSession.title ?? 'New session'}
+                </h1>
                 {selectedSession.model && (
-                  <span className="truncate text-xs font-mono text-muted-foreground" title="Session model">
+                  <span className="hidden shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block" title="Session model">
                     {selectedSession.model}
                   </span>
                 )}
               </>
+            ) : (
+              <h1 className="text-sm font-medium text-muted-foreground">
+                {getNavItem(activeNav)?.title}
+              </h1>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            {activeNav === 'sessions' && (
-              <button
-                onClick={() => void handleNewSession()}
-                title="New Session"
-                disabled={starting}
-                className="flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-60"
-              >
-                <Plus className="h-4 w-4" />
-                {starting ? 'Starting…' : 'New chat'}
-              </button>
-            )}
             {activeNav === 'sessions' && selectedSession && (
               <SessionMeter totals={totals} className="hidden lg:flex" />
             )}
@@ -345,6 +341,7 @@ function Dashboard() {
                   onRetry={() => void retry(lastUserText(items)).catch(rewindFailed)}
                   onEdit={(text) => void editAndResend(text).catch(rewindFailed)}
                   isBusy={isBusy}
+                  currentModel={currentModel}
                 />
               )}
               {activeNav === 'sessions' && selectedSession && status === 'open' &&

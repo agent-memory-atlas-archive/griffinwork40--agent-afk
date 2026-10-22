@@ -34,8 +34,8 @@ export function TopologySpine({ nodes, className }: TopologySpineProps) {
         className,
       )}
     >
-      {/* Section header */}
-      <div className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground select-none">
+      {/* Section header — text-foreground/60 (~AA at 10px bold on dark bg) */}
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-foreground/60 select-none">
         Execution
       </div>
 

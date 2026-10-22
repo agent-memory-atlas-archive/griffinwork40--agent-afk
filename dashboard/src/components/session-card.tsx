@@ -30,6 +30,17 @@ function cwdLabel(cwd: string): string {
   return segments[segments.length - 1] ?? cwd;
 }
 
+/**
+ * Convert a slug-shaped title (kebab-case or snake_case, no spaces) to a
+ * sentence-cased human-readable string. Titles with spaces are returned as-is.
+ * Examples: "do-not-use-any-tools-write" → "Do not use any tools write"
+ */
+function humanizeTitle(title: string): string {
+  if (/\s/.test(title)) return title; // already has spaces — leave it
+  const words = title.replace(/[-_]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function SessionCard({
   session,
   pendingSessionIds,
@@ -52,7 +63,8 @@ export function SessionCard({
   // A live session with no title has not run its first turn yet (its title
   // comes from the first user message in the ledger), so it is "new", not
   // anonymous.
-  const title = session.title ?? (session.mode === 'live' ? 'New session' : 'Untitled session');
+  const rawTitle = session.title ?? (session.mode === 'live' ? 'New session' : 'Untitled session');
+  const title = humanizeTitle(rawTitle);
 
   return (
     <div

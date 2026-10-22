@@ -28,6 +28,7 @@ export function SessionContent({
   onRetry,
   onEdit,
   isBusy,
+  currentModel,
 }: {
   onNewSession?: () => void;
   starting?: boolean;
@@ -44,6 +45,8 @@ export function SessionContent({
   onRetry?: () => void;
   onEdit?: (text: string) => void;
   isBusy?: boolean;
+  /** Model alias/name for the welcome screen (from server default or user selection). */
+  currentModel?: string;
 }) {
   if (loading && !sessions.length) {
     return (
@@ -105,11 +108,25 @@ export function SessionContent({
       </div>
     );
   }
+  // Derive working folder from any available session cwd.
+  const anyCwd = sessions.find((s) => s.cwd)?.cwd;
+  const folderName = anyCwd ? anyCwd.replace(/\/+$/, '').split('/').pop() ?? anyCwd : undefined;
+
   return (
     <div className="flex h-full items-center justify-center text-muted-foreground">
       <div className="max-w-lg px-6 py-12 text-center">
         <img src="/brand-mark.svg" alt="" className="mx-auto mb-6 size-12" />
         <h2 className="text-3xl font-semibold tracking-tight text-foreground">Your next idea starts here</h2>
+        {(folderName ?? currentModel) && (
+          <p className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            {folderName && (
+              <span className="rounded bg-secondary px-1.5 py-0.5 font-mono">{folderName}</span>
+            )}
+            {currentModel && (
+              <span className="rounded bg-secondary px-1.5 py-0.5 font-mono">{currentModel}</span>
+            )}
+          </p>
+        )}
         <p className="mt-4 text-sm leading-relaxed">Chat with an agent that can explore your project, explain code, and help you get things done. You stay in control.</p>
         <button onClick={onNewSession} disabled={starting}
           className="mt-7 min-h-11 rounded-xl bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand/90 disabled:opacity-60">

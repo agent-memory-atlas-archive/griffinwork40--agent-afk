@@ -10,8 +10,7 @@ describe('toolSummary', () => {
   });
   it.each([
     ['bash', '{"command":"echo first\\necho second"}', 'echo first'],
-    ['grep', '{"pattern":"foo|bar","path":"/repo"}', 'foo|bar'],
-    ['glob', '{"pattern":"**/*.ts"}', '**/*.ts'],
+    ['glob', '{"pattern":"**/*.ts"}', 'glob "**/*.ts"'],
     ['web_request', '{"url":"https://example.com/path"}', 'example.com'],
     ['web_scrape', 'https://example.com/path', 'example.com'],
     ['web_scrape', '{"query":"test search"}', 'test search'],
@@ -21,4 +20,14 @@ describe('toolSummary', () => {
     ['bash', 'echo first\necho second', 'echo first'],
     ['read_file', 'null', 'null'],
   ])('summarizes %s %s', (name, input, expected) => expect(toolSummary(name, input)).toBe(expected));
+
+  it('grep with path shows pattern and relative dir', () => {
+    expect(toolSummary('grep', '{"pattern":"MAX_TEXT_LEN","path":"/repo/src"}', '/repo')).toBe('grep "MAX_TEXT_LEN" in src');
+    expect(toolSummary('grep', '{"pattern":"foo|bar"}', '/repo')).toBe('grep "foo|bar"');
+    expect(toolSummary('grep', '{"pattern":"foo","path":"/repo"}', '/repo')).toBe('grep "foo" in .');
+    expect(toolSummary('grep', '{"pattern":"X","include":"*.ts"}', '/repo')).toBe('grep "X" in *.ts');
+  });
+  it('grep legacy plain-text preview passes through unchanged', () => {
+    expect(toolSummary('grep', 'MAX_TEXT_LEN')).toBe('MAX_TEXT_LEN');
+  });
 });

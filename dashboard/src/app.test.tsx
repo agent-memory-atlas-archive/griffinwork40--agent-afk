@@ -42,6 +42,7 @@ vi.mock('./hooks/use-scroll-pin', () => ({
     scrollToBottom: vi.fn(),
     isPinned: true,
     showScrollButton: false,
+    notifyNewContent: vi.fn(),
   }),
 }));
 vi.mock('./hooks/use-queue', () => ({
@@ -98,7 +99,7 @@ describe('App — new session honors server model', () => {
     vi.mocked(api.apiFetch).mockResolvedValue({ session: { id: 'new-sess' } });
 
     render(<App />);
-    const newBtn = screen.getByTitle('New Session');
+    const newBtn = screen.getAllByTitle('Start a new chat')[0]!;
     fireEvent.click(newBtn);
 
     await waitFor(() => {
