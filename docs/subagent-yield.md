@@ -140,34 +140,47 @@ children under-yielding or false positives causing real harm.
   from its journal instead of falling back to a fresh re-dispatch. That is
   unverified: check `src/agent/journal/hydrate.ts` and `reader.ts` before
   relying on it.
-- **Guard false positives.** `parseTerminalState` is tail-anchored and
-  fenced-code-aware but not blockquote-aware, so a child that quotes another
-  agent's Asking block near its tail could be misdetected. Require Asking to be
-  the last terminal heading and reject blockquoted headings. Because
+- **Guard false positives.** `parseTerminalState` is tail-anchored (last 40
+  lines) and fenced-code-aware. Blockquoted headings (`> **Asking**`) do NOT
+  match because `lineToKind()` preserves the `>` character
+  (`src/agent/outcomes/terminal-state.ts:254-282`). The real false-positive
+  surface is a bare unquoted `**Asking**` heading in the tail 40 lines of
+  a child that is reporting or summarizing another agent's output. Because
   `needs_input` always carries the full final text, a misdetection degrades to
   today's output plus a label.
 - **Compose.** A compose node cannot be resumed, so a yield there means
   fresh-re-dispatch semantics or yields off by default for nodes. Downstream
   nodes must never silently consume a yield as a complete result.
-- **Facets are unaffected.** A child's Asking block arrives inside a
-  tool_result in a user-role message, which `src/agent/facets/derive.ts` does
-  not scan as the parent's own terminal state.
+- **Facets are likely unaffected.** `src/agent/facets/derive.ts:102-103` reads
+  the last non-empty `turns[].assistant` string to find the parent's terminal
+  state, and a child's Asking block arrives inside a `tool_result` in a
+  user-role message. The mechanism that populates `turn.assistant` from the
+  journal has not been verified end-to-end, so this is plausible but
+  [UNVERIFIED].
 
 ## Open questions
 
 1. A second composition-boundary check on the revised design, scoped to the
    tag set in `runToResult` / `buildResultFromMessage` and the ToolResult
    assemblers that must honor it.
-2. Whether forks inherit the parent's assembled system prompt. The full
-   Done/Blocked/Asking block format is added only on the `repl` and `telegram`
-   surfaces (`src/agent/routing-directive.ts:151-170`), and
-   `fork-child-config.ts:297` reads `options.config.systemPrompt` without making
-   it obvious which prompt that is. If forks do not inherit it, the preamble
-   paragraph must spell out the Asking block format itself.
+2. ~~Whether forks inherit the parent's assembled system prompt.~~
+   **Resolved: NO.** `assembleSystemPrompt` appends `END_OF_TURN_DIRECTIVE`
+   (containing the full Asking block format) only for `repl` and `telegram`
+   surfaces (`src/agent/routing-directive.ts:151-170`). Forks get a separately
+   built prompt through `src/agent/tools/subagent/child-config.helpers.ts:204-207`
+   (named agent: definition body; unnamed: `composeUnnamedWorkerPrompt` in
+   `src/agent/tools/system-prompt.ts:181-186`, which is the bare operator
+   overlay plus the framework base). `fork-child-config.ts:297` computes
+   `taskPrompt` only for the workspace-store query, not for the child config.
+   **Consequence: the conditional preamble paragraph must spell out the Asking
+   block format itself.** Children have never seen it through inheritance.
 3. Whether compose nodes get yields at all in v1, or stay on today's wording.
 4. Whether a lost continuation chain can be rebuilt from the subagent journal
    after a restart, which would remove the fresh-re-dispatch fallback for that
    case.
+5. End-to-end verification that `turn.assistant` in the facet pipeline never
+   contains tool_result text from a child (claim 4 above, currently
+   [UNVERIFIED]).
 
 ## Related
 
