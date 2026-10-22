@@ -79,9 +79,9 @@ const CONTROL_EXCEPT_LF = /[\x00-\x09\x0B-\x1F\x7F-\x9F]/g;
  *   1. stripAnsi + strip C0/C1 except LF + trim  — remove injection surface
  *      while preserving the newline command separator the lexer needs; trim
  *      ensures the first command word lands at position 0 (lexer start pos)
- *   2. shortenPaths                              — path linkification on clean text
- *   3. styleBashCommand                          — danger-chip + dim on correct words
- *   4. replace [\r\n]+ → ' '                    — flatten the now-styled string
+ *   2. styleBashCommand                          — danger-chip + dim on correct words
+ *   3. replace [\r\n]+ → ' '                    — flatten the now-styled string
+ *   4. shortenPaths                              — path linkification
  * Non-bash entries use sanitizeLabel (which flattens LF) then shortenPaths,
  * matching pre-existing behaviour for non-bash grouped rows.
  */
@@ -96,6 +96,7 @@ function styleGroupedTargets(
   let result = '';
   let remaining = targetWidth;
   for (const entry of entries) {
+    if (result !== '' && remaining <= 0) break;
     const raw = entry.toolInput;
     let styled: string;
     if (isBash) {
@@ -104,12 +105,14 @@ function styleGroupedTargets(
       // at position 0 (mirrors the single-entry path which trims before
       // passing to formatToolLine).
       const clean = stripAnsi(raw).replace(CONTROL_EXCEPT_LF, ' ').trim();
-      // Step 2: linkify paths on the clean (SGR-free) string so the
-      // regex can match absolute paths before styling adds escapes
-      const linked = shortenPaths(clean);
+      // Step 2: linkify paths BEFORE SGR styling so collapseFsPaths regex
+      // matches absolute-path command words unobstructed by escape sequences.
+      // OSC 8 hyperlinks emitted here are opaque to the bash lexer (it treats
+      // them as a single token) — see tool-lane-format-bash.ts lexer comment.
+      const shortened = shortenPaths(clean);
       // Step 3: style with LF intact so lexer sees newline command separators
-      const withStyle = styleBashCommand(linked);
-      // Step 4: flatten newlines on the styled string
+      const withStyle = styleBashCommand(shortened);
+      // Step 4: flatten newlines on the now-styled string
       styled = withStyle.replace(/[\r\n]+/g, ' ');
     } else {
       styled = palette.toolArg(shortenPaths(sanitizeLabel(raw)).trim());
@@ -121,7 +124,6 @@ function styleGroupedTargets(
       result += sep + styled;
       remaining -= sepWidth + displayWidth(styled);
     }
-    if (remaining <= 0) break;
   }
   return result;
 }
