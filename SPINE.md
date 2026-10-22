@@ -71,7 +71,7 @@
 - **INV-066** (2026-10-06, b73baab5-6f79-4d03-ade4-09166d480c0b): Shadow-verify UNVERIFIABLE findings are preserved in a dedicated output section with the anchoring reason; pre-flight UNVERIFIABLE (no concrete evidence_ref) receives no verifier dispatch (src/bundled-plugins/awa-bundled/skills/shadow-verify/SKILL.md:32-35)
 - **INV-067** (2026-10-22, eae23bd5-f57c-4bfc-bbdd-97f27f9d389e): Session-level model switch via /model must propagate the server-returned session.model value to the client ModelSelector; the selector value is authoritative from the command response, not from the option label text (src/dashboard/src/app.test.tsx:229-270)
 - **INV-068** (2026-10-22, 986b6bd1-314b-4a18-a10c-185a2e905614): Return focus to the composer textarea (document.querySelector('textarea')) after the model picker dialog closes, falling back to previousFocusRef only when no textarea exists (`dashboard/src/components/choice-dialog.tsx:162-165`) (reinforced 2026-10-22)
-- **INV-069** (2026-10-22, a679515f-32d9-462a-bf89-8c0b951d04a8): Successful slash-command submission must call recordRecentCommand(token) in the composer so the autocomplete recents list reflects actual usage (`dashboard/src/components/composer.tsx:254`)
+- **INV-069** (2026-10-22, a679515f-32d9-462a-bf89-8c0b951d04a8): Successful slash-command submission must call recordRecentCommand(token) in the composer so the autocomplete recents list reflects actual usage (`dashboard/src/components/composer.tsx:254`) (reinforced 2026-10-22)
 
 
 ## Explicitly Rejected Patterns
