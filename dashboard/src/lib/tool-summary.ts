@@ -10,8 +10,8 @@ const host: Summarizer = input => {
 /** Format grep/glob summary as `grep "PATTERN" in <relDir>` when a search path is available. */
 function grepSummary(input: Input, cwd?: string): string {
   const pattern = text(input, 'pattern');
+  if (!pattern) return ''; // fall through to raw ledger preview
   const searchPath = text(input, 'path') || text(input, 'include');
-  if (!pattern) return searchPath || '';
   let dir = searchPath;
   if (dir && cwd) {
     const root = cwd.replace(/[\\/]+$/, '').replaceAll('\\', '/');
