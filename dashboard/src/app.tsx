@@ -26,6 +26,8 @@ import { ChoiceDialog } from './components/choice-dialog';
 import { CommandProgress } from './components/command-progress';
 import { apiFetch } from './lib/api';
 import type { CommandResponse, ThinkingUiMode } from './types/command-wire';
+import { useRewind } from './hooks/use-rewind';
+import { useTabNotification } from './hooks/use-tab-notification';
 
 
 export function App() {
@@ -100,6 +102,17 @@ function Dashboard() {
   };
 
   const isBusy = turnActive;
+
+  // Retry / edit-and-resend via POST /api/sessions/:id/rewind.
+  const { retry, editAndResend } = useRewind(selectedSessionId ?? '', isBusy);
+
+  // Tab title badge + Web Notification when a turn finishes in a hidden tab.
+  useTabNotification({
+    liveTurns,
+    sessionTitle: selectedSession?.title,
+    isSelected: true,
+  });
+
   const [selectedModel, setSelectedModel] = useState<string>();
   const currentModel = selectedSession?.model ?? selectedModel;
 
@@ -225,6 +238,7 @@ function Dashboard() {
     <Sidebar
       sessions={sessions}
       pendingSessionIds={pendingSessionIds}
+      busySessionIds={isBusy && selectedSessionId ? new Set([selectedSessionId]) : undefined}
       selectedSessionId={selectedSessionId}
       onSelectSession={handleSelectSession}
       onResumeSession={(id) => void handleResumeFromSidebar(id)}
@@ -320,6 +334,9 @@ function Dashboard() {
                   onNewSession={() => void handleNewSession()}
                   starting={starting}
                   onSuggest={(text) => { if (selectedSessionId) setPrefill({ text, nonce: Date.now(), sessionId: selectedSessionId }); }}
+                  onRetry={() => void retry()}
+                  onEdit={(text) => void editAndResend(text)}
+                  isBusy={isBusy}
                 />
               )}
               {activeNav === 'sessions' && selectedSession && status === 'open' &&

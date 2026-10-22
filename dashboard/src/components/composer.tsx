@@ -20,9 +20,10 @@ import { ModelSelector } from './model-selector';
 import { QueuePanel } from './queue-panel';
 import type { UseQueueResult } from '@/hooks/use-queue';
 import { useCommandControl } from '@/hooks/use-command-control';
+import { useComposerHistory } from '@/hooks/use-composer-history';
+import { useComposerDraft } from '@/hooks/use-composer-draft';
 
 interface ComposerProps {
-  prefill?: { text: string; nonce: number };
   sessionId: string;
   sessionMode: 'live' | 'readonly';
   isBusy: boolean;
@@ -41,7 +42,10 @@ interface ComposerProps {
   onNavigate?: (targetSessionId: string) => void;
   /** Called when /exit marks the session as ended. */
   onSessionEnded?: () => void;
-
+  /** Optional suggestion chips injected by the layout lane. */
+  suggestions?: string[];
+  /** Welcome-screen suggestion: replaces the draft and focuses (new nonce = re-apply). */
+  prefill?: { text: string; nonce: number };
 }
 
 /** Cached slash commands — cleared on page focus to pick up new skills. */
@@ -109,7 +113,6 @@ function commandErrorMessage(err: unknown, token: string): string {
 
 /** Main prompt composer — textarea + send/stop controls. */
 export function Composer({
-  prefill,
   sessionId,
   sessionMode,
   isBusy,
@@ -121,22 +124,38 @@ export function Composer({
   onToast,
   onNavigate,
   onSessionEnded,
-
+  suggestions,
+  prefill,
 }: ComposerProps) {
-  const [text, setText] = useState('');
+  const draft = useComposerDraft(sessionId);
+  const [text, setText] = useState(() => draft.load());
   const [submitting, setSubmitting] = useState(false);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [acActiveIdx, setAcActiveIdx] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (prefill) { setText(prefill.text); textareaRef.current?.focus(); }
-  }, [prefill]);
   const lifetimeRef = useRef({ active: true });
+  const history = useComposerHistory(sessionId);
+
   useEffect(() => {
     const lifetime = { active: true };
     lifetimeRef.current = lifetime;
+    // Restore draft for the new session.
+    setText(draft.load());
     return () => { lifetime.active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // Welcome-screen suggestion chip → composer text. Declared after the
+  // session-restore effect so a prefill for a just-selected session wins over
+  // the (empty) restored draft; the draft-save effect below then persists it.
+  useEffect(() => {
+    if (prefill) { setText(prefill.text); textareaRef.current?.focus(); }
+  }, [prefill]);
+
+  // Persist draft on every text change.
+  useEffect(() => {
+    draft.save(text);
+  }, [text, draft]);
 
   const disabled = sessionMode === 'readonly';
   const slashQuery = getSlashQuery(text);
@@ -200,7 +219,6 @@ export function Composer({
   const submitCommand = useCallback(async (input: string, depth = 0): Promise<boolean> => {
     const lifetime = lifetimeRef.current;
     onCommandStart?.(input);
-
     const response = await apiFetch<CommandResponse>(
       `/api/sessions/${sessionId}/commands`,
       { method: 'POST', body: JSON.stringify({ input }) },
@@ -225,9 +243,8 @@ export function Composer({
     }
   }, [disabled, submitting, isBusy, currentModel, submitCommand, onToast]);
 
-
-  const submit = useCallback(async () => {
-    const trimmed = text.trim();
+  const submit = useCallback(async (overrideText?: string) => {
+    const trimmed = (overrideText ?? text).trim();
     if (!trimmed || submitting || disabled) return;
     setSubmitting(true);
     try {
@@ -244,7 +261,9 @@ export function Composer({
           } else {
             await submitPrompt(trimmed);
           }
+          history.push(trimmed);
           setText('');
+          draft.clear();
           return;
         }
 
@@ -259,26 +278,29 @@ export function Composer({
           return;
         }
 
-        // Known native ok, alias, or unknown — let the server resolve it
         try {
           const shouldClear = await submitCommand(trimmed);
-          if (shouldClear) setText('');
+          if (shouldClear) {
+            history.push(trimmed);
+            setText('');
+            draft.clear();
+          }
         } catch (err) {
           onToast?.(commandErrorMessage(err, token));
-          // Leave text intact so user can retry
         }
         return;
       }
 
-      // Plain text — send to /prompt
       await submitPrompt(trimmed);
+      history.push(trimmed);
       setText('');
+      draft.clear();
     } catch {
       // Leave text intact so user can retry
     } finally {
       setSubmitting(false);
     }
-  }, [text, submitting, disabled, submitPrompt, submitCommand, onToast]);
+  }, [text, submitting, disabled, submitPrompt, submitCommand, onToast, history, draft, isBusy, queue]);
 
   const interrupt = useCallback(async () => {
     try {
@@ -296,6 +318,20 @@ export function Composer({
 
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      // Escape while busy → interrupt.
+      if (e.key === 'Escape' && isBusy) {
+        e.preventDefault();
+        void interrupt();
+        return;
+      }
+
+      // Cmd/Ctrl+. → interrupt.
+      if (e.key === '.' && (e.metaKey || e.ctrlKey) && isBusy) {
+        e.preventDefault();
+        void interrupt();
+        return;
+      }
+
       const consumed = handleAutocompleteKey(
         e,
         acVisible,
@@ -306,26 +342,44 @@ export function Composer({
           const cmd = acFiltered[idx];
           if (cmd) selectCommand(cmd.name);
         },
-        () => setText((t) => t), // keep text, just close (slashQuery will become null)
+        () => setText((t) => t),
         isActiveSuggestionExact(text, acFiltered[acActiveIdx]?.name),
       );
       if (consumed) { e.preventDefault(); return; }
 
+      // Up/down arrow — history navigation (when autocomplete is not visible).
+      if (!acVisible && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        const ta = textareaRef.current;
+        const selStart = ta?.selectionStart ?? 0;
+        const next = history.navigate(e.key, text, selStart);
+        if (next !== null) {
+          e.preventDefault();
+          setText(next);
+          // Place caret at end after render.
+          requestAnimationFrame(() => {
+            const t = textareaRef.current;
+            if (t) t.setSelectionRange(t.value.length, t.value.length);
+          });
+          return;
+        }
+      }
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (isBusy && queue) {
-          // When a turn is running, Enter queues instead of sending.
           const trimmed = text.trim();
           if (trimmed) {
             queue.enqueue(trimmed);
             setText('');
+            draft.clear();
           }
         } else {
           void submit();
         }
       }
     },
-    [acVisible, acFiltered, acActiveIdx, selectCommand, submit, isBusy, text, queue],
+    [acVisible, acFiltered, acActiveIdx, selectCommand, submit, isBusy, text, queue,
+     interrupt, history, draft],
   );
 
   /** Insert text at the current cursor position. */
@@ -339,7 +393,6 @@ export function Composer({
     const prefix = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
     const next = before + prefix + token + ' ' + after;
     setText(next);
-    // Defer cursor placement to after React re-renders.
     requestAnimationFrame(() => {
       const pos = start + prefix.length + token.length + 1;
       ta.setSelectionRange(pos, pos);
@@ -361,45 +414,90 @@ export function Composer({
         )}
       >
         {queue && <QueuePanel queue={queue} />}
+        {/* Suggestion chips from layout lane (additive prop). */}
+        {suggestions && suggestions.length > 0 && !text && !isBusy && (
+          <div className="flex flex-wrap gap-1.5">
+            {suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => void submit(s)}
+                className={cn(
+                  'rounded-full border border-border px-2.5 py-0.5 text-xs',
+                  'text-muted-foreground hover:text-foreground hover:bg-secondary',
+                  'transition-colors',
+                )}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
         <SlashAutocomplete
           query={slashQuery ?? ''}
           commands={commands}
           onSelect={selectCommand}
           visible={acVisible}
         />
-        <div className="flex items-end gap-2">
-          {/* Toolbar: @-file + model selector */}
-          <div className="flex shrink-0 items-center gap-1">
-            <AtFilePopover onInsert={insertAtCursor} />
-            {onModelSelect && (
-              <ModelSelector
-                onSelect={(model) => void selectModel(model)}
-                current={currentModel}
-                disabled={disabled || submitting || isBusy}
-              />
-            )}
-          </div>
+        {/*
+         * Invariant: exactly ONE textarea exists in the DOM at all times —
+         * one source of truth for value, focus, history, and draft state.
+         *
+         * Layout strategy (CSS only, no JS breakpoint detection):
+         *   Mobile (<sm / 640 px): two-row grid.
+         *     Row 1: [textarea] [send/stop]   — textarea fills available width.
+         *     Row 2: [toolbar (@ + model)]    — spans full width below.
+         *   Desktop (sm+): single row.
+         *     [toolbar] [textarea] [send/stop] — toolbar shrinks, textarea fills.
+         *
+         * grid-template-areas drives the reorder so the textarea DOM node is
+         * declared once and CSS places it in the right cell per breakpoint.
+         * On 390 px: total width 390 − (2×16 px padding) − (2 px border) − 8 px gap
+         *            − 36 px button = ~312 px for textarea → well above 200 px floor.
+         */}
+        <div
+          className={cn(
+            // Mobile: 2-row grid. "ta" area top-left, "btn" top-right, "bar" bottom span-2.
+            'grid gap-x-2 gap-y-1.5',
+            '[grid-template-areas:"ta_btn"_"bar_bar"]',
+            '[grid-template-columns:1fr_auto]',
+            // sm+: single row. "bar" left, "ta" middle, "btn" right.
+            'sm:[grid-template-areas:"bar_ta_btn"]',
+            'sm:[grid-template-columns:auto_1fr_auto]',
+          )}
+        >
+          {/* Textarea — grid area "ta" */}
           <textarea
             ref={textareaRef}
             rows={1}
+            data-testid="composer-textarea"
             value={text}
             disabled={disabled || submitting}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={disabled ? 'Read-only session' : 'Send a message… (/ for commands)'}
+            placeholder={
+              disabled
+                ? 'Read-only session'
+                : isBusy
+                  ? 'Running… (Esc or ⌘. to stop, Enter to queue)'
+                  : 'Send a message… (/ for commands)'
+            }
             className={cn(
-              'flex-1 resize-none rounded-xl border border-input bg-background',
+              '[grid-area:ta] self-end',
+              'w-full resize-none rounded-xl border border-input bg-background',
               'px-3 py-2 text-sm leading-5 shadow-sm',
               'placeholder:text-muted-foreground',
               'focus:outline-none focus:ring-2 focus:ring-ring',
               'disabled:cursor-not-allowed',
             )}
           />
+
+          {/* Send / Stop button — grid area "btn" */}
           {isBusy ? (
             <button
               onClick={() => void interrupt()}
-              title="Stop"
-              className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              title="Stop (Esc or ⌘.)"
+              className="[grid-area:btn] self-end shrink-0 flex items-center justify-center h-9 w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
             >
               <Square className="h-4 w-4 fill-current" />
             </button>
@@ -409,7 +507,7 @@ export function Composer({
               disabled={!text.trim() || submitting || disabled}
               title="Send"
               className={cn(
-                'shrink-0 flex items-center justify-center h-9 w-9 rounded-lg',
+                '[grid-area:btn] self-end shrink-0 flex items-center justify-center h-9 w-9 rounded-lg',
                 'bg-primary text-primary-foreground hover:bg-primary/90 transition-colors',
                 'disabled:opacity-40 disabled:cursor-not-allowed',
               )}
@@ -417,6 +515,18 @@ export function Composer({
               <Send className="h-4 w-4" />
             </button>
           )}
+
+          {/* Toolbar (@-file + model selector) — grid area "bar" */}
+          <div className="[grid-area:bar] flex shrink-0 items-center gap-1 self-end">
+            <AtFilePopover onInsert={insertAtCursor} />
+            {onModelSelect && (
+              <ModelSelector
+                onSelect={(model) => void selectModel(model)}
+                current={currentModel}
+                disabled={disabled || submitting || isBusy}
+              />
+            )}
+          </div>
         </div>
       </div>
     </>

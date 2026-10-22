@@ -33,6 +33,7 @@ function cwdLabel(cwd: string): string {
 export function SessionCard({
   session,
   pendingSessionIds,
+  busySessionIds,
   selected,
   onSelect,
   onResume,
@@ -41,12 +42,13 @@ export function SessionCard({
   running?: boolean;
   session: SessionSummary;
   pendingSessionIds: Set<string>;
+  busySessionIds?: Set<string>;
   selected: boolean;
   onSelect: (id: string) => void;
   /** Called when the Resume button is clicked on a readonly session. */
   onResume?: (sessionId: string) => void;
 }) {
-  const status: SessionStatusGroup = classifySession(session, pendingSessionIds);
+  const status: SessionStatusGroup = classifySession(session, pendingSessionIds, busySessionIds);
   // A live session with no title has not run its first turn yet (its title
   // comes from the first user message in the ledger), so it is "new", not
   // anonymous.

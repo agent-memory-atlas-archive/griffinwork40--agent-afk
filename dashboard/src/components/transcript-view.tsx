@@ -10,6 +10,7 @@ import {
   AssistantRow,
   ErrorItem,
   NoticeItem,
+  StoppedItem,
   BgJobItem,
 } from './message-row';
 import type { TranscriptItem } from '@/lib/ledger-adapter';
@@ -31,6 +32,12 @@ interface TranscriptViewProps {
   sessionId?: string;
   /** Suppress the "No transcript items yet." placeholder (command outputs fill the view). */
   hideEmptyState?: boolean;
+  /** Called to retry the last turn (rewind + resend). */
+  onRetry?: () => void;
+  /** Called to edit-and-resend a user message. */
+  onEdit?: (text: string) => void;
+  /** Whether a turn is currently running (disables retry/edit buttons). */
+  isBusy?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,26 +80,39 @@ export function groupItems(items: TranscriptItem[]): Slot[] {
 // Shared item renderer (text items only in spine mode, all in flat mode)
 // ---------------------------------------------------------------------------
 
-export function renderNonSubagentItem(item: TranscriptItem, isStreaming = false): React.ReactNode {
+interface RenderItemOpts {
+  isStreaming?: boolean;
+  onRetry?: () => void;
+  onEdit?: (text: string) => void;
+  isBusy?: boolean;
+}
+
+export function renderNonSubagentItem(item: TranscriptItem, isStreamingOrOpts: boolean | RenderItemOpts = false): React.ReactNode {
+  const isStreaming = typeof isStreamingOrOpts === 'boolean' ? isStreamingOrOpts : (isStreamingOrOpts.isStreaming ?? false);
+  const opts: RenderItemOpts = typeof isStreamingOrOpts === 'object' ? isStreamingOrOpts : {};
   switch (item.kind) {
-    case 'user':      return <UserMessage text={item.text} />;
-    case 'assistant': return <AssistantRow text={item.text} isStreaming={isStreaming} />;
+    case 'user':      return <UserMessage text={item.text} ts={item.ts} onEdit={opts.onEdit} isBusy={opts.isBusy} />;
+    case 'assistant': return <AssistantRow text={item.text} ts={item.ts} isStreaming={isStreaming} onRetry={opts.onRetry} isBusy={opts.isBusy} />;
     case 'thinking':  return <ThinkingPanel text={item.text} isStreaming={isStreaming} />;
     case 'tool':      return <ToolCallCard {...item} />;
     case 'error':     return <ErrorItem message={item.message} />;
     case 'notice':    return <NoticeItem text={item.text} />;
+    case 'stopped':   return <StoppedItem text={item.text} onRetry={opts.onRetry} isBusy={opts.isBusy} />;
     case 'bg_job':    return <BgJobItem item={item} />;
     case 'subagent':  return null;
   }
 }
 
-function renderTextItem(item: TranscriptItem, isStreaming = false): React.ReactNode {
+function renderTextItem(item: TranscriptItem, isStreamingOrOpts: boolean | RenderItemOpts = false): React.ReactNode {
+  const isStreaming = typeof isStreamingOrOpts === 'boolean' ? isStreamingOrOpts : (isStreamingOrOpts.isStreaming ?? false);
+  const opts: RenderItemOpts = typeof isStreamingOrOpts === 'object' ? isStreamingOrOpts : {};
   switch (item.kind) {
-    case 'user':      return <UserMessage text={item.text} />;
-    case 'assistant': return <AssistantRow text={item.text} isStreaming={isStreaming} />;
+    case 'user':      return <UserMessage text={item.text} ts={item.ts} onEdit={opts.onEdit} isBusy={opts.isBusy} />;
+    case 'assistant': return <AssistantRow text={item.text} ts={item.ts} isStreaming={isStreaming} onRetry={opts.onRetry} isBusy={opts.isBusy} />;
     case 'thinking':  return <ThinkingPanel text={item.text} isStreaming={isStreaming} />;
     case 'error':     return <ErrorItem message={item.message} />;
     case 'notice':    return <NoticeItem text={item.text} />;
+    case 'stopped':   return <StoppedItem text={item.text} onRetry={opts.onRetry} isBusy={opts.isBusy} />;
     case 'bg_job':    return <BgJobItem item={item} />;
     default:          return null;
   }
@@ -111,7 +131,7 @@ export function TranscriptView({ sessionId, ...rest }: TranscriptViewProps) {
   );
 }
 
-function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false }: Omit<TranscriptViewProps, 'sessionId'>) {
+function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, turnActive = false, hideEmptyState = false, onRetry, onEdit, isBusy }: Omit<TranscriptViewProps, 'sessionId'>) {
   // Filter only the render projection, before either grouping path. Never mutate
   // the ledger-backed array: toggling back on restores old and new thinking.
   const visibleItems = useMemo(() => thinkingUi === 'off'
@@ -128,11 +148,11 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
           {isTurnStart && (
             <div className="my-6 border-t border-border/40" aria-hidden="true" />
           )}
-          <div className="py-2 px-1">{renderTextItem(item, streaming)}</div>
+          <div className="py-2 px-1">{renderTextItem(item, { isStreaming: streaming, onRetry, onEdit, isBusy })}</div>
         </div>
       );
     },
-    [],
+    [onRetry, onEdit, isBusy],
   );
 
   return (
@@ -161,7 +181,7 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
                   <div className="my-6 border-t border-border/40" aria-hidden="true" />
                 )}
                 <div className="py-2 px-1">
-                  {renderNonSubagentItem(item, streaming)}
+                  {renderNonSubagentItem(item, { isStreaming: streaming, onRetry, onEdit, isBusy })}
                 </div>
               </div>
             );

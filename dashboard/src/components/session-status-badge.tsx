@@ -24,9 +24,14 @@ const statusConfig: Record<
 export function classifySession(
   session: SessionSummary,
   pendingSessionIds: Set<string>,
+  busySessionIds?: Set<string>,
 ): SessionStatusGroup {
   if (pendingSessionIds.has(session.id)) return 'needs-input';
-  if (session.mode === 'live' || session.alive) return 'active';
+  // A live session is only shown as "Running" when it actually has a turn in
+  // flight. When isBusy is false (turn finished or was stopped) the badge
+  // reverts to "Done" so the sidebar clears promptly after Stop.
+  if (session.mode === 'live') return busySessionIds?.has(session.id) ? 'active' : 'completed';
+  if (session.alive) return 'active';
   return 'completed';
 }
 
