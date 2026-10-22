@@ -14,7 +14,7 @@ import {
 } from '@/lib/slash-command';
 import type { SlashCommand } from '@/types/api';
 import type { CommandResponse } from '@/types/command-wire';
-import { SlashAutocomplete, handleAutocompleteKey } from './slash-autocomplete';
+import { SlashAutocomplete, handleAutocompleteKey, recordRecentCommand } from './slash-autocomplete';
 import { AtFilePopover } from './at-file-popover';
 import { ModelSelector } from './model-selector';
 import { QueuePanel } from './queue-panel';
@@ -251,6 +251,7 @@ export function Composer({
       if (trimmed.startsWith('/')) {
         const cmds = await fetchCommands();
         const token = trimmed.split(/\s+/)[0]!;
+        recordRecentCommand(token);
         const cmd = findCommand(cmds, token);
 
         if (cmd?.kind === 'skill') {
@@ -311,6 +312,7 @@ export function Composer({
   }, [sessionId]);
 
   const selectCommand = useCallback((name: string) => {
+    recordRecentCommand(name);
     setText(`${formatSlashCommandName(name)} `);
     setAcActiveIdx(0);
     textareaRef.current?.focus();
