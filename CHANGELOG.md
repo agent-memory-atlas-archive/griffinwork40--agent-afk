@@ -12,11 +12,18 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 ## [Unreleased]
 
 ### Added
+- OpenAI family aliases (sol/luna/astra/terra) (#4310) (ed09d4eab)
+- /resume repo-root filtering, smarter naming, daemon exclusion (#4308) (ad8dc1d99)
 - web/CLI parity Stages 1-5: cross-surface slash commands, choices, lifecycle (/fork, /resume, /exit), structured /diff, session controls (#4295) (6a7043d2a)
 - /rewind conversation|files|both with cross-turn file restore (#4286) (2fd716087)
 - child-to-parent yield for foreground subagents (#4297) (7cb903fa3)
 
 ### Fixed
+- await plugin init before "Unknown command" on early slash input (#4320) (e5fea17c0)
+- clear handler timeout, truncate echoed text, pin 504 shape (#4277) (62cb67efe)
+- scope picker row truncation to selection picker only (8503ce382)
+- address remaining advisory findings from Oct 14 triage (#3794) (a01e78715)
+- address PR #4310 review findings (713734ac2)
 - remove write-only pending-question-store (#4299) (728d32c01)
 - address remaining advisory findings from 2026-10-19 evening triage (#4301) (a82a9aaac)
 - bash lexer long wrapper options, pipe-ampersand, truncated verbs (#4303) (9c0037771)
