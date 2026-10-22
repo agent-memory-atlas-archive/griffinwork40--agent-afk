@@ -211,7 +211,12 @@ children under-yielding or false positives causing real harm.
 - Foreground `agent` tool dispatches: full yield support.
 - Skill forks (`fork-dispatch.ts`): full yield support.
 - Compose/DAG nodes: yields disabled; fail-fast safety net.
-- Background children: deferred (handle lifecycle change needed).
+- Background children: **not needed.** They already have `emit_progress`
+  (child to parent, delivered at the parent's next turn boundary) and
+  `send_message_to_agent` (parent to child, delivered at the child's next
+  tool-round boundary). Both work because the parent model is not blocked
+  while a background child runs. Yield exists to fill the gap that only
+  foreground children have.
 - Journal-based chain rebuild: deferred (chain sidecar needed).
 
 ## Related
