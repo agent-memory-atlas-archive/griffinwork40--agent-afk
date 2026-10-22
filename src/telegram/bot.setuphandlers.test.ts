@@ -515,41 +515,33 @@ describe('TelegramBot — setupHandlers() closure coverage', () => {
   // bot.action(/^afk:m:/) — lines 286-310
   // -------------------------------------------------------------------------
   describe("bot.action(/^afk:m:/) closure", () => {
-    test('unknown alias is rejected silently (no reply)', async () => {
-      // An alias not in MODEL_ALIASES_HINT returns early without switchModel
-      const sm = (
-        bot as unknown as {
-          sessionManager: { switchModel: (...a: unknown[]) => Promise<void> };
-        }
-      ).sessionManager;
-      const spy = vi.spyOn(sm, 'switchModel').mockResolvedValue(undefined);
+    const handlerOf = (b: unknown) =>
+      (b as { messageHandler: { runSlash: (...a: unknown[]) => Promise<boolean> } }).messageHandler;
+    const managerOf = (b: unknown) =>
+      (b as { sessionManager: { switchModel: (...a: unknown[]) => Promise<void> } }).sessionManager;
+
+    test('unknown alias is rejected silently (no command run)', async () => {
+      const spy = vi.spyOn(handlerOf(bot), 'runSlash').mockResolvedValue(true);
       await fireAction(bot, 'afk:m:__invalid__');
       expect(spy).not.toHaveBeenCalled();
     });
 
-    test('valid alias triggers switchModel and edits message', async () => {
-      const sm = (
-        bot as unknown as {
-          sessionManager: { switchModel: (...a: unknown[]) => Promise<void> };
-        }
-      ).sessionManager;
-      const switchSpy = vi.spyOn(sm, 'switchModel').mockResolvedValue(undefined);
+    test('valid alias runs the shared /model command (in-place switch), never switchModel', async () => {
+      const runSpy = vi.spyOn(handlerOf(bot), 'runSlash').mockResolvedValue(true);
+      const switchSpy = vi.spyOn(managerOf(bot), 'switchModel').mockResolvedValue(undefined);
       await fireAction(bot, 'afk:m:haiku');
-      expect(switchSpy).toHaveBeenCalledWith(
+      expect(runSpy).toHaveBeenCalledWith(
+        expect.anything(),
         expect.objectContaining({ chatId: 12345 }),
-        'haiku',
+        '/model haiku',
       );
+      expect(switchSpy).not.toHaveBeenCalled();
     });
 
-    test('switchModel error is caught and logged (verbose)', async () => {
+    test('a command error is caught and logged (verbose)', async () => {
       const verboseBot = makeBot();
       (verboseBot as unknown as { options: { verbose: boolean } }).options.verbose = true;
-      const sm = (
-        verboseBot as unknown as {
-          sessionManager: { switchModel: (...a: unknown[]) => Promise<void> };
-        }
-      ).sessionManager;
-      vi.spyOn(sm, 'switchModel').mockRejectedValueOnce(new Error('switch err'));
+      vi.spyOn(handlerOf(verboseBot), 'runSlash').mockRejectedValueOnce(new Error('switch err'));
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       await fireAction(verboseBot, 'afk:m:sonnet');
       expect(logSpy).toHaveBeenCalledWith(
@@ -563,12 +555,7 @@ describe('TelegramBot — setupHandlers() closure coverage', () => {
 
     test('disallowed chat id is rejected silently', async () => {
       // Chat 99999 is not in allowedChatIds
-      const sm = (
-        bot as unknown as {
-          sessionManager: { switchModel: (...a: unknown[]) => Promise<void> };
-        }
-      ).sessionManager;
-      const spy = vi.spyOn(sm, 'switchModel').mockResolvedValue(undefined);
+      const spy = vi.spyOn(handlerOf(bot), 'runSlash').mockResolvedValue(true);
       await fireAction(bot, 'afk:m:haiku', 99999);
       expect(spy).not.toHaveBeenCalled();
     });

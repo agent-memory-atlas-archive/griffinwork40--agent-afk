@@ -420,8 +420,12 @@ export class MessageHandler {
     }
   }
 
-  /** Lazy: keeps the shared command tree off the bot's import path. */
-  private async runSlash(ctx: Context, route: TelegramRoute, text: string, fromQueue = false): Promise<boolean> {
+  /**
+   * Lazy: keeps the shared command tree off the bot's import path. Public so
+   * inline-keyboard callbacks (e.g. the /model picker) run the SAME shared
+   * command as typing it, instead of a parallel implementation.
+   */
+  async runSlash(ctx: Context, route: TelegramRoute, text: string, fromQueue = false): Promise<boolean> {
     const { dispatchTelegramSlash } = await import('./slash.js');
     return dispatchTelegramSlash(this.slashDeps(), ctx, route, text, fromQueue);
   }

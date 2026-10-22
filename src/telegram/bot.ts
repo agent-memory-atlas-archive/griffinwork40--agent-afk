@@ -5,7 +5,7 @@
 
 import { Telegraf, Context } from 'telegraf';
 import { SessionManager, SessionManagerOptions } from './session-manager.js';
-import { formatError, formatModelSwitch } from './formatter.js';
+import { formatError } from './formatter.js';
 import { handleStart } from './handlers/start.js';
 import { MODEL_ALIASES_HINT } from '../agent/session/model-slots.js';
 import { handleSessions, handleNew, handleSwitchCallback } from './handlers/sessions.js';
@@ -303,9 +303,11 @@ export class TelegramBot {
       if (!(MODEL_ALIASES_HINT as readonly string[]).includes(alias)) return;
 
       try {
-        await this.sessionManager.switchModel(route, alias);
-        const confirmText = formatModelSwitch(alias);
-        await ctx.editMessageText(confirmText).catch(() => ctx.reply(confirmText));
+        // Same path as typing `/model <alias>`: the shared in-place switch,
+        // which keeps the conversation (a teardown here would silently start
+        // a new one). The command replies with its own confirmation.
+        await ctx.editMessageReplyMarkup(undefined).catch(() => {});
+        await this.messageHandler.runSlash(ctx, route, `/model ${alias}`);
       } catch (err) {
         this.log('Model action error:', err);
       }
