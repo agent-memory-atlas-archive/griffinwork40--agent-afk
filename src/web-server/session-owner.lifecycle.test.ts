@@ -26,6 +26,7 @@ import {
 } from '../cli/session-store.js';
 import type { SlashContext, SessionStats } from '../cli/slash/types.js';
 import type { SessionOwner } from './session-owner.js';
+import { forkJournal } from '../agent/journal/index.js';
 import {
   handleWebExit,
   handleWebFork,
@@ -182,6 +183,15 @@ describe('handleWebResumeTarget', () => {
 });
 
 describe('handleWebFork', () => {
+  it('forks the journal of the CURRENT provider conversation, not the pre-/clear id', async () => {
+    const stats = makeStats({ totalTurns: 2 });
+    const browserId = stats.sessionId!;
+    const ctx = makeCtx(stats, makeSession('provider-after-clear'));
+    mockFork.mockReturnValue({ id: 'fork-1', path: '/tmp/fork-1.json' } as never);
+    await handleWebFork(makeOwner(), browserId, ctx);
+    expect(vi.mocked(forkJournal)).toHaveBeenCalledWith('provider-after-clear', 'fork-1');
+  });
+
   it('returns continue with warn when no turns', async () => {
     const stats = makeStats({ totalTurns: 0 });
     const owner = makeOwner();

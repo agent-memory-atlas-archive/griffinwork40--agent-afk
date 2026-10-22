@@ -296,10 +296,13 @@ export async function handleWebFork(
     return 'continue';
   }
 
-  // Best-effort journal copy (same as REPL).
-  if (ctx.stats.sessionId) {
+  // Best-effort journal copy (same as REPL). The journal belongs to the
+  // CURRENT provider conversation: after /clear, stats.sessionId is reset to
+  // the stable browser id, whose journal holds the cleared history.
+  const journalSource = ctx.session.current.sessionId ?? ctx.stats.sessionId;
+  if (journalSource) {
     try { await ctx.session.current.messageJournal?.flush(); } catch { /* best-effort */ }
-    if (forkJournal(ctx.stats.sessionId, forkId)) {
+    if (forkJournal(journalSource, forkId)) {
       seedForkLedger(forkId, { model: String(ctx.stats.model), ...(ctx.stats.cwd ? { cwd: ctx.stats.cwd } : {}) });
     }
   }

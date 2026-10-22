@@ -187,19 +187,18 @@ export async function handleCommand(
     // Execute handler — bounded to 15 s to prevent runaway commands from
     // holding the turn reservation open indefinitely.
     const HANDLER_TIMEOUT_MS = 15_000;
-    const execution = ctx.executeSessionControl
-      ? await Promise.race([
-          ctx.executeSessionControl(sessionId, cmd, slashCtx, parsed.args ?? ''),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('command_timeout')), HANDLER_TIMEOUT_MS),
-          ),
-        ])
-      : { result: await Promise.race([
-          cmd.handler(slashCtx, parsed.args ?? ''),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('command_timeout')), HANDLER_TIMEOUT_MS),
-          ),
-        ]) };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('command_timeout')), HANDLER_TIMEOUT_MS);
+    });
+    let execution;
+    try {
+      execution = ctx.executeSessionControl
+        ? await Promise.race([ctx.executeSessionControl(sessionId, cmd, slashCtx, parsed.args ?? ''), timeout])
+        : { result: await Promise.race([cmd.handler(slashCtx, parsed.args ?? ''), timeout]) };
+    } finally {
+      clearTimeout(timer);
+    }
     const blocks = writer.toOutputBlocks();
     const control = execution.control ?? normalizeSlashResult(execution.result);
 
