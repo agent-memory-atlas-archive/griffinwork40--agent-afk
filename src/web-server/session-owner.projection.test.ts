@@ -12,4 +12,26 @@ describe('projectJournalMessages (rewind projection)', () => {
     const user = records.find((r) => r.kind === 'user');
     expect(user?.kind === 'user' && user.text.length).toBeLessThan(8_100);
   });
+
+  it('injects priorCost into the last done record when cost > 0', () => {
+    const records = projectJournalMessages([
+      { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'world' }] },
+    ] as never, { costUsd: 0.1234, durationMs: 5000, inputTokens: 100, outputTokens: 50, cacheReadTokens: 0 });
+    const done = records.filter((r) => r.kind === 'done');
+    expect(done).toHaveLength(1);
+    expect(done[0]).toMatchObject({ kind: 'done', costUsd: 0.1234, durationMs: 5000, inputTokens: 100, outputTokens: 50 });
+    // cacheReadTokens=0 is omitted (falsy guard)
+    expect((done[0] as Record<string, unknown>)['cacheReadTokens']).toBeUndefined();
+  });
+
+  it('emits a plain done record when priorCost is zero', () => {
+    const records = projectJournalMessages([
+      { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'world' }] },
+    ] as never, { costUsd: 0, durationMs: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 });
+    const done = records.filter((r) => r.kind === 'done');
+    expect(done).toHaveLength(1);
+    expect(done[0]).toEqual({ kind: 'done' });
+  });
 });

@@ -132,6 +132,52 @@ function GenericChoiceDialog({ sessionId, request, onAnswered }: ChoiceDialogPro
   );
 }
 
+// ── Model alias chip strip (max 2 visible + overflow count) ──────────────
+
+const MAX_VISIBLE_CHIPS = 2;
+
+function ModelAliasChips({
+  aliases,
+  has1m,
+  selectedAlias,
+  rowId,
+  onSelect,
+}: {
+  aliases: string[];
+  has1m: boolean;
+  selectedAlias: string;
+  rowId: string;
+  onSelect: (alias: string) => void;
+}) {
+  const allChips: Array<{ key: string; label: string; alias: string }> = [
+    ...aliases.map((a) => ({ key: a, label: a, alias: a })),
+    ...(has1m ? [{ key: `${rowId}_1m`, label: '1M', alias: `${rowId}_1m` }] : []),
+  ];
+  const visible = allChips.slice(0, MAX_VISIBLE_CHIPS);
+  const overflow = allChips.length - MAX_VISIBLE_CHIPS;
+  return (
+    <span className="ml-2 flex shrink-0 items-center gap-1">
+      {visible.map(({ key, label, alias }) => (
+        <span key={key}
+          onClick={(e) => { e.stopPropagation(); onSelect(alias); }}
+          className={[
+            'cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-mono transition-colors',
+            selectedAlias === alias
+              ? 'bg-brand text-primary-foreground'
+              : 'bg-muted text-muted-foreground hover:bg-muted/70',
+          ].join(' ')}>
+          {label}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+          +{overflow}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Model picker dialog ───────────────────────────────────────────────────
 
 interface ModelPickerProps {
@@ -160,7 +206,10 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
     return () => {
       mounted.current = false;
       // Defer focus so React's commit (removing the dialog from DOM) runs first.
-      const textarea = document.querySelector<HTMLElement>('textarea');
+      // Prefer the composer textarea (data-testid) so keyboard users land there.
+      const textarea =
+        document.querySelector<HTMLElement>('[data-testid="composer-textarea"]') ??
+        document.querySelector<HTMLElement>('textarea');
       const target = textarea ?? previousFocusRef.current;
       setTimeout(() => { target?.focus(); }, 0);
     };
@@ -186,7 +235,9 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
       if (!busy) {
         // Dismiss UI immediately so the session becomes interactive again.
         // Then POST null to the server in the background to unblock the coroutine.
-        const textarea = document.querySelector<HTMLElement>('textarea');
+        const textarea =
+          document.querySelector<HTMLElement>('[data-testid="composer-textarea"]') ??
+          document.querySelector<HTMLElement>('textarea');
         const target = textarea ?? previousFocusRef.current;
         onAnswered();
         setTimeout(() => { target?.focus(); }, 0);
@@ -249,7 +300,8 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         isSelected ? 'border-brand bg-accent' : 'border-border hover:bg-accent/50',
                       ].join(' ')}>
-                      <span className="flex items-center gap-2 min-w-0">
+                      {/* Name + current badge — always visible, shrinks before chips do */}
+                      <span className="flex min-w-0 items-center gap-2">
                         <span className="font-medium truncate">{row.name}</span>
                         {isCurrent && (
                           <span className="shrink-0 rounded-full bg-status-done/15 px-1.5 py-0.5 text-[10px] font-medium text-status-done">
@@ -257,33 +309,15 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
                           </span>
                         )}
                       </span>
-                      {/* Alias chips */}
-                      <span className="flex shrink-0 items-center gap-1 ml-2 flex-wrap justify-end">
-                        {row.aliases.map((a) => (
-                          <span key={a}
-                            onClick={(e) => { e.stopPropagation(); setSelectedAlias(a); }}
-                            className={[
-                              'cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-mono transition-colors',
-                              selectedAlias === a
-                                ? 'bg-brand text-primary-foreground'
-                                : 'bg-muted text-muted-foreground hover:bg-muted/70',
-                            ].join(' ')}>
-                            {a}
-                          </span>
-                        ))}
-                        {row.has1m && (
-                          <span
-                            onClick={(e) => { e.stopPropagation(); setSelectedAlias(`${row.id}_1m`); }}
-                            className={[
-                              'cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-mono transition-colors',
-                              selectedAlias === `${row.id}_1m`
-                                ? 'bg-brand text-primary-foreground'
-                                : 'bg-muted/60 text-muted-foreground hover:bg-muted/40',
-                            ].join(' ')}>
-                            1M
-                          </span>
-                        )}
-                      </span>
+                      {/* Alias chips — capped at 2 visible + "+N" overflow chip so the
+                          model name is never pushed off-screen on narrow viewports. */}
+                      <ModelAliasChips
+                        aliases={row.aliases}
+                        has1m={row.has1m}
+                        selectedAlias={selectedAlias}
+                        rowId={row.id}
+                        onSelect={(a) => { setSelectedAlias(a); }}
+                      />
                     </button>
                   );
                 })}
@@ -296,7 +330,13 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
         <div className="shrink-0 flex justify-end gap-2 border-t border-border/40 px-5 py-3">
           <button type="button" disabled={busy}
             className="rounded border px-3 py-2 text-sm hover:bg-accent"
-            onClick={() => void answer(null)}>Cancel</button>
+            onClick={() => {
+              const textarea =
+                document.querySelector<HTMLElement>('[data-testid="composer-textarea"]') ??
+                document.querySelector<HTMLElement>('textarea');
+              void answer(null);
+              setTimeout(() => { (textarea ?? previousFocusRef.current)?.focus(); }, 0);
+            }}>Cancel</button>
           <button type="button" disabled={busy || !selectedAlias}
             className="rounded bg-brand px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
             onClick={() => void answer(selectedAlias)}>

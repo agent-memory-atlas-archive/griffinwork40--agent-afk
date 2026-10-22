@@ -7,7 +7,7 @@ import { clearConversation } from '../agent/session-control/index.js';
 import { FastModeController } from '../agent/fast-mode.js';
 import { resolveModelId } from '../agent/session/model-resolution.js';
 import { SessionLedgerWriter, type LedgerPayload } from '../agent/session-ledger.js';
-import { projectJournalMessages, readProjectionMessages } from './session-owner.projection.js';
+import { projectJournalMessages, readLedgerCostTotals, readProjectionMessages } from './session-owner.projection.js';
 import { archiveSessionLedger } from './ledger-archive.js';
 import { getSessionLedgerDir, getSessionLedgerPath } from '../paths.js';
 import { recordTurn } from '../cli/slash/session-stats.js';
@@ -135,9 +135,12 @@ export class WebSessionControl {
     const rewind = this.session.rewindConversation;
     this.session.rewindConversation = async (index) => {
       await readProjectionMessages(this.session); // fail closed BEFORE provider mutation
+      // Read cost totals from the CURRENT ledger before it is archived so we
+      // can inject them into the rebuilt projection (journals carry no billing).
+      const priorCost = await readLedgerCostTotals(this.id);
       const result = await rewind.call(this.session, index);
       if (result.rewound) {
-        const retained = projectJournalMessages(await readProjectionMessages(this.session));
+        const retained = projectJournalMessages(await readProjectionMessages(this.session), priorCost);
         // Unlike clear, rewind doesn't seal the AgentSession's same-id writer.
         await this.session.sealEventLedger();
         await this.resetProjection(retained);

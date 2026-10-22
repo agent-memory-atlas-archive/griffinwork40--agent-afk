@@ -29,6 +29,7 @@ export function SessionContent({
   onEdit,
   isBusy,
   currentModel,
+  serverCwd,
 }: {
   onNewSession?: () => void;
   starting?: boolean;
@@ -47,6 +48,13 @@ export function SessionContent({
   isBusy?: boolean;
   /** Model alias/name for the welcome screen (from server default or user selection). */
   currentModel?: string;
+  /**
+   * Server cwd from the session create response or the selected session.
+   * Passed explicitly so the folder chip on the welcome screen is visible
+   * immediately after a new session is created, before the first turn writes
+   * the ledger meta record that populates session.cwd via listWebSessions.
+   */
+  serverCwd?: string;
 }) {
   if (loading && !sessions.length) {
     return (
@@ -109,7 +117,10 @@ export function SessionContent({
     );
   }
   // Derive working folder from any available session cwd.
-  const anyCwd = sessions.find((s) => s.cwd)?.cwd;
+  // Prefer serverCwd (from the create response or selected session) so the
+  // folder chip shows immediately on the welcome screen without waiting for
+  // the ledger meta record to propagate through listWebSessions.
+  const anyCwd = serverCwd ?? sessions.find((s) => s.cwd)?.cwd;
   const folderName = anyCwd ? anyCwd.replace(/\/+$/, '').split('/').pop() ?? anyCwd : undefined;
 
   return (

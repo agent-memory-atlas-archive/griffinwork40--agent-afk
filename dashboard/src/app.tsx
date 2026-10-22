@@ -74,7 +74,7 @@ function Dashboard() {
   const [answeredChoice, setAnsweredChoice] = useState<string | null>(null);
   const activeChoice = status === 'open' && selectedSession?.mode === 'live'
     ? choices.find((choice) => `${selectedSessionId}:${choice.corrId}` !== answeredChoice) : undefined;
-  useEffect(() => { setAnsweredChoice(null); setPrefill(undefined); }, [selectedSessionId]);
+  useEffect(() => { setAnsweredChoice(null); setPrefill(undefined); setNewSessionCwd(undefined); }, [selectedSessionId]);
   useEffect(() => {
     if (answeredChoice && !choices.some((choice) => `${selectedSessionId}:${choice.corrId}` === answeredChoice)) {
       setAnsweredChoice(null);
@@ -124,6 +124,10 @@ function Dashboard() {
 
   const [selectedModel, setSelectedModel] = useState<string>();
   const currentModel = selectedSession?.model ?? selectedModel;
+  // Server cwd received from the session create response; used to show the
+  // folder chip on the welcome screen before the first turn completes and the
+  // session list is refreshed with the real cwd from the ledger meta record.
+  const [newSessionCwd, setNewSessionCwd] = useState<string | undefined>();
 
   const handleCommandOutput = (input: string, response: CommandResponse) => {
     if (!selectedSessionId) return;
@@ -195,6 +199,9 @@ function Dashboard() {
       setSelectedSessionId(result.session.id);
       setActiveNav('sessions');
       setMobileSidebarOpen(false);
+      // Capture server cwd immediately so the welcome screen folder chip shows
+      // before the first turn completes and refreshSessions updates the list.
+      setNewSessionCwd((result.session as { cwd?: string }).cwd);
       await refreshSessions(); // the composer needs the new row; do not wait for the 5 s poll
     } catch (err) {
       toast(err instanceof Error ? `Could not start chat: ${err.message}` : 'Could not start chat', 'info');
@@ -295,7 +302,7 @@ function Dashboard() {
               <>
                 <StreamStatusDot status={status} />
                 <h1 className="min-w-0 truncate text-sm font-medium text-foreground" title={selectedSession.title ?? undefined}>
-                  {selectedSession.title ?? 'New session'}
+                  {selectedSession.title ? humanizeTitle(selectedSession.title) : 'New session'}
                 </h1>
                 {selectedSession.model && (
                   <span className="hidden shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-secondary-foreground sm:inline-block" title="Session model">
@@ -328,7 +335,8 @@ function Dashboard() {
 
         {/* Content area */}
         <div className="relative flex flex-1 flex-col overflow-hidden">
-          <div ref={containerRef} data-testid="transcript-scroll" className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+          <div ref={containerRef} data-testid="transcript-scroll" className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+            style={showScrollButton ? { paddingBottom: '2.5rem' } : undefined}>
             <div className="flex-1">
               {activeNav === 'sessions' && (
                 <SessionContent
@@ -348,6 +356,7 @@ function Dashboard() {
                   onEdit={(text) => void editAndResend(text).catch(rewindFailed)}
                   isBusy={isBusy}
                   currentModel={currentModel}
+                  serverCwd={selectedSession?.cwd ?? newSessionCwd}
                 />
               )}
               {activeNav === 'sessions' && selectedSession && status === 'open' &&
@@ -430,4 +439,15 @@ function StreamStatusDot({ status }: { status: string }) {
 function lastUserText(items: readonly { kind: string; text?: string }[]): string | undefined {
   for (let i = items.length - 1; i >= 0; i--) if (items[i]!.kind === 'user') return items[i]!.text;
   return undefined;
+}
+
+/**
+ * Convert a slug-shaped title (kebab-case or snake_case) to a human-readable
+ * string. Titles that already contain spaces are returned as-is.
+ * Mirrors session-card.tsx so the header and sidebar show the same label.
+ */
+function humanizeTitle(title: string): string {
+  if (/\s/.test(title)) return title;
+  const words = title.replace(/[-_]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
