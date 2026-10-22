@@ -76,19 +76,22 @@ export function SessionCard({
           <SessionStatusBadge status={status} running={running} className="shrink-0" />
         </div>
 
-        {/* Meta row */}
+        {/* Meta row
+            P1-9: chip uses text-foreground/70 on bg-muted so contrast ≥ 4.5:1
+            (was text-muted-foreground #7e8691 on bg-secondary #21252c = 4.17,
+            below the 4.5 WCAG AA threshold for 10px bold text). */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {session.model && (
-            <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[10px]">
+            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground/80">
               {session.model}
             </span>
           )}
           {session.cwd && (
-            <span className="truncate font-mono text-[10px]" title={session.cwd}>
+            <span className="truncate font-mono text-[10px] text-foreground/60" title={session.cwd}>
               {cwdLabel(session.cwd)}
             </span>
           )}
-          <span className="ml-auto shrink-0">
+          <span className="ml-auto shrink-0 text-foreground/60">
             {session.updatedAt ? relativeTime(session.updatedAt) : ''}
           </span>
         </div>

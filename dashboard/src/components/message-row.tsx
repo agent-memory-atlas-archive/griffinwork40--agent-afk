@@ -9,7 +9,14 @@ import type { TranscriptItem } from '@/lib/ledger-adapter';
 // UserMessage
 // ---------------------------------------------------------------------------
 
-/** Right-aligned user turn. No bubble — just label + plain text. */
+/**
+ * Left-aligned user turn with a subtle bubble.
+ *
+ * P1-8: bubble replaces bare right-aligned text; left-aligned text inside the
+ * bubble is more readable and avoids ragged right-alignment on long messages.
+ * P1-9: "YOU" label uses text-muted-foreground (not /50) to pass WCAG AA
+ * contrast (was 2.15 against #0d1117; muted-foreground gives ≥4.5).
+ */
 export function UserMessage({
   text,
   ts,
@@ -22,13 +29,15 @@ export function UserMessage({
   isBusy?: boolean;
 }) {
   return (
-    <div className="group relative flex flex-col items-end gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/50">
+    <div className="group relative flex flex-col items-start gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
         You
       </span>
-      <p className="max-w-2xl text-sm leading-relaxed text-foreground whitespace-pre-wrap text-right">
-        {text}
-      </p>
+      <div className="max-w-xl rounded-xl bg-secondary/70 px-4 py-2.5 border border-border/50">
+        <p className="text-[15px] leading-relaxed text-foreground whitespace-pre-wrap">
+          {text}
+        </p>
+      </div>
       <MessageActions kind="user" text={text} ts={ts} onEdit={onEdit} isBusy={isBusy} />
     </div>
   );
