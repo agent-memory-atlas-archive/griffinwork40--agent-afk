@@ -31,3 +31,11 @@ describe('toolSummary', () => {
     expect(toolSummary('grep', 'MAX_TEXT_LEN')).toBe('MAX_TEXT_LEN');
   });
 });
+
+describe('toolSummary: formatted grep/glob ledger previews', () => {
+  it('shows the pattern and a repo-relative dir', () => {
+    expect(toolSummary('grep', ' "MAX_TEXT_LEN" in /repo/src/agent', '/repo')).toBe('grep "MAX_TEXT_LEN" in src/agent');
+    expect(toolSummary('grep', ' "TODO" in /repo', '/repo')).toBe('grep "TODO" in .');
+    expect(toolSummary('glob', ' "**/*.ts"', '/repo')).toBe('glob "**/*.ts"');
+  });
+});

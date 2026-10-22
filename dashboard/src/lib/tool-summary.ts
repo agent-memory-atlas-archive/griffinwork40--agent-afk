@@ -52,6 +52,13 @@ export function toolSummary(name: string, preview: string, cwd?: string): string
     const p = summary.replaceAll('\\', '/');
     if (p.startsWith(`${root}/`)) summary = p.slice(root.length + 1);
   }
+  if ((name === 'grep' || name === 'glob') && cwd) {
+    // Ledger previews arrive formatted (`"PATTERN" in /abs/dir`); show the dir repo-relative.
+    const root = cwd.replace(/[\\/]+$/, '').replaceAll('\\', '/');
+    summary = summary.replaceAll('\\', '/').replace(` in ${root}/`, ' in ').replace(new RegExp(` in ${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`), ' in .');
+    if (name === 'grep' && summary.startsWith('"')) summary = `grep ${summary}`;
+    if (name === 'glob' && summary.startsWith('"')) summary = `glob ${summary}`;
+  }
   if (['web_scrape', 'web_request', 'browser_open'].includes(name)) {
     try { summary = new URL(summary).host; } catch { /* Search queries stay readable. */ }
   }
