@@ -9,8 +9,8 @@ import { resetStats } from '../../cli/slash/session-stats.js';
  * A failed reset leaves stats and ledger untouched. Terminal clearing belongs
  * to the caller, as does busy/queue policy and turn reservation.
  *
- * Telegram currently replaces its managed session; Stage 5 must adopt this
- * contract rather than preserving that surface-specific lifecycle operation.
+ * Telegram adopts this contract (Stage 5, telegram/handlers/slash.ts); its
+ * SessionManager only re-points chat-level identity bookkeeping afterwards.
  */
 export async function clearConversation(
   session: Pick<AgentSession, 'reset'>,

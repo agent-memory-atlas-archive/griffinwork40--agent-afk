@@ -128,3 +128,26 @@ Skill commands (plugin, user, builtin, marketplace): **DONE** via `classifySlash
 | Plugins / skills / marketplace | MISSING | UX |
 | Peers / inbox | MISSING | UX |
 | Worktrees | MISSING | S2 + UX |
+
+## Telegram (Stage 5)
+
+Telegram now uses the shared command layer. A text message that starts with `/` and resolves to a
+registered command runs through the slash registry. It gets a Telegram `SlashContext`
+(`telegramCapabilities()` = `sessionControl`) and a Telegram HTML `Writer`. Commands whose
+requirements Telegram cannot meet reply with their capability reason. Unknown commands reply with the
+nearest suggestion. Session skills and SDK commands pass through to the agent unchanged.
+
+| Command group | Telegram now | Notes |
+|---|---|---|
+| /help, /cost, /tokens (/ctx), /usage, /info, /history, /tools, /limits, /debug, /mcp, /diff, ... | DONE (shared) | rendered via `writer.telegram.ts`: list → bullets, keyValue → bold labels, table/diff → `<pre>`, link → anchor |
+| /clear | DONE (shared) | reset-in-place (`clearConversation`); chat-level identity wrapper in SessionManager (see the Contract in `handlers/slash.ts`) |
+| /compact, /model &lt;name&gt;, /name, /thinking, /fast | DONE (shared) | session-control service; queued while the route is busy; bare `/model` keeps the tap-to-switch keyboard |
+| /editor, /copy, /theme, /keys, /sh, /plan, /retry, /reauth, ... | GATED | capability reason (same `requires` metadata as web) |
+| /exit, /resume, /fork, /rewind | GATED | Telegram lifecycle deferrals: /new, /sessions cover the chat equivalents |
+| /start, /cd (/cwd), /sessions, /new, /watch, /unwatch, /abort, /afk, /inbox, /insights, /good, /bad | Telegram-only | bot-specific handlers, unchanged |
+
+Deleted Telegram duplicates: `/clear`, `/compact`, `/model`, `/name`, `/help`, `/usage` handlers
+(`handlers/commands.ts` sections, `handlers/help.ts`, `handlers/usage.ts`,
+`handlers/message.compact-handler.ts`, `handlers/commands.model-validate.ts`). The `setMyCommands`
+menu is the Telegram-only list followed by registry commands runnable under Telegram capabilities
+(`bot.command-descriptors.ts`), plus session skills per chat.
