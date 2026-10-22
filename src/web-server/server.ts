@@ -29,15 +29,7 @@ import {
 } from './routes.js';
 import { handleStream } from './stream-route.js';
 import { handleGetToolResult } from './routes.tool-results.js';
-import {
-  handleCreateSchedule,
-  handleDaemonStatus,
-  handleDeleteSchedule,
-  handleListSchedules,
-  handleScheduleHistory,
-  handleToggleSchedule,
-  handleUpdateSchedule,
-} from './routes.schedules.js';
+import { dispatchScheduleRoute } from './server.schedules.js';
 import { handleListModels } from './routes.models.js';
 import { handleSearchMemory, handleGetHotMemory } from './routes.memory.js';
 import { handleListBgJobs, handleGetBgJob } from './routes.bg-jobs.js';
@@ -281,8 +273,6 @@ function actualPort(server: Server): number {
   return typeof addr === 'object' && addr !== null ? addr.port : 0;
 }
 
-
-
 async function dispatch(
   req: IncomingMessage,
   res: ServerResponse,
@@ -399,38 +389,8 @@ async function dispatch(
     return;
   }
 
-  // ---- schedule management routes ------------------------------------------
-  if (path === '/api/schedules' && method === 'GET') {
-    await handleListSchedules(res);
-    return;
-  }
-  if (path === '/api/schedules' && method === 'POST') {
-    await handleCreateSchedule(res, await readBody(req));
-    return;
-  }
-  const scheduleIdMatch = /^\/api\/schedules\/([^/]+)$/.exec(path);
-  if (scheduleIdMatch?.[1] && method === 'PATCH') {
-    await handleUpdateSchedule(res, decodeURIComponent(scheduleIdMatch[1]), await readBody(req));
-    return;
-  }
-  if (scheduleIdMatch?.[1] && method === 'DELETE') {
-    await handleDeleteSchedule(res, decodeURIComponent(scheduleIdMatch[1]));
-    return;
-  }
-  const toggleMatch = /^\/api\/schedules\/([^/]+)\/toggle$/.exec(path);
-  if (toggleMatch?.[1] && method === 'POST') {
-    await handleToggleSchedule(res, decodeURIComponent(toggleMatch[1]));
-    return;
-  }
-  const historyMatch = /^\/api\/schedules\/([^/]+)\/history$/.exec(path);
-  if (historyMatch?.[1] && method === 'GET') {
-    await handleScheduleHistory(res, decodeURIComponent(historyMatch[1]));
-    return;
-  }
-  if (path === '/api/daemon/status' && method === 'GET') {
-    await handleDaemonStatus(res);
-    return;
-  }
+  // ---- schedule management + daemon status (server.schedules.ts) ------------
+  if (await dispatchScheduleRoute(res, path, method, () => readBody(req))) return;
 
   if (path === '/api/models' && method === 'GET') {
     handleListModels(res, owner?.defaultModel);
