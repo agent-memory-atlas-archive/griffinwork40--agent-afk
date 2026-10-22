@@ -9,7 +9,6 @@
  * Pure functions — no side effects, no mutations to FrameHost state.
  */
 
-import { truncateDisplayWidth } from './display.js';
 import type { ChromeRows } from './terminal-compositor.frame.layout.js';
 
 /**
@@ -94,7 +93,6 @@ export function buildPickerFrameLines(
   renderGap: boolean,
   pickerRows: string[],
   margin = '',
-  bandWidth = Infinity,
 ): string[] {
   const { spinnerRow, tipRow, attachmentRow } = chrome;
   const frameLines: string[] = [];
@@ -103,9 +101,6 @@ export function buildPickerFrameLines(
   if (tipRow) frameLines.push(withMargin(tipRow, margin));
   if (attachmentRow) frameLines.push(withMargin(attachmentRow, margin));
   if (renderGap) frameLines.push('');
-  for (const row of pickerRows) {
-    const fitted = bandWidth < Infinity ? truncateDisplayWidth(row, bandWidth) : row;
-    frameLines.push(withMargin(fitted, margin));
-  }
+  for (const row of pickerRows) frameLines.push(withMargin(row, margin));
   return frameLines;
 }
