@@ -11,6 +11,7 @@ import ora from 'ora';
 import { palette } from '../../palette.js';
 import { divider } from '../../render.js';
 import { list } from '../registry.js';
+import { missingCapabilities } from '../capabilities.js';
 import { writeList } from '../output-blocks.js';
 import { clearConversation, compactConversation } from '../../../agent/session-control/index.js';
 import { REPL_SPINNER_OPTIONS } from '../../commands/interactive/shared.js';
@@ -236,7 +237,11 @@ const helpCmd: SlashCommand = {
   summary: 'Show this help',
   hint: 'When you want the full command list with usage strings — broader than this inline dropdown.',
   async handler(ctx) {
-    const cmds = list();
+    // Contract: a surface that declares capabilities sees only the commands it
+    // can run (web and Telegram listed refused ones like /editor before). The
+    // REPL declares none, so its listing and bytes are unchanged.
+    const provided = ctx.capabilities;
+    const cmds = list().filter((cmd) => provided === undefined || missingCapabilities(cmd, provided).length === 0);
     const maxName = cmds.reduce((m, c) => Math.max(m, c.name.length), 0) + 2;
 
     writeList(ctx.out, {
@@ -254,9 +259,11 @@ const helpCmd: SlashCommand = {
       }
       ctx.out.line();
     });
-    ctx.out.line(palette.dim('  Tip: Ctrl+C interrupts a running turn; a second press exits.'));
-    ctx.out.line(palette.dim('  Hidden: /keys for keybindings · @ to attach files · !cmd to run shell · Shift+Tab to change mode'));
-    ctx.out.line();
+    if (provided === undefined || provided.has('tty')) {
+      ctx.out.line(palette.dim('  Tip: Ctrl+C interrupts a running turn; a second press exits.'));
+      ctx.out.line(palette.dim('  Hidden: /keys for keybindings · @ to attach files · !cmd to run shell · Shift+Tab to change mode'));
+      ctx.out.line();
+    }
     return 'continue';
   },
 };
