@@ -233,8 +233,14 @@ export function ledgerRecordToItem(
   if (typeof record.kind !== 'string') return undefined;
 
   switch (record.kind) {
-    case 'user':
-      return { kind: 'user', id: nextId('u'), text: str(record['text']) ?? '', ...(record.ts !== undefined ? { ts: record.ts as number } : {}) };
+    case 'user': {
+      // Contract: the ledger stores `input` (user-typed text before framework
+      // preamble was prepended) alongside `text` (the full concatenated string).
+      // Display the user-typed `input` when available so [placeholder-prevent]
+      // and similar framework injections never appear in the transcript.
+      const displayText = str(record['input']) ?? str(record['text']) ?? '';
+      return { kind: 'user', id: nextId('u'), text: displayText, ...(record.ts !== undefined ? { ts: record.ts as number } : {}) };
+    }
 
     case 'assistant':
       return { kind: 'assistant', id: nextId('a'), text: str(record['text']) ?? '', ...(record.ts !== undefined ? { ts: record.ts as number } : {}) };

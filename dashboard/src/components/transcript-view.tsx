@@ -102,14 +102,16 @@ export function renderNonSubagentItem(item: TranscriptItem, isStreamingOrOpts: b
   }
 }
 
-function renderTextItem(item: TranscriptItem, isStreaming = false): React.ReactNode {
+function renderTextItem(item: TranscriptItem, isStreamingOrOpts: boolean | RenderItemOpts = false): React.ReactNode {
+  const isStreaming = typeof isStreamingOrOpts === 'boolean' ? isStreamingOrOpts : (isStreamingOrOpts.isStreaming ?? false);
+  const opts: RenderItemOpts = typeof isStreamingOrOpts === 'object' ? isStreamingOrOpts : {};
   switch (item.kind) {
-    case 'user':      return <UserMessage text={item.text} ts={item.ts} />;
-    case 'assistant': return <AssistantRow text={item.text} ts={item.ts} isStreaming={isStreaming} />;
+    case 'user':      return <UserMessage text={item.text} ts={item.ts} onEdit={opts.onEdit} isBusy={opts.isBusy} />;
+    case 'assistant': return <AssistantRow text={item.text} ts={item.ts} isStreaming={isStreaming} onRetry={opts.onRetry} isBusy={opts.isBusy} />;
     case 'thinking':  return <ThinkingPanel text={item.text} />;
     case 'error':     return <ErrorItem message={item.message} />;
     case 'notice':    return <NoticeItem text={item.text} />;
-    case 'stopped':   return <StoppedItem text={item.text} />;
+    case 'stopped':   return <StoppedItem text={item.text} onRetry={opts.onRetry} isBusy={opts.isBusy} />;
     case 'bg_job':    return <BgJobItem item={item} />;
     default:          return null;
   }
@@ -153,11 +155,11 @@ function TranscriptBody({ items, totals, thinkingUi = 'live', spineMode = true, 
           {isTurnStart && (
             <div className="my-6 border-t border-border/40" aria-hidden="true" />
           )}
-          <div className="py-2 px-1">{renderTextItem(item, streaming)}</div>
+          <div className="py-2 px-1">{renderTextItem(item, { isStreaming: streaming, onRetry, onEdit, isBusy })}</div>
         </div>
       );
     },
-    [turnActive, lastAssistantId],
+    [turnActive, lastAssistantId, onRetry, onEdit, isBusy],
   );
 
   return (

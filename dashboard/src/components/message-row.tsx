@@ -111,7 +111,7 @@ export function NoticeItem({ text }: { text: string }) {
  */
 export function StoppedItem({ text, onRetry, isBusy }: { text: string; onRetry?: () => void; isBusy?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
+    <div data-testid="stopped-item" className="flex items-center gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
       <OctagonX className="h-3.5 w-3.5 shrink-0 text-amber-500" />
       <p className="flex-1 text-xs text-amber-600 dark:text-amber-400">{text}</p>
       {onRetry && (

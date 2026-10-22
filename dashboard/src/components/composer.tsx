@@ -417,21 +417,38 @@ export function Composer({
           onSelect={selectCommand}
           visible={acVisible}
         />
-        <div className="flex items-end gap-2">
-          {/* Toolbar: @-file + model selector */}
-          <div className="flex shrink-0 items-center gap-1">
-            <AtFilePopover onInsert={insertAtCursor} />
-            {onModelSelect && (
-              <ModelSelector
-                onSelect={(model) => void selectModel(model)}
-                current={currentModel}
-                disabled={disabled || submitting || isBusy}
-              />
-            )}
-          </div>
+        {/*
+         * Invariant: exactly ONE textarea exists in the DOM at all times —
+         * one source of truth for value, focus, history, and draft state.
+         *
+         * Layout strategy (CSS only, no JS breakpoint detection):
+         *   Mobile (<sm / 640 px): two-row grid.
+         *     Row 1: [textarea] [send/stop]   — textarea fills available width.
+         *     Row 2: [toolbar (@ + model)]    — spans full width below.
+         *   Desktop (sm+): single row.
+         *     [toolbar] [textarea] [send/stop] — toolbar shrinks, textarea fills.
+         *
+         * grid-template-areas drives the reorder so the textarea DOM node is
+         * declared once and CSS places it in the right cell per breakpoint.
+         * On 390 px: total width 390 − (2×16 px padding) − (2 px border) − 8 px gap
+         *            − 36 px button = ~312 px for textarea → well above 200 px floor.
+         */}
+        <div
+          className={cn(
+            // Mobile: 2-row grid. "ta" area top-left, "btn" top-right, "bar" bottom span-2.
+            'grid gap-x-2 gap-y-1.5',
+            '[grid-template-areas:"ta_btn"_"bar_bar"]',
+            '[grid-template-columns:1fr_auto]',
+            // sm+: single row. "bar" left, "ta" middle, "btn" right.
+            'sm:[grid-template-areas:"bar_ta_btn"]',
+            'sm:[grid-template-columns:auto_1fr_auto]',
+          )}
+        >
+          {/* Textarea — grid area "ta" */}
           <textarea
             ref={textareaRef}
             rows={1}
+            data-testid="composer-textarea"
             value={text}
             disabled={disabled || submitting}
             onChange={(e) => setText(e.target.value)}
@@ -444,18 +461,21 @@ export function Composer({
                   : 'Send a message… (/ for commands)'
             }
             className={cn(
-              'flex-1 resize-none rounded-xl border border-input bg-background',
+              '[grid-area:ta] self-end',
+              'w-full resize-none rounded-xl border border-input bg-background',
               'px-3 py-2 text-sm leading-5 shadow-sm',
               'placeholder:text-muted-foreground',
               'focus:outline-none focus:ring-2 focus:ring-ring',
               'disabled:cursor-not-allowed',
             )}
           />
+
+          {/* Send / Stop button — grid area "btn" */}
           {isBusy ? (
             <button
               onClick={() => void interrupt()}
               title="Stop (Esc or ⌘.)"
-              className="shrink-0 flex items-center justify-center h-9 w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              className="[grid-area:btn] self-end shrink-0 flex items-center justify-center h-9 w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
             >
               <Square className="h-4 w-4 fill-current" />
             </button>
@@ -465,7 +485,7 @@ export function Composer({
               disabled={!text.trim() || submitting || disabled}
               title="Send"
               className={cn(
-                'shrink-0 flex items-center justify-center h-9 w-9 rounded-lg',
+                '[grid-area:btn] self-end shrink-0 flex items-center justify-center h-9 w-9 rounded-lg',
                 'bg-primary text-primary-foreground hover:bg-primary/90 transition-colors',
                 'disabled:opacity-40 disabled:cursor-not-allowed',
               )}
@@ -473,6 +493,18 @@ export function Composer({
               <Send className="h-4 w-4" />
             </button>
           )}
+
+          {/* Toolbar (@-file + model selector) — grid area "bar" */}
+          <div className="[grid-area:bar] flex shrink-0 items-center gap-1 self-end">
+            <AtFilePopover onInsert={insertAtCursor} />
+            {onModelSelect && (
+              <ModelSelector
+                onSelect={(model) => void selectModel(model)}
+                current={currentModel}
+                disabled={disabled || submitting || isBusy}
+              />
+            )}
+          </div>
         </div>
       </div>
     </>
