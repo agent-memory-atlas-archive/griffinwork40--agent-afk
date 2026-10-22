@@ -25,6 +25,10 @@ import { isGated, gateReason } from './command-gate.js';
 import { BufferingWriter } from './writer.buffer.js';
 import { getStats, buildSessionRef, buildOptionalSessionRef } from './session-owner.slash.js';
 import { createWebSlashContext } from './slash-context.web.js';
+import { createCommandWatchdog } from './routes.commands.watchdog.js';
+
+/** A command with no sign of life (no pending choice, no open progress span) for this long is abandoned with 504. */
+export const HANDLER_IDLE_TIMEOUT_MS = 15_000;
 import { normalizeSlashResult } from './slash-result.web.js';
 export { normalizeSlashResult } from './slash-result.web.js';
 
@@ -176,28 +180,25 @@ export async function handleCommand(
       : buildOptionalSessionRef(undefined);
     const writer = new BufferingWriter();
     const slashCtx = createWebSlashContext(sessionRef, stats, writer, cwd);
+    // Execute the handler under an INACTIVITY watchdog (15 s with no sign of
+    // life) so a runaway command cannot hold the turn reservation forever,
+    // while a pending picker or an open progress span keeps it alive.
+    const watchdog = createCommandWatchdog(HANDLER_IDLE_TIMEOUT_MS);
     if (ctx.choiceBroker) {
       const broker = ctx.choiceBroker;
-      slashCtx.choose = (request) => broker.choose(sessionId, request, disconnected.signal);
-      slashCtx.progress = (event) => { broker.progress(sessionId, event); };
+      slashCtx.choose = (request) => watchdog.hold(broker.choose(sessionId, request, disconnected.signal));
+      slashCtx.progress = (event) => { watchdog.progress(event); broker.progress(sessionId, event); };
     }
 
     // The owner wraps canonical handlers with persistent accounting and a
     // provider-backed fast controller. This route alone owns the reservation.
-    // Execute handler — bounded to 15 s to prevent runaway commands from
-    // holding the turn reservation open indefinitely.
-    const HANDLER_TIMEOUT_MS = 15_000;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error('command_timeout')), HANDLER_TIMEOUT_MS);
-    });
     let execution;
     try {
       execution = ctx.executeSessionControl
-        ? await Promise.race([ctx.executeSessionControl(sessionId, cmd, slashCtx, parsed.args ?? ''), timeout])
-        : { result: await Promise.race([cmd.handler(slashCtx, parsed.args ?? ''), timeout]) };
+        ? await Promise.race([ctx.executeSessionControl(sessionId, cmd, slashCtx, parsed.args ?? ''), watchdog.promise])
+        : { result: await Promise.race([cmd.handler(slashCtx, parsed.args ?? ''), watchdog.promise]) };
     } finally {
-      clearTimeout(timer);
+      watchdog.dispose();
     }
     const blocks = writer.toOutputBlocks();
     const control = execution.control ?? normalizeSlashResult(execution.result);
@@ -205,7 +206,7 @@ export async function handleCommand(
     sendJson(res, 200, { blocks, control, ...(execution.session ? { session: execution.session } : {}) });
   } catch (err) {
     if (err instanceof Error && err.message === 'command_timeout') {
-      console.error('[web] command handler timed out after 15000ms');
+      console.error(`[web] command handler idle for ${HANDLER_IDLE_TIMEOUT_MS}ms; timed out`);
       sendJson(res, 504, { error: 'command_timeout', message: 'Command execution timed out.' });
     } else {
       console.error('[web] command handler failed:', err);
