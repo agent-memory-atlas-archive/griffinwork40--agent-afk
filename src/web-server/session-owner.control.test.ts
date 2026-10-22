@@ -156,7 +156,7 @@ describe('WebSessionControl', () => {
       await setSessionModel(ctx.session.current, ctx.stats, args);
       return 'continue';
     }), s.ctx, 'opus');
-    expect(model.session).toEqual({ model: 'opus', name: 'a-new-name' });
+    expect(model.session).toEqual({ model: 'opus', name: 'a-new-name', nameExplicit: true });
     saver.saveTurn('next', 'answer', { sessionId: 'fresh-provider', totalCostUsd: 0.1 });
     expect(saver.stats).toBe(s.stats);
     expect(s.stats).toMatchObject({ totalTurns: 1, name: 'a-new-name', model: 'opus', sessionId: 'stable-web' });
