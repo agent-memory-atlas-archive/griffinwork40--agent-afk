@@ -3,7 +3,7 @@
 The `afk web` browser surface aims at feature and UX parity with the interactive REPL. This file is the
 contract that defines "parity": every REPL capability has a row, and every row ends as **DONE** (backed by a
 test) or **N/A** (with a reason). Architecture: see the command-layer ADR summarized in
-[`docs/web-command-layer.md`](web-command-layer.md) once it lands; until then the decision record is PATH_B,
+[`docs/web-command-layer.md`](web-command-layer.md). The decision record is PATH_B,
 "surface-agnostic command layer, staged".
 
 Status legend: **DONE** works on web with a test · **TEXT** runs on web, plain/ANSI text output only ·
@@ -14,15 +14,13 @@ Target column = the stage that delivers the row (S0 generic command route + text
 session-control service, S2 structured output blocks + renderer registry, S3 choice-requests + progress events,
 S4 session lifecycle, S5 Telegram adoption, UX = dashboard-native work).
 
-Baseline measured 2026-10-21 on main @ 1c846bee0.
-
-Stage 1 update: `/clear`, `/model <name>`, `/name`, `/thinking`, `/fast`, and `/compact`
-now execute canonical session controls on web. `/model` without arguments prints current
-model and available aliases as text; the terminal picker remains REPL-only. Clear also resets
-the browser transcript and command outputs across connected tabs. Usage/tokens/context/MCP
-reads share the canonical service; Stage 2 renders usage/tokens/MCP through structured blocks. Capability requirements replace
-the Stage 0 flat gate list. Rows below retain future UX targets; no pickers, fork/resume or
-Telegram adoption were added in Stage 1.
+Baseline measured 2026-10-21 on main @ 1c846bee0; “Web now” reflects implemented Stages 1–3,
+not the baseline. `/clear`, `/model`, `/name`, `/thinking`, `/fast` and `/compact` use canonical
+session controls; Stage 2 renders shared usage/tokens/MCP reads as structured blocks. Stage 3
+adds browser choice requests and live progress: bare `/model` opens a picker, and `/rewind`
+selects a previous prompt and prefills the composer. Rewind also replaces the durable browser
+transcript projection with retained journal history. Fork/resume/exit and Telegram migration
+remain deferred to Stages 4 and 5.
 
 ## Slash commands (58 built-in)
 
@@ -68,19 +66,19 @@ Telegram adoption were added in Stage 1.
 | /keys | portable | GATED | UX | web keyboard-shortcut sheet (?) |
 | /exit, /quit | session-control | GATED | S4 | close session tab |
 | /clear | session-control | DONE | S1 | resets conversation and command outputs across tabs; retains confirmation |
-| /compact | session-control | DONE | S1 → S3 | canonical compaction with buffered progress; live progress deferred |
+| /compact | session-control | DONE | S1 → S3 | canonical compaction with live, correlated progress |
 | /plan | session-control | GATED | S1 | mode toggle in composer; requires session-control service |
 | /afk | session-control | GATED | S1 | mode toggle in composer; requires session-control service |
 | /thinking | session-control | DONE | S1 | authoritative per-session thinking display preference |
 | /fast | session-control | DONE | S1 | canonical command backed by live provider fast controller |
 | /theme | session-control | GATED | UX | dashboard light/dark/auto theme |
 | /retry | session-control | GATED | S1 | retry action on last message; requires session-control service |
-| /model | partial | DONE (arg/read) | S1 → S3 (picker) | authoritative selector/header/sidebar updates; bare command lists aliases |
-| /resume | partial | GATED | S3 / S4 | picker, not a plain listing; intentionally not migrated in S2 |
+| /model | partial | DONE | S1 → S3 | argument switches directly; bare command opens choice picker; authoritative selector/header/sidebar updates |
+| /resume | partial | GATED | S4 | session lifecycle and picker remain deferred |
 | /transcript | partial | TEXT | S0 | text; transcript view already exists |
 | /afk-md | partial | TEXT | S0 (show/reload/add) | `user`/`project` edit subcommands → UX editor |
 | /config | partial | TEXT | S1 (view/set) → UX | editable settings view |
-| /rewind | tty-only | GATED | S3 | choice-request picker; "rewind to here" on a user message |
+| /rewind | picker | DONE | S3; message action UX | choice picker; retained historical transcript replaced durably; selected prompt prefilled for editing |
 | /editor | tty-only | GATED | N/A | the browser composer is already a full editor |
 | /copy | tty-only | TEXT | UX | copy buttons on messages and code blocks (partly DONE) |
 | /ghost | tty-only | GATED | N/A | terminal ghost-text; web uses native autocomplete |
@@ -105,8 +103,9 @@ Skill commands (plugin, user, builtin, marketplace): **DONE** via `classifySlash
 | Multi-line input, history ↑/↓ | PARTIAL | UX | Shift+Enter exists; add history |
 | Permission-mode cycle (Shift+Tab) | MISSING | S1 | mode switcher in composer |
 | Status line (model, context %, cost, mode, quota) | PARTIAL | UX | session header meter |
-| Model selector | DONE | S1 | create and authoritative mid-session switching |
+| Model selector | DONE | S1 → S3 | create and authoritative mid-session switching; bare `/model` opens a choice picker |
 | Peer inbox delivery / idle wake | N/A | | REPL-owned sessions; web sessions read peers via panel |
+| Command choice requests + progress | DONE | S3 | client-local dialog/status; correlated SSE, cross-tab settlement |
 | Resume / continue a stored session | MISSING | S4 | |
 | Retry / edit a sent message | MISSING | S1 / S3 | |
 | Message timestamps | MISSING | UX | |
