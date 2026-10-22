@@ -114,6 +114,8 @@ export class SessionOwner {
 
   constructor(private readonly options: SessionOwnerOptions) {}
 
+  get defaultModel(): string { return this.options.model; }
+
   private get baseCwd(): string {
     return this.options.cwd ?? process.cwd();
   }

@@ -198,7 +198,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
 
   const server = createServer((req, res) => {
     const auth: StaticAuth = { token, docKey, nonces };
-    void dispatch(req, res, ctx, auth, host, actualPort(server), streams).catch((err: unknown) => {
+    void dispatch(req, res, ctx, auth, host, actualPort(server), streams, options.owner).catch((err: unknown) => {
       if (res.headersSent) {
         res.end();
         return;
@@ -288,6 +288,7 @@ async function dispatch(
   host: string,
   port: number,
   streams: Set<AbortController>,
+  owner?: SessionOwner,
 ): Promise<void> {
   const rawUrl = req.url ?? '/';
   const path = rawUrl.split('?')[0] ?? '/';
@@ -313,7 +314,7 @@ async function dispatch(
   }
 
   if (path === '/api/sessions' && method === 'GET') {
-    await handleListSessions(ctx, res);
+    await handleListSessions(ctx, res, new Map(owner?.list?.().map((session) => [session.id, session.model])));
     return;
   }
 
@@ -426,7 +427,7 @@ async function dispatch(
   }
 
   if (path === '/api/models' && method === 'GET') {
-    handleListModels(res);
+    handleListModels(res, owner?.defaultModel);
     return;
   }
 

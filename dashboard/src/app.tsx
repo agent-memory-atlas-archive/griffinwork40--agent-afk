@@ -20,6 +20,7 @@ import { useTranscript } from './hooks/use-transcript';
 import { useScrollPin } from './hooks/use-scroll-pin';
 import { useQueue } from './hooks/use-queue';
 import { useCommandOutputs } from './hooks/use-command-outputs';
+import { useSessionUrl } from './hooks/use-session-url';
 import { SessionContent } from './components/session-content';
 import { ChoiceDialog } from './components/choice-dialog';
 import { CommandProgress } from './components/command-progress';
@@ -43,7 +44,10 @@ function Dashboard() {
   const { toast } = useToast();
 
   const [activeNav, setActiveNav] = useState('sessions');
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useSessionUrl();
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number; sessionId: string }>();
+  const [starting, setStarting] = useState(false);
+  const startingRef = useRef(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -62,13 +66,13 @@ function Dashboard() {
   });
   const { containerRef, scrollToBottom, isPinned, showScrollButton } = useScrollPin();
 
-  // Per-session client-local command output items (not persisted; see use-command-outputs).
+  // Per-tab command outputs survive reload without sending local UI state to the server.
   const { itemsFor: cmdItemsFor, addItem: addCmdItem, clearItems: clearCmdItems } = useCommandOutputs();
   const cmdItems = cmdItemsFor(selectedSessionId);
   const [answeredChoice, setAnsweredChoice] = useState<string | null>(null);
   const activeChoice = status === 'open' && selectedSession?.mode === 'live'
     ? choices.find((choice) => `${selectedSessionId}:${choice.corrId}` !== answeredChoice) : undefined;
-  useEffect(() => { setAnsweredChoice(null); }, [selectedSessionId]);
+  useEffect(() => { setAnsweredChoice(null); setPrefill(undefined); }, [selectedSessionId]);
   useEffect(() => {
     if (answeredChoice && !choices.some((choice) => `${selectedSessionId}:${choice.corrId}` === answeredChoice)) {
       setAnsweredChoice(null);
@@ -80,6 +84,8 @@ function Dashboard() {
   useEffect(() => {
     if (isPinned) scrollToBottom();
   }, [items, cmdItems.length, isPinned, scrollToBottom]);
+  useEffect(() => { scrollToBottom(); }, [selectedSessionId, scrollToBottom]);
+  useEffect(() => { if (selectedSessionId) setActiveNav('sessions'); }, [selectedSessionId]);
 
   const handleNavigate = (nav: string) => {
     if (!getNavItem(nav)) return;
@@ -89,11 +95,12 @@ function Dashboard() {
 
   const handleSelectSession = (id: string) => {
     setSelectedSessionId(id);
+    setActiveNav('sessions');
     setMobileSidebarOpen(false);
   };
 
   const isBusy = turnActive;
-  const [selectedModel, setSelectedModel] = useState('sonnet');
+  const [selectedModel, setSelectedModel] = useState<string>();
   const currentModel = selectedSession?.model ?? selectedModel;
 
   const handleCommandOutput = (input: string, response: CommandResponse) => {
@@ -127,14 +134,14 @@ function Dashboard() {
     // The new session is not in the polled list yet; refresh now rather than
     // leaving it shown as unknown/read-only for up to one poll interval.
     refreshSessions();
-  }, [refreshSessions]);
+  }, [refreshSessions, setSelectedSessionId]);
 
   /** Handle /exit: deselect and refresh so the session shows as ended now. */
   const handleSessionEnded = useCallback(() => {
     // Deselect so the user sees the sidebar and picks their next session.
     setSelectedSessionId(null);
     refreshSessions();
-  }, [refreshSessions]);
+  }, [refreshSessions, setSelectedSessionId]);
 
   /**
    * Resume a past session from the sidebar Resume button through the
@@ -152,17 +159,28 @@ function Dashboard() {
     } catch (err) {
       toast(err instanceof Error ? `Could not resume: ${err.message}` : 'Could not resume this session', 'info');
     }
-  }, [toast, refreshSessions]);
+  }, [toast, refreshSessions, setSelectedSessionId]);
 
   const handleNewSession = useCallback(async () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
     try {
-      const result = await apiFetch<{ session: { id: string } }>('/api/sessions', { method: 'POST', body: JSON.stringify({ model: selectedModel }) });
+      const result = await apiFetch<{ session: { id: string } }>('/api/sessions', {
+        method: 'POST', body: JSON.stringify(selectedModel ? { model: selectedModel } : {}),
+      });
+      // Invariant: navigate only after creation succeeds; failed starts keep the current chat.
       setSelectedSessionId(result.session.id);
+      setActiveNav('sessions');
+      setMobileSidebarOpen(false);
       await refreshSessions(); // the composer needs the new row; do not wait for the 5 s poll
-    } catch {
-      // best-effort
+    } catch (err) {
+      toast(err instanceof Error ? `Could not start chat: ${err.message}` : 'Could not start chat', 'info');
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
     }
-  }, [selectedModel, refreshSessions]);
+  }, [selectedModel, setSelectedSessionId, refreshSessions, toast]);
 
   // Abort controller ref: abort in-flight POSTs when the session changes.
   const abortRef = useRef<AbortController | null>(null);
@@ -186,7 +204,7 @@ function Dashboard() {
   // Track the previous liveTurns value to detect new turn completions.
   const prevTurnsRef = useRef(0);
 
-  // Clear the queue, abort in-flight POST, and clear command outputs when session changes.
+  // Clear the queue and abort in-flight POST when session changes; retain local history.
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -213,12 +231,15 @@ function Dashboard() {
       activeNav={activeNav}
       onNavChange={handleNavigate}
       collapsed={sidebarCollapsed}
+      runningSessionId={turnActive ? selectedSessionId : null}
+      onNewSession={() => void handleNewSession()}
+      starting={starting}
       onToggleCollapse={() => setSidebarCollapsed((c) => !c)}
     />
   );
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <CommandPalette onNavigate={handleNavigate} />
       <KeyboardShortcuts onNavigate={handleNavigate} />
 
@@ -230,13 +251,18 @@ function Dashboard() {
         open={mobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
       >
-        {sidebarContent}
+        <Sidebar sessions={sessions} pendingSessionIds={pendingSessionIds}
+          selectedSessionId={selectedSessionId} onSelectSession={handleSelectSession}
+          onResumeSession={(id) => void handleResumeFromSidebar(id)} activeNav={activeNav}
+          onNavChange={handleNavigate} collapsed={false} onToggleCollapse={() => undefined}
+          runningSessionId={turnActive ? selectedSessionId : null}
+          onNewSession={() => void handleNewSession()} starting={starting} />
       </MobileSidebar>
 
-      <main className="flex flex-1 flex-col overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-          <div className="flex items-center gap-3">
+        <header className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b px-3 md:px-4">
+          <div className="flex min-w-0 items-center gap-2">
             <HamburgerButton
               className="md:hidden"
               onClick={() => setMobileSidebarOpen(true)}
@@ -248,25 +274,27 @@ function Dashboard() {
               <>
                 <StreamStatusDot status={status} />
                 {selectedSession.model && (
-                  <span className="text-xs font-mono text-muted-foreground" title="Session model">
+                  <span className="truncate text-xs font-mono text-muted-foreground" title="Session model">
                     {selectedSession.model}
                   </span>
                 )}
               </>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             {activeNav === 'sessions' && (
               <button
                 onClick={() => void handleNewSession()}
                 title="New Session"
-                className="flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                disabled={starting}
+                className="flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-60"
               >
                 <Plus className="h-4 w-4" />
+                {starting ? 'Starting…' : 'New chat'}
               </button>
             )}
             {activeNav === 'sessions' && selectedSession && (
-              <SessionMeter totals={totals} />
+              <SessionMeter totals={totals} className="hidden lg:flex" />
             )}
             <kbd className="hidden rounded border bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-block">
               ⌘K
@@ -276,16 +304,7 @@ function Dashboard() {
 
         {/* Content area */}
         <div className="relative flex flex-1 flex-col overflow-hidden">
-          {showScrollButton && activeNav === 'sessions' && (
-            <button
-              onClick={scrollToBottom}
-              className="animate-fade-in fixed bottom-24 left-1/2 z-20 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg hover:bg-brand/90 transition-colors"
-            >
-              <ArrowDown className="size-3" />
-              New messages
-            </button>
-          )}
-          <div ref={containerRef} className="relative flex flex-1 flex-col overflow-y-auto">
+          <div ref={containerRef} data-testid="transcript-scroll" className="relative flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
             <div className="flex-1">
               {activeNav === 'sessions' && (
                 <SessionContent
@@ -298,6 +317,9 @@ function Dashboard() {
                   status={status}
                   turnActive={turnActive}
                   thinkingUi={selectedSession?.thinkingUi}
+                  onNewSession={() => void handleNewSession()}
+                  starting={starting}
+                  onSuggest={(text) => { if (selectedSessionId) setPrefill({ text, nonce: Date.now(), sessionId: selectedSessionId }); }}
                 />
               )}
               {activeNav === 'sessions' && selectedSession && status === 'open' &&
@@ -310,16 +332,23 @@ function Dashboard() {
               {activeNav === 'settings' && <SettingsView />}
             </div>
 
-            {/* Composer + approvals (sessions view only, live sessions) */}
+          </div>
+            {/* Invariant: only the transcript scrolls; turn controls stay in the viewport. */}
             {activeNav === 'sessions' && selectedSession && selectedSession.mode === 'live' && (
-              <div className="shrink-0">
+              <div className="relative shrink-0 pb-[env(safe-area-inset-bottom)]" data-testid="composer-dock">
+                {showScrollButton && (
+                  <button onClick={scrollToBottom}
+                    className="absolute -top-10 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-brand px-3 py-2 text-xs font-medium text-primary-foreground shadow-lg">
+                    <ArrowDown className="size-3" /> New messages
+                  </button>
+                )}
                 {approvals.length > 0 && (
                   <ApprovalCards approvals={approvals} />
                 )}
                 <Composer
                   key={selectedSession.id}
-
                   sessionId={selectedSession.id}
+                  prefill={prefill?.sessionId === selectedSession.id ? prefill : undefined}
                   sessionMode={selectedSession.mode}
                   isBusy={isBusy}
                   queue={queue}
@@ -338,7 +367,6 @@ function Dashboard() {
                 />
               </div>
             )}
-          </div>
         </div>
       </main>
       {activeNav === 'sessions' && selectedSessionId && activeChoice &&

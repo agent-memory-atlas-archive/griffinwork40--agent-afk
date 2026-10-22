@@ -36,7 +36,9 @@ export function SessionCard({
   selected,
   onSelect,
   onResume,
+  running = false,
 }: {
+  running?: boolean;
   session: SessionSummary;
   pendingSessionIds: Set<string>;
   selected: boolean;
@@ -69,7 +71,7 @@ export function SessionCard({
           <span className="line-clamp-2 text-sm font-medium leading-snug">
             {title}
           </span>
-          <SessionStatusBadge status={status} className="shrink-0" />
+          <SessionStatusBadge status={status} running={running} className="shrink-0" />
         </div>
 
         {/* Meta row */}

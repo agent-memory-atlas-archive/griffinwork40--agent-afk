@@ -53,7 +53,7 @@ export function SessionMeter({ totals, className }: { totals?: SessionTotals; cl
     (totals.cacheReadTokens ?? 0);
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2', className)}>
+    <div className={cn('flex flex-nowrap items-center gap-2 whitespace-nowrap', className)}>
       <Metric label="turns" value={String(totals.turns)} />
       <Separator />
       <Metric label="cost" value={`$${totals.costUsd.toFixed(4)}`} />
