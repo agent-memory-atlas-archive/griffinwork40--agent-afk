@@ -110,18 +110,36 @@ children under-yielding or false positives causing real harm.
 
 ## Implementation constraints (from the boundary check)
 
-- **There is no single ToolResult choke point.** The foreground path
-  (`foreground-handoff.ts:161-167`, plus the promotion path in
-  `foreground-promotion.ts:162-164`) and the compose path
-  (`dag-subagent.dispatch.ts:85,164`) assemble results independently. Detect
-  once where the `SubagentResult` is built (`buildSuccessResult` in
-  `src/agent/subagent/result.ts`), tag it, and have every assembler honor the
-  tag. Intercepting in one assembler alone silently misses compose children.
-- **Bypass output schemas.** Tagging must happen before Zod `outputSchema`
-  validation (`src/agent/subagent/handle.ts:240`,
-  `handle.streaming.ts:376-399`). A yielding child cannot also satisfy a schema,
-  so an Asking result must skip validation rather than surface a spurious
+- **Detect in `runToResult`, the one place every path converges.** Every
+  dispatch path ends in `handle.runToResult()`: the foreground `agent` tool
+  (`src/agent/tools/subagent/foreground-handoff.ts`), compose
+  (`src/agent/dag-subagent.dispatch.ts:217`), and skill forks
+  (`src/agent/tools/skill-executor/fork-dispatch.ts:458`), with background jobs
+  awaiting the same call (`src/agent/background-registry.ts:297`).
+  `runToResult` turns the child's final message into a `SubagentResult` through
+  `buildResultFromMessage` (`src/agent/subagent/handle.streaming.ts:372-386`).
+  Detect the Asking block there and tag the result; the per-path ToolResult
+  assemblers only need to honor the tag. (An earlier draft of this doc said
+  there was no single choke point and named a non-existent
+  `buildSuccessResult`; both were wrong.)
+- **Bypass output schemas.** `buildResultFromMessage` is also where the Zod
+  `outputSchema` is applied (`handle.streaming.ts:383`). Detection must run
+  before validation: a yielding child cannot also satisfy a schema, so an
+  Asking result must skip validation rather than surface a spurious
   `schemaError`.
+- **The journal is the resume record, not the catch point.** Subagent journals
+  are written through an async `SerialQueue` that reports and skips failed
+  writes so it can never wedge a session (`src/agent/journal/append-queue.ts:4-6`),
+  a SIGKILL can lose queued records, and the journal flush is post-result
+  bookkeeping that finishes *after* the result is delivered
+  (`src/agent/subagent/continuation-registry.ts:68-71`). Control flow cannot
+  wait on it. It is, however, the durable copy of the child's history that
+  continuation already resumes from (`journalUsable` in `recordTerminal`). The
+  continuation registry is only an in-memory index over it, so the
+  "chains are lost on restart" weakness could be fixed by rebuilding a chain
+  from its journal instead of falling back to a fresh re-dispatch. That is
+  unverified: check `src/agent/journal/hydrate.ts` and `reader.ts` before
+  relying on it.
 - **Guard false positives.** `parseTerminalState` is tail-anchored and
   fenced-code-aware but not blockquote-aware, so a child that quotes another
   agent's Asking block near its tail could be misdetected. Require Asking to be
@@ -138,7 +156,8 @@ children under-yielding or false positives causing real harm.
 ## Open questions
 
 1. A second composition-boundary check on the revised design, scoped to the
-   `buildSuccessResult` tag and its consumers.
+   tag set in `runToResult` / `buildResultFromMessage` and the ToolResult
+   assemblers that must honor it.
 2. Whether forks inherit the parent's assembled system prompt. The full
    Done/Blocked/Asking block format is added only on the `repl` and `telegram`
    surfaces (`src/agent/routing-directive.ts:151-170`), and
@@ -146,6 +165,9 @@ children under-yielding or false positives causing real harm.
    it obvious which prompt that is. If forks do not inherit it, the preamble
    paragraph must spell out the Asking block format itself.
 3. Whether compose nodes get yields at all in v1, or stay on today's wording.
+4. Whether a lost continuation chain can be rebuilt from the subagent journal
+   after a restart, which would remove the fresh-re-dispatch fallback for that
+   case.
 
 ## Related
 
