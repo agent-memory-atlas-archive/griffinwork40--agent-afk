@@ -234,7 +234,10 @@ export const DIRECT_MODEL_ALIASES: Readonly<Record<string, string>> = {
 // Curated picker hint lists live in the sibling file to keep this file within
 // the 350-code-line ceiling. Re-exported here so all existing importers keep
 // working without path changes.
-export { OPENAI_MODEL_HINTS, MODEL_ALIASES_HINT } from './model-slots.hints.js';
+export { OPENAI_MODEL_HINTS } from './model-slots.hints.js';
+import { getModelAliasesHint } from './model-slots.hints.js';
+/** Lazy-built to avoid circular-init TDZ; see model-slots.hints.ts. */
+export const MODEL_ALIASES_HINT: readonly string[] = getModelAliasesHint();
 
 /**
  * Process-global resolved bindings, installed by `loadConfig()` via
