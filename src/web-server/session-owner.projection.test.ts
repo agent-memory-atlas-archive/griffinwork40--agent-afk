@@ -34,4 +34,21 @@ describe('projectJournalMessages (rewind projection)', () => {
     expect(done).toHaveLength(1);
     expect(done[0]).toEqual({ kind: 'done' });
   });
+
+  it('carries a recorded tool duration through the projection and omits an unknown one', () => {
+    const records = projectJournalMessages([
+      { role: 'user', content: [{ type: 'text', text: 'run' }] },
+      { role: 'assistant', content: [
+        { type: 'tool_use', id: 'known', name: 'bash', input: { command: 'ls' } },
+        { type: 'tool_use', id: 'unknown', name: 'read_file', input: { path: 'x' } },
+      ] },
+      { role: 'user', content: [
+        { type: 'tool_result', toolUseId: 'known', content: [{ type: 'text', text: 'ok' }] },
+        { type: 'tool_result', toolUseId: 'unknown', content: [{ type: 'text', text: 'ok' }] },
+      ] },
+    ] as never, undefined, new Map([['known', 1234]]));
+    const results = records.filter((r) => r.kind === 'tool_result');
+    expect(results[0]).toMatchObject({ toolUseId: 'known', durationMs: 1234 });
+    expect(results[1]).not.toHaveProperty('durationMs');
+  });
 });

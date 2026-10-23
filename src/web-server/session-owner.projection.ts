@@ -44,6 +44,28 @@ export async function readLedgerCostTotals(sessionId: string): Promise<{
   return totals;
 }
 
+/**
+ * Per-tool wall-clock durations recorded in the CURRENT ledger, keyed by
+ * toolUseId.
+ *
+ * Contract: like cost, durations live only in the ledger (`tool_result`
+ * records carry `durationMs`); the journal has none. Read BEFORE the ledger is
+ * archived so Retry / /rewind can carry them into the rebuilt projection.
+ * A tool missing from the map gets no duration (never a guessed one).
+ * Never throws: an unreadable ledger returns what was read so far.
+ */
+export async function readLedgerToolDurations(sessionId: string): Promise<Map<string, number>> {
+  const durations = new Map<string, number>();
+  try {
+    for await (const rec of readLedger(sessionId)) {
+      if (rec.kind === 'tool_result' && typeof rec.durationMs === 'number') durations.set(rec.toolUseId, rec.durationMs);
+    }
+  } catch {
+    // Unreadable ledger: keep whatever was accumulated.
+  }
+  return durations;
+}
+
 /** Check BEFORE mutation too: a disabled/failed journal cannot safely rewind web. */
 export async function readProjectionMessages(session: AgentSession): Promise<JournalMessage[]> {
   const journal = session.messageJournal;
@@ -82,6 +104,7 @@ export type LedgerCostTotals = {
 export function projectJournalMessages(
   messages: readonly JournalMessage[],
   priorCost?: LedgerCostTotals,
+  toolDurations?: ReadonlyMap<string, number>,
 ): LedgerPayload[] {
   const records: LedgerPayload[] = [];
   const tools = new Map<string, string>();
@@ -116,7 +139,7 @@ export function projectJournalMessages(
           const toolName = tools.get(block.toolUseId);
           records.push(block.isError
             ? { kind: 'tool_error', content, ...(toolName ? { toolName } : {}) }
-            : { kind: 'tool_result', toolUseId: block.toolUseId, content, ...(toolName ? { toolName } : {}) });
+            : { kind: 'tool_result', toolUseId: block.toolUseId, content, ...(durationOf(toolDurations, block.toolUseId)), ...(toolName ? { toolName } : {}) });
           break;
         }
       }
@@ -139,4 +162,10 @@ export function projectJournalMessages(
     records.push({ kind: 'done' });
   }
   return records;
+}
+
+/** `{ durationMs }` only when the pre-rewind ledger recorded one for this tool. */
+function durationOf(durations: ReadonlyMap<string, number> | undefined, toolUseId: string): { durationMs?: number } {
+  const ms = durations?.get(toolUseId);
+  return typeof ms === 'number' && Number.isFinite(ms) && ms >= 0 ? { durationMs: ms } : {};
 }
