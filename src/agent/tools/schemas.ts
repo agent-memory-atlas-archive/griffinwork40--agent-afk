@@ -218,7 +218,9 @@ export const BUILTIN_TOOL_NAMES = builtinToolSchemas.map((t) => t.name);
  * Note: `gitReadTool` is included here for closed-world classification but is
  * only registered at runtime when `AFK_READONLY_GIT_TOOL` is enabled (#3754).
  * The flag is read once at provider-construction time and is not expected to
- * change during a session.
+ * change during a session. Toggling `AFK_READONLY_GIT_TOOL` mid-session has no
+ * effect: the tool remains registered (or absent) for the entire lifetime of
+ * the provider instance, and a restart is required for the change to take effect.
  */
 export const ALL_TOOL_SCHEMAS: readonly AnthropicToolDef[] = [
   ...builtinToolSchemas,

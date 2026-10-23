@@ -156,11 +156,11 @@ describe('sumBillingUsage', () => {
     // must merge cleanly with no provider-mismatch warn.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const mixed1 = sumBillingUsage(
-      anthropicBilling({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 }),
+      anthropicBilling({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100, cache_creation_input_tokens: 40 }),
       openAICompatibleBilling(20, 10, 3),
     )!;
     const mixed2 = sumBillingUsage(
-      anthropicBilling({ input_tokens: 8, output_tokens: 4, cache_read_input_tokens: 50 }),
+      anthropicBilling({ input_tokens: 8, output_tokens: 4, cache_read_input_tokens: 50, cache_creation_input_tokens: 30 }),
       openAICompatibleBilling(12, 6, 2),
     )!;
     warnSpy.mockClear(); // discard the two construction warns
