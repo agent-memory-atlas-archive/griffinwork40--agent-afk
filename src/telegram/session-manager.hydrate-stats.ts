@@ -74,6 +74,7 @@ export function hydrateStatsFromStore(
     sessionId: stored.sessionId,
     name: stored.name,
     ...(stored.nameExplicit ? { nameExplicit: true } : {}),
+    ...(stored.nameExplicit && stored.displayName ? { displayName: stored.displayName } : {}),
     model: stored.model,
     source: stored.source,
     telegramChatId: stored.telegramChatId,
@@ -153,6 +154,8 @@ export function persistSessionName(
   if (!stats) return { persisted: false };
   stats.name = slug;
   stats.nameExplicit = true;
+  // Telegram passes only the slug: drop a stale verbatim name from an earlier rename.
+  delete stats.displayName;
 
   // Capture the live session's id if the stats don't carry one yet.
   const live = sessions.get(key);

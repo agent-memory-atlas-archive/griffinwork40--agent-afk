@@ -30,9 +30,21 @@ const SIDECAR_HEAD_BYTES = 4096;
  * Returns `undefined` when absent, empty, or not a well-formed JSON string.
  */
 export function parseSidecarName(head: string): string | undefined {
+  return parseTopLevelString(head, 'name');
+}
+
+/**
+ * The top-level `displayName` (the verbatim `/name` text), same scoping and
+ * failure behaviour as {@link parseSidecarName}.
+ */
+export function parseSidecarDisplayName(head: string): string | undefined {
+  return parseTopLevelString(head, 'displayName');
+}
+
+function parseTopLevelString(head: string, key: 'name' | 'displayName'): string | undefined {
   const turnsAt = head.search(/^ {2}"turns"\s*:/m);
   const scope = turnsAt >= 0 ? head.slice(0, turnsAt) : head;
-  const match = /^ {2}"name"\s*:\s*("(?:[^"\\\n]|\\.)*")/m.exec(scope);
+  const match = new RegExp(`^ {2}"${key}"\\s*:\\s*("(?:[^"\\\\\\n]|\\\\.)*")`, 'm').exec(scope);
   if (!match?.[1]) return undefined;
   try {
     const value: unknown = JSON.parse(match[1]);
@@ -52,12 +64,17 @@ export function parseSidecarNameExplicit(head: string): boolean {
   return /^ {2}"nameExplicit"\s*:\s*true\s*,?\s*$/m.test(scope);
 }
 
-/** Sidecar name plus whether it was chosen explicitly. Never throws. */
+/**
+ * Sidecar name plus whether it was chosen explicitly. For an explicit name
+ * the verbatim `displayName` wins over the slug (display only). Never throws.
+ */
 export async function readSidecarNameInfo(sessionId: string): Promise<{ name?: string; explicit: boolean }> {
   const head = await readSidecarHead(sessionId);
   if (head === undefined) return { explicit: false };
   const name = parseSidecarName(head);
-  return name === undefined ? { explicit: false } : { name, explicit: parseSidecarNameExplicit(head) };
+  if (name === undefined) return { explicit: false };
+  const explicit = parseSidecarNameExplicit(head);
+  return { name: (explicit ? parseSidecarDisplayName(head) : undefined) ?? name, explicit };
 }
 
 /**

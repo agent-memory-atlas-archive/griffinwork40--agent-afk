@@ -120,10 +120,12 @@ export class WebSessionControl {
       : await cmd.handler(ctx, args);
     this.stats.sessionId = this.id;
     this.onMetadata({ model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}) });
+    // An explicit /name is shown exactly as typed; `name` (the slug) stays the resume key.
+    const shownName = this.stats.nameExplicit ? (this.stats.displayName ?? this.stats.name) : this.stats.name;
     if (cmd.name === '/model' || cmd.name === '/name' || cmd.name === '/thinking') {
       // Metadata is authoritative even when validation rejected the requested value.
       this.persist();
-      return { result, session: { model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name, ...(this.stats.nameExplicit ? { nameExplicit: true } : {}) } : {}), ...(cmd.name === '/thinking' ? { thinkingUi: this.stats.thinkingUi ?? 'live' } : {}) } };
+      return { result, session: { model: String(this.stats.model), ...(this.stats.name ? { name: shownName, ...(this.stats.nameExplicit ? { nameExplicit: true } : {}) } : {}), ...(cmd.name === '/thinking' ? { thinkingUi: this.stats.thinkingUi ?? 'live' } : {}) } };
     }
     return { result };
   }

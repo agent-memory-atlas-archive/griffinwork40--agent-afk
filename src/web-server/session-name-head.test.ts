@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSidecarName, parseSidecarNameExplicit } from './session-name-head.js';
+import { parseSidecarDisplayName, parseSidecarName, parseSidecarNameExplicit } from './session-name-head.js';
 
 describe('parseSidecarName', () => {
   it('reads the top-level name from a pretty-printed sidecar head', () => {
@@ -33,3 +33,11 @@ describe('parseSidecarNameExplicit', () => {
     expect(parseSidecarNameExplicit('{\n  "name": "x",\n  "turns": [\n    {\n  "nameExplicit": true\n    }\n  ]\n}')).toBe(false);
   });
 });
+
+describe('parseSidecarDisplayName', () => {
+  it('reads the verbatim top-level displayName before turns only', () => {
+    expect(parseSidecarDisplayName('{\n  "sessionId": "a",\n  "name": "job-queue",\n  "nameExplicit": true,\n  "displayName": "Job queue \\"Q\\"",\n  "turns": []\n}')).toBe('Job queue "Q"');
+    expect(parseSidecarDisplayName('{\n  "name": "x",\n  "turns": [\n    {\n  "displayName": "nested"\n    }\n  ]\n}')).toBeUndefined();
+  });
+});
+

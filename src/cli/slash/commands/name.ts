@@ -42,7 +42,9 @@ export const nameCmd: SlashCommand = {
     // No arg → report the current name.
     if (!raw) {
       if (ctx.stats.name) {
-        ctx.out.line(palette.dim('  name  ') + palette.warning(ctx.stats.name));
+        const hostConsole = ctx.capabilities === undefined || ctx.capabilities.has('consoleOutput');
+        const shown = hostConsole ? ctx.stats.name : (ctx.stats.displayName ?? ctx.stats.name);
+        ctx.out.line(palette.dim('  name  ') + palette.warning(shown));
       } else {
         ctx.out.info('No name set. Use /name <name> to set one.');
       }
@@ -57,14 +59,21 @@ export const nameCmd: SlashCommand = {
       return 'continue';
     }
 
+    // Invariant: REPL output is byte-identical to before (slug + resume hint).
+    // The `afk interactive --resume` hint is a host-shell command, so only a
+    // surface attached to the host console (capability `consoleOutput`; legacy
+    // contexts without capabilities count as the REPL) prints it. Other
+    // surfaces (web, Telegram) echo the name as typed instead of the slug.
+    const hostConsole = ctx.capabilities === undefined || ctx.capabilities.has('consoleOutput');
     const slug = result.name;
+    const shown = hostConsole ? slug : (ctx.stats.displayName ?? slug);
     if ('saveError' in result) {
-      ctx.out.error(`Named "${slug}" but save failed: ${errorMessage(result.saveError)}`);
+      ctx.out.error(`Named "${shown}" but save failed: ${errorMessage(result.saveError)}`);
     } else if (result.saved) {
-      ctx.out.success(palette.success('Named') + palette.dim(`  ${slug}`));
-      ctx.out.line(palette.dim(`  Resume:  ${formatResumeCommand(slug, ctx.stats.model)}`));
+      ctx.out.success(palette.success('Named') + palette.dim(`  ${shown}`));
+      if (hostConsole) ctx.out.line(palette.dim(`  Resume:  ${formatResumeCommand(slug, ctx.stats.model)}`));
     } else {
-      ctx.out.success(palette.success('Named') + palette.dim(`  ${slug}  (saves on first turn)`));
+      ctx.out.success(palette.success('Named') + palette.dim(`  ${shown}  (saves on first turn)`));
     }
     return 'continue';
   },
