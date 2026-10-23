@@ -184,7 +184,12 @@ export function resolveRepoRootSync(options?: ResolveRepoRootSyncOptions): strin
   // Injected executors are test stubs; bypassing the cache keeps tests hermetic.
   const cacheKey = `${mode}:${cwd}`;
   if (!customExec && repoRootSyncCache.has(cacheKey)) {
-    return repoRootSyncCache.get(cacheKey)!;
+    // LRU promotion: delete then re-insert so this key sorts as most-recently-used.
+    // Map iteration order is insertion order; eviction targets the first (oldest) key.
+    const cached = repoRootSyncCache.get(cacheKey)!;
+    repoRootSyncCache.delete(cacheKey);
+    repoRootSyncCache.set(cacheKey, cached);
+    return cached;
   }
 
   try {
