@@ -118,4 +118,26 @@ describe('slugifySessionName', () => {
       'pr-triage-fix-flaky-tests',
     );
   });
+
+  it('boolean flag after value-taking flag does not consume task text', () => {
+    // Regression guard for the flag-stripping regex. The pattern
+    // /--[\w-]+(?:=\S+)?/g must only consume the `=value` form for
+    // value-taking flags — NOT the next word. So after `--limit 10`, the
+    // bare `10` must survive, and the subsequent boolean flag `--dry-run`
+    // must be stripped without consuming the following task text.
+    //
+    // Input:  /tackle-issues --limit 10 --dry-run refactor auth module
+    // After strip:            <spc> 10 <spc>       refactor auth module
+    // Slugified:             10-refactor-auth-module  (tackle-issues prefix + those words)
+    expect(slugifySessionName('/tackle-issues --limit 10 --dry-run refactor auth module')).toBe(
+      'tackle-issues-10-refactor-auth-module',
+    );
+  });
+
+  it('value-taking flag with =value form strips only the flag token', () => {
+    // --limit=10 is stripped as a single token; surrounding task words survive.
+    expect(slugifySessionName('/tackle-issues --limit=10 refactor auth')).toBe(
+      'tackle-issues-refactor-auth',
+    );
+  });
 });
