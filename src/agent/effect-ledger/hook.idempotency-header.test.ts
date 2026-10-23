@@ -98,7 +98,6 @@ describe('Scenario 2 / #3714 — idempotency-key header forwarding', () => {
 
   // ── Defect pin (it.fails) ──────────────────────────────────────────────────
 
-  // eslint-disable-next-line vitest/no-disabled-tests
   it.fails(
     'DEFECT(#3714): pre-hook does not yet inject Idempotency-Key header into updatedInput' +
       ' — flip to passing when header-forwarding is implemented',
@@ -137,46 +136,78 @@ describe('Scenario 2 / #3714 — idempotency-key header forwarding', () => {
     expect(headDecision.updatedInput).toBeUndefined();
 
     // And nothing is written to the ledger for reads.
+    // GET/HEAD -> classifier.ts isExternal:false -> no writePending
     expect(await store.all()).toHaveLength(0);
   });
 
   // ── 4. Idempotency key is stable across retries ────────────────────────────
 
-  it('the same method+url+body produces the same idempotency key on every call', () => {
-    const input = { method: 'POST', url: 'https://api.example.com/orders', body: { item: 'widget', qty: 3 } };
-    const k1 = computeIdempotencyKey('web_request_mutation', input);
-    const k2 = computeIdempotencyKey('web_request_mutation', input);
-    expect(k1).toBe(k2);
-    expect(k1).toMatch(/^[0-9a-f]{64}$/);
+  it('the same method+url+body produces the same idempotency key on every call (hook-level round-trip)', async () => {
+    // Hook-level round-trip: call pre() twice with identical input from two
+    // independent sessions so the dedup guard does not suppress the second
+    // write, then assert both ledger records carry the same idempotency key.
+    const { pre } = createEffectLedgerHooks(store);
+    const inputArgs = { method: 'POST', url: 'https://api.example.com/orders', body: { item: 'widget', qty: 3 } };
+
+    // Session A — first attempt.
+    const ctxA: PreToolUseContext = {
+      event: 'PreToolUse', toolName: 'web_request',
+      input: inputArgs, sessionId: 'session-A', toolUseId: 'tu-retry-1',
+    };
+    // Session B — retry from a different session (same logical request).
+    const ctxB: PreToolUseContext = {
+      event: 'PreToolUse', toolName: 'web_request',
+      input: inputArgs, sessionId: 'session-B', toolUseId: 'tu-retry-2',
+    };
+
+    await pre(ctxA);
+    await pre(ctxB);
+
+    const records = await store.all();
+    expect(records).toHaveLength(2);
+    // Both calls with identical args must produce the same idempotency key.
+    expect(records[0]!.idempotencyKey).toBe(records[1]!.idempotencyKey);
+    expect(records[0]!.idempotencyKey).toMatch(/^[0-9a-f]{64}$/);
 
     // Different methods produce different keys even with identical other fields.
-    const k3 = computeIdempotencyKey('web_request_mutation', { ...input, method: 'PATCH' });
-    expect(k3).not.toBe(k1);
+    const store2 = new EffectStore(join(dir, 'ledger2.jsonl'));
+    const { pre: pre2 } = createEffectLedgerHooks(store2);
+    const ctxPatch: PreToolUseContext = {
+      event: 'PreToolUse', toolName: 'web_request',
+      input: { ...inputArgs, method: 'PATCH' }, sessionId: 'session-A', toolUseId: 'tu-patch',
+    };
+    await pre2(ctxPatch);
+    const records2 = await store2.all();
+    expect(records2[0]!.idempotencyKey).not.toBe(records[0]!.idempotencyKey);
   });
 
   // ── 5. Caller-supplied Idempotency-Key must not be clobbered ──────────────
 
-  it('a caller-supplied Idempotency-Key header is not overwritten by the hook (vacuously true until feature lands)', async () => {
-    // Currently the hook never sets updatedInput, so caller headers are
-    // trivially preserved. When header-forwarding is implemented, the hook
-    // must detect a pre-existing Idempotency-Key and leave it untouched.
-    const { pre } = createEffectLedgerHooks(store);
-    const callerKey = 'caller-supplied-key-abc123';
-    const ctx = webRequestPre(
-      'DELETE',
-      'https://api.example.com/resources/42',
-      { headers: { 'Idempotency-Key': callerKey } },
-      'tu-caller-key',
-    );
+  // Pins the expected post-feature behavior: when header-forwarding lands,
+  // a caller-supplied Idempotency-Key must not be clobbered.
+  it.fails(
+    'DEFECT(#3714): a caller-supplied Idempotency-Key header must not be overwritten by the hook' +
+      ' — flip to passing when no-clobber guard is implemented alongside header-forwarding',
+    async () => {
+      // When the feature is implemented, the hook must detect a pre-existing
+      // Idempotency-Key header and leave it untouched rather than overwriting
+      // it with the computed key.
+      const { pre } = createEffectLedgerHooks(store);
+      const callerKey = 'caller-supplied-key-abc123';
+      const ctx = webRequestPre(
+        'DELETE',
+        'https://api.example.com/resources/42',
+        { headers: { 'Idempotency-Key': callerKey } },
+        'tu-caller-key',
+      );
 
-    const decision = await pre(ctx);
+      const decision = await pre(ctx);
 
-    // If updatedInput IS set (feature landed), verify the caller's key survives.
-    if (decision.updatedInput !== undefined) {
+      // The hook must set updatedInput (feature landed) and must preserve the
+      // caller-supplied key rather than replacing it.
+      expect(decision.updatedInput).toBeDefined();
       const headers = (decision.updatedInput as Record<string, unknown>)['headers'] as Record<string, string> | undefined;
-      // The original caller key must not have been replaced.
       expect(headers?.['Idempotency-Key']).toBe(callerKey);
-    }
-    // If updatedInput is absent (current behavior), headers are untouched — pass.
-  });
+    },
+  );
 });
