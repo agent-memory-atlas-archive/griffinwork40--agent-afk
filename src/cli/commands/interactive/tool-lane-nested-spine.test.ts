@@ -381,3 +381,119 @@ describe('spineChalk / colorizeIndent — depth-graded spine dimming', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// #4329 — orphan roots when parent commits over running children
+// ---------------------------------------------------------------------------
+
+/**
+ * Acceptance test for #4329.
+ *
+ * Topology: root → child → grandchild, grandchild finishes last.
+ *
+ *   ◉ Agent(root)        ← root finishes first, flushSource absorbs root+child
+ *   │ ╰─ Agent(child)    ← child is still running when root flushes
+ *   │    ╰─ Read         ← grandchild tool, calls after root absorbed child
+ *
+ * Without the fix: after flushSource('rootId') deletes 'childId' from the
+ * lane, the grandchild's next tool call via addStartWithAgentContext(...,
+ * 'childId') re-inserts an entry with a dangling agentContext. That entry
+ * then surfaces as an orphan root in committed scrollback.
+ *
+ * With the fix (Direction 2 — track absorbed ids): flushSource records
+ * 'childId' in absorbedIds; addStartWithAgentContext silently drops any
+ * call whose agentContext is absorbed.
+ */
+describe('#4329 — no orphan roots when parent flushSource absorbs a still-running child', () => {
+  it('addStartWithAgentContext drops entries whose agentContext was absorbed', () => {
+    const lane = new ToolLane();
+
+    // Build root → child → grandchild topology
+    lane.addStartWithAgentContext('rootId',  'Agent', '(root)',  undefined);
+    lane.addStartWithAgentContext('childId', 'Agent', '(child)', 'rootId');
+    lane.addStartWithAgentContext('gcTool1', 'Read',  '"a.ts"',  'childId');
+    lane.addResult('gcTool1', makeResult('line 1'));
+
+    // Root completes and is flushed — this deletes rootId AND childId from
+    // the lane (BFS collects all descendants). childId is now absorbed.
+    lane.setAgentResultSummary('root', 'Done');
+    lane.addResult('rootId', makeResult('root done'));
+    lane.flushSource('rootId');
+
+    // Verify child was absorbed
+    expect(lane.isAbsorbed('childId'), 'childId must be absorbed after flushSource(rootId)').toBe(true);
+
+    // The lane should be empty (root + child + gcTool1 all removed)
+    expect(lane.hasPending(), 'lane must be empty after flushSource of root').toBe(false);
+
+    // Grandchild keeps running and emits another tool call with parentId=childId.
+    // Pre-fix: this would re-insert an entry with agentContext='childId' (dangling).
+    // Post-fix: the call is silently dropped.
+    lane.addStartWithAgentContext('gcTool2', 'Bash', '"ls"', 'childId');
+
+    // The lane must still be empty — no orphan entry was created.
+    expect(lane.hasPending(), 'lane must remain empty — no orphan entry for absorbed parent').toBe(false);
+  });
+
+  it('flush() at turn end leaves no entries referencing a deleted agentContext', () => {
+    const lane = new ToolLane();
+
+    lane.addStartWithAgentContext('rootId',  'Agent', '(root)',  undefined);
+    lane.addStartWithAgentContext('childId', 'Agent', '(child)', 'rootId');
+    lane.addStartWithAgentContext('gcTool1', 'Read',  '"a.ts"',  'childId');
+    lane.addResult('gcTool1', makeResult('line 1'));
+
+    // Root flushes first (child still running)
+    lane.setAgentResultSummary('rootId', 'Done');
+    lane.addResult('rootId', makeResult('root done'));
+    const scrollback = lane.flushSource('rootId');
+
+    // Scrollback from flushSource must contain the root block
+    expect(scrollback.join('\n')).toContain('root');
+
+    // Grandchild emits more tool events — must be silently dropped
+    lane.addStartWithAgentContext('gcTool2', 'Bash', '"ls"',     'childId');
+    lane.addStartWithAgentContext('gcTool3', 'Write', '"b.ts"',  'childId');
+
+    // Dispose-time flush must produce nothing (lane was already empty)
+    const disposeLines = lane.flush().filter((l) => l.trim().length > 0);
+    expect(
+      disposeLines,
+      `No orphan blocks expected at turn end; got: ${JSON.stringify(disposeLines)}`,
+    ).toHaveLength(0);
+  });
+
+  it('absorbed set clears on flush() so the next turn starts fresh', () => {
+    const lane = new ToolLane();
+
+    lane.addStartWithAgentContext('rootId', 'Agent', '(root)', undefined);
+    lane.addStartWithAgentContext('childId', 'Agent', '(child)', 'rootId');
+    lane.addResult('rootId', makeResult('done'));
+    lane.flushSource('rootId');
+    expect(lane.isAbsorbed('childId')).toBe(true);
+
+    // Full flush (turn end) clears the absorbed set
+    lane.flush();
+    expect(lane.isAbsorbed('childId'), 'absorbedIds must be cleared after flush()').toBe(false);
+
+    // A new turn can use the same synthetic ids without being silently dropped
+    lane.addStartWithAgentContext('childId', 'Agent', '(child-turn2)', undefined);
+    expect(lane.hasPending(), 'new-turn entry must be accepted after absorbedIds cleared').toBe(true);
+  });
+
+  it('non-absorbed agentContext entries are still accepted normally', () => {
+    const lane = new ToolLane();
+
+    // Two parallel roots — flushing one must not block the other
+    lane.addStartWithAgentContext('rootA', 'Agent', '(A)', undefined);
+    lane.addStartWithAgentContext('rootB', 'Agent', '(B)', undefined);
+    lane.addStartWithAgentContext('childA', 'Read', '"a.ts"', 'rootA');
+    lane.addResult('rootA', makeResult('done'));
+    lane.flushSource('rootA');
+
+    // rootB and its children should still be insertable
+    lane.addStartWithAgentContext('childB', 'Read', '"b.ts"', 'rootB');
+    expect(lane.hasPending(), 'rootB children must still be accepted').toBe(true);
+    expect(lane.isAbsorbed('rootB'), 'rootB must NOT be absorbed').toBe(false);
+  });
+});
