@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.333.0] - 2026-10-23
+
 ### Added
 - warn at load time when AFK.md overlay exceeds 10k tokens (#4292) (aa4181981)
 
