@@ -332,15 +332,20 @@ export function handleApprove(
 /**
  * `POST /api/approve` — answer a pending elicitation by request id alone.
  *
- * Contract: deliberately session-agnostic, and that is not a weakening. The
- * elicitation record does not always carry a sessionId (the router supplies it
- * as an optional extra), and the per-session route resolved by requestId
- * regardless — the id constrained nothing. Meanwhile requiring it broke the
- * real case: a user viewing a read-only session could never answer a prompt,
- * because the frontend fell back to the ACTIVE session id and got a permanent
- * 409. Identity is still established — bearer token and Origin are checked in
- * `dispatch` before this runs, and the bridge only holds elicitations raised by
- * sessions this process owns.
+ * Contract: session-agnostic in the REQUEST (no sessionId required in the body),
+ * but ownership-checked when the elicitation record carries one. The router
+ * supplies sessionId as an optional extra; when present, the handler verifies
+ * the owning session is in `ctx.owned` before resolving — so a bearer-authed
+ * local process cannot resolve elicitations by guessing request ids. When the
+ * record has no sessionId (legacy or edge case), the bearer + Origin check in
+ * `dispatch` is the sole gate.
+ *
+ * History: originally fully session-agnostic with no ownership check. The
+ * per-session route resolved by requestId regardless — the session id in the
+ * URL constrained nothing, and requiring it broke the real case (a user
+ * viewing a read-only session could never answer a prompt). The ownership
+ * guard was added in PR #4334 review (S-1) without re-introducing a
+ * session id requirement in the request body.
  */
 export function handleApproveByRequestId(
   ctx: RouteContext,
@@ -354,6 +359,18 @@ function approveByRequestId(ctx: RouteContext, res: ServerResponse, body: unknow
   const requestId = readStringField(body, 'requestId');
   if (requestId === undefined) {
     sendJson(res, 400, { error: 'bad_request', message: 'body must include requestId' });
+    return;
+  }
+  // Invariant: the requestId must resolve to a session this process owns.
+  // Without this check any bearer-authed local process could resolve
+  // elicitations by guessing request ids.
+  const ownerSession = ctx.bridge.sessionFor(requestId);
+  if (ownerSession !== undefined && !ctx.owned.has(ownerSession)) {
+    sendJson(res, 409, {
+      error: 'session_not_owned',
+      message:
+        `elicitation ${requestId} belongs to session ${ownerSession} which is not owned by this server.`,
+    });
     return;
   }
   const response = isRecord(body) ? body['response'] : undefined;

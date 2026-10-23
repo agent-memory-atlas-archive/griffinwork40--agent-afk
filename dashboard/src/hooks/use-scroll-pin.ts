@@ -66,6 +66,10 @@ export function useScrollPin(): UseScrollPinResult {
   const scrolledUpRef = useRef(false);
   // Ref mirror of isPinned, read synchronously inside the scroll handler.
   const pinnedRef = useRef(true);
+  // Ref shared between the scroll handler closure and scrollToBottom, so a
+  // programmatic scroll updates lastTop and the handler does not misclassify
+  // the next event as a user scroll-up (stale closure over the old value).
+  const lastTopRef = useRef(0);
 
   // Track pin state and button visibility on scroll.
   useEffect(() => {
@@ -81,7 +85,8 @@ export function useScrollPin(): UseScrollPinResult {
     // skipped it) and the screen stayed blank while busy.
     // A user scroll-up always lowers scrollTop; a reflow that grows the
     // content (narrower viewport, padding added) leaves scrollTop unchanged.
-    let lastTop = el.scrollTop;
+    lastTopRef.current = el.scrollTop;
+    let lastTop = lastTopRef.current;
     let lastHeight = el.scrollHeight;
     function handleScroll(): void {
       if (el === null) return;
@@ -91,10 +96,12 @@ export function useScrollPin(): UseScrollPinResult {
       lastHeight = el.scrollHeight;
       const userScrolledUp = el.scrollTop < lastTop && !shrank;
       lastTop = el.scrollTop;
+      lastTopRef.current = lastTop;
       if (pinnedRef.current && !userScrolledUp
         && el.scrollHeight - el.scrollTop - el.clientHeight > PINNED_THRESHOLD_PX) {
         el.scrollTop = el.scrollHeight;
         lastTop = el.scrollTop;
+        lastTopRef.current = lastTop;
       }
       const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
       const pinned = distanceFromBottom <= PINNED_THRESHOLD_PX;
@@ -120,6 +127,7 @@ export function useScrollPin(): UseScrollPinResult {
       if (pinnedRef.current && el.scrollHeight - el.scrollTop - el.clientHeight > PINNED_THRESHOLD_PX) {
         el.scrollTop = el.scrollHeight;
         lastTop = el.scrollTop;
+        lastTopRef.current = lastTop;
       }
     });
     if (ro !== null && content !== null) ro.observe(content);
@@ -132,6 +140,7 @@ export function useScrollPin(): UseScrollPinResult {
     const el = containerRef.current;
     if (el === null) return;
     el.scrollTop = el.scrollHeight;
+    lastTopRef.current = el.scrollTop;
     pinnedRef.current = true;
     setHasNewContent(false);
   }, []);
