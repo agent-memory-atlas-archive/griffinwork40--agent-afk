@@ -36,6 +36,14 @@ describe.each([true, false])('thinking display (spineMode=%s)', (spineMode) => {
 });
 
 describe('workingState (indicator visibility + phase)', () => {
+  it('a streaming THINKING draft does not hide the indicator (only answer text does)', async () => {
+    const { workingState } = await import('./transcript-view');
+    const user = { kind: 'user' as const, id: 'u', text: 'q' };
+    const thinking = { kind: 'thinking' as const, id: 't', text: 'Let me consider the list', live: 'streaming' };
+    const answer = { kind: 'assistant' as const, id: 'a', text: 'Hello', live: 'streaming' };
+    expect(workingState([user, thinking] as never, true).showWorking).toBe(true);
+    expect(workingState([user, thinking, answer] as never, true).showWorking).toBe(false);
+  });
   it('keeps the indicator while the streaming draft has no visible text, hides it once text shows', async () => {
     const { workingState } = await import('./transcript-view');
     const user = { kind: 'user' as const, id: 'u', text: 'q' };

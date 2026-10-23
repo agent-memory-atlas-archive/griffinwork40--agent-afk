@@ -88,8 +88,7 @@ function Dashboard() {
   // Layout effect: scroll in the same commit that appends a live draft, so the
   // draft is never painted below the fold (content-visibility:auto skips it).
   useEffect(() => {
-    // The user's own new message always brings the view down (send, Retry, edit).
-    if (isPinned || items.at(-1)?.kind === 'user') scrollToBottom();
+    if (isPinned) scrollToBottom();
     else notifyNewContent();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, cmdItems.length]);
@@ -406,6 +405,7 @@ function Dashboard() {
                   queue={queue}
                   onModelSelect={setSelectedModel}
                   currentModel={currentModel}
+                  onPromptSent={scrollToBottom}
                   onCommandStart={(input) => {
                     scrollToBottom();
                     if (/^\/clear(?:\s|$)/.test(input)) {

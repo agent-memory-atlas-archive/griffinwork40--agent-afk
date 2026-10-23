@@ -179,9 +179,12 @@ export function workingState(items: readonly TranscriptItem[], turnActive: boole
   // sealed draft (not yet claimed/settled) must never hide this turn's
   // indicator. Drafts render after every durable item, so a draft before the
   // last user item cannot exist; the index guard covers both orders.
+  // Only ANSWER text ends the indicator. A thinking draft (often hidden or
+  // collapsed) is not something the user can read yet; hiding the indicator
+  // on it left a blank frame between "Thinking Ns" and the first answer text.
   const hasDraft = items.some((i, idx) => {
     const live = liveStateOf(i);
-    if (!hasVisibleText(i)) return false;
+    if (i.kind !== 'assistant' || !hasVisibleText(i)) return false;
     if (live === 'streaming') return true;
     return live === 'sealed' && idx > lastUser && !runningTool;
   });
@@ -224,7 +227,7 @@ function TranscriptBody({ items, thinkingUi = 'live', spineMode = true, turnActi
       const isTurnStart = item.kind === 'user' && idx > 0;
       const streaming = liveStateOf(item) === 'streaming';
       return (
-        <div key={item.id} className="[content-visibility:auto] [contain-intrinsic-size:auto_160px]" {...(liveStateOf(item) ? { 'data-live': liveStateOf(item) } : {})}>
+        <div key={item.id} className={liveStateOf(item) ? undefined : '[content-visibility:auto] [contain-intrinsic-size:auto_160px]'} {...(liveStateOf(item) ? { 'data-live': liveStateOf(item) } : {})}>
           {isTurnStart && (
             <div className="my-6 border-t border-border/40" aria-hidden="true" />
           )}
@@ -252,7 +255,7 @@ function TranscriptBody({ items, thinkingUi = 'live', spineMode = true, turnActi
             const isTurnStart = item.kind === 'user' && idx > 0;
             const streaming = liveStateOf(item) === 'streaming';
             return (
-              <div key={item.id} className="[content-visibility:auto] [contain-intrinsic-size:auto_160px]" {...(liveStateOf(item) ? { 'data-live': liveStateOf(item) } : {})}>
+              <div key={item.id} className={liveStateOf(item) ? undefined : '[content-visibility:auto] [contain-intrinsic-size:auto_160px]'} {...(liveStateOf(item) ? { 'data-live': liveStateOf(item) } : {})}>
                 {isTurnStart && (
                   <div className="my-6 border-t border-border/40" aria-hidden="true" />
                 )}

@@ -37,6 +37,8 @@ interface ComposerProps {
   /** Called with command output to insert a client-local transcript item. */
   onCommandOutput?: (input: string, response: CommandResponse) => void;
   onCommandStart?: (input: string) => void;
+  /** Called just before this tab sends a prompt (the view re-pins to the bottom). */
+  onPromptSent?: () => void;
   /** Called with a toast message (e.g. gated command reason). */
   onToast?: (message: string) => void;
   /** Called when a /fork or /resume produces a navigate control. */
@@ -122,6 +124,7 @@ export function Composer({
   currentModel,
   onCommandOutput,
   onCommandStart,
+  onPromptSent,
   onToast,
   onNavigate,
   onSessionEnded,
@@ -200,11 +203,12 @@ export function Composer({
   }, [slashQuery]);
 
   const submitPrompt = useCallback(async (trimmed: string) => {
+    onPromptSent?.();
     await apiFetch(`/api/sessions/${sessionId}/prompt`, {
       method: 'POST',
       body: JSON.stringify({ text: trimmed }),
     });
-  }, [sessionId]);
+  }, [sessionId, onPromptSent]);
 
   const { handleControl } = useCommandControl({
     sessionId,
