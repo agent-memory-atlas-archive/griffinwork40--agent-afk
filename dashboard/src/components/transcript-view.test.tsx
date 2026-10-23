@@ -47,6 +47,22 @@ describe('workingState (indicator visibility + phase)', () => {
     expect(workingState([user, shown], true).showWorking).toBe(false);
   });
 
+  it('a sealed draft with visible text hides the indicator (no "Thinking 0s" flash at turn end)', async () => {
+    const { workingState } = await import('./transcript-view');
+    const user = { kind: 'user' as const, id: 'u', text: 'q' };
+    const sealed = { kind: 'assistant' as const, id: 'd', text: 'Final answer', live: 'sealed' };
+    const sealedEmpty = { kind: 'assistant' as const, id: 'd', text: '   ', live: 'sealed' };
+    expect(workingState([user, sealed], true).showWorking).toBe(false);
+    // Visible-text rule still holds for sealed drafts.
+    expect(workingState([user, sealedEmpty], true).showWorking).toBe(true);
+    // Pre-tool text seals when the tool starts: "Running <tool>" stays.
+    const tool = { kind: 'tool' as const, id: 't', name: 'bash', inputPreview: 'ls', status: 'running' as const };
+    expect(workingState([user, tool, sealed], true)).toMatchObject({ showWorking: true, workingPhase: 'running', runningTool: 'bash' });
+    // After the tool finishes the next segment starts empty: "Writing…".
+    const next = { kind: 'assistant' as const, id: 'd2', text: '', live: 'streaming' };
+    expect(workingState([user, { ...tool, status: 'ok' as const }, next], true)).toMatchObject({ showWorking: true });
+  });
+
   it('reports Running <tool> while the newest tool has no result, then Writing', async () => {
     const { workingState } = await import('./transcript-view');
     const user = { kind: 'user' as const, id: 'u', text: 'q' };

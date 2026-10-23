@@ -156,7 +156,6 @@ function hasVisibleText(item: TranscriptItem): boolean {
  * else 'thinking'.
  */
 export function workingState(items: readonly TranscriptItem[], turnActive: boolean): { showWorking: boolean; workingPhase: WorkingPhase; runningTool?: string } {
-  const hasDraft = items.some((i) => liveStateOf(i) === 'streaming' && hasVisibleText(i));
   const lastItem = items[items.length - 1];
   let runningTool: string | undefined;
   for (let i = items.length - 1; i >= 0; i--) {
@@ -164,6 +163,16 @@ export function workingState(items: readonly TranscriptItem[], turnActive: boole
     if (it.kind === 'user') break;
     if (it.kind === 'tool' && it.status === 'running') { runningTool = it.name; break; }
   }
+  // A SEALED draft with visible text also counts: the final segment seals
+  // (live_seal / live_end) ~150 ms before the durable `done` clears
+  // turnActive, and counting only `streaming` flashed "Thinking 0s" under
+  // every finished answer. A running tool still wins: the pre-tool text
+  // seals when the tool starts and "Running <tool>" must stay visible.
+  const hasDraft = items.some((i) => {
+    const live = liveStateOf(i);
+    if (!hasVisibleText(i)) return false;
+    return live === 'streaming' || (live === 'sealed' && !runningTool);
+  });
   const lastWasTool = lastItem?.kind === 'tool' || lastItem?.kind === 'notice';
   const workingPhase: WorkingPhase = runningTool ? 'running' : lastWasTool ? 'writing' : 'thinking';
   return { showWorking: turnActive && !hasDraft, workingPhase, ...(runningTool ? { runningTool } : {}) };
