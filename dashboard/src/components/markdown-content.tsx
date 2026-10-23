@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import type { Components } from 'react-markdown';
 import { CodeBlock } from './code-block';
+import { ScrollTable, cellClass } from './scroll-table';
 
 // Contract: ul/ol use `pl-6 list-outside` (padding, not margin) so that
 // markers (bullets and numbers) paint inside the scrollable content box. The
@@ -62,32 +63,18 @@ const components: Components = {
   ),
   em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
   hr: () => <hr className="my-3 border-border" />,
-  // P1-9: table wrapper is keyboard-focusable (axe: scrollable-region-focusable)
-  // with an aria-label. min-w applied so mobile cells stay ≥ 80px wide.
-  table: ({ children }) => (
-    <div
-      className="mb-2 overflow-x-auto rounded border border-border"
-      tabIndex={0}
-      aria-label="data table"
-      role="region"
-    >
-      <table className="w-full text-sm">
-        <colgroup>
-          {/* min-width injected via colgroup so every column is ≥80px on mobile */}
-        </colgroup>
-        {children}
-      </table>
-    </div>
-  ),
+  // P1-9 + design pass 3: focusable labelled scroll region; horizontal scroll
+  // (no-wrap short cells, edge fade) is the narrow-screen behaviour.
+  table: ({ children }) => <ScrollTable>{children}</ScrollTable>,
   thead: ({ children }) => (
     <thead className="bg-secondary text-secondary-foreground">{children}</thead>
   ),
   th: ({ children }) => (
     // min-w-[80px] ensures cells are keyboard-reachable wide on mobile (P1-9).
-    <th className="px-3 py-1.5 text-left font-medium min-w-[80px]">{children}</th>
+    <th className={cn('px-3 py-1.5 text-left font-medium min-w-[80px]', cellClass(children))}>{children}</th>
   ),
   td: ({ children }) => (
-    <td className="border-t border-border px-3 py-1.5 min-w-[80px]">{children}</td>
+    <td className={cn('border-t border-border px-3 py-1.5 min-w-[80px]', cellClass(children))}>{children}</td>
   ),
   code: ({ children, className }) => {
     const lang = /language-(\w+)/.exec(className ?? '')?.[1];
