@@ -62,6 +62,7 @@ function makeSlots(over: Partial<Record<'local' | 'small' | 'medium' | 'large', 
     small: { id: over.small ?? DEFAULT_SLOT_BINDINGS.small.id },
     medium: { id: over.medium ?? DEFAULT_SLOT_BINDINGS.medium.id },
     large: { id: over.large ?? DEFAULT_SLOT_BINDINGS.large.id },
+    subagent: { id: '' },
   };
 }
 
@@ -71,10 +72,10 @@ afterEach(() => {
 });
 
 describe('SLOT_NAMES', () => {
-  it('has four entries with local first', () => {
-    expect(SLOT_NAMES).toHaveLength(4);
+  it('has five entries with local first and subagent last', () => {
+    expect(SLOT_NAMES).toHaveLength(5);
     expect(SLOT_NAMES[0]).toBe('local');
-    expect(SLOT_NAMES).toEqual(['local', 'small', 'medium', 'large']);
+    expect(SLOT_NAMES).toEqual(['local', 'small', 'medium', 'large', 'subagent']);
   });
 });
 
@@ -259,7 +260,7 @@ describe('MODEL_ALIASES_HINT (single source of truth for the /model picker)', ()
   it('is derived from the tiers + identity aliases + OpenAI hints, in the documented order', () => {
     expect(MODEL_ALIASES_HINT).toEqual([
       // Capability tiers (SLOT_NAMES)
-      'local', 'small', 'medium', 'large',
+      'local', 'small', 'medium', 'large', 'subagent',
       // Fixed-identity Claude/xAI/OpenAI aliases (DIRECT_MODEL_ALIASES)
       'opus', 'opus_1m', 'opus-5.5', 'opus-5.5_1m', 'sonnet', 'sonnet_1m', 'haiku', 'fable', 'grok',
       'sol', 'luna', 'astra', 'terra',
@@ -506,6 +507,7 @@ describe('resolveBinding — raw slot id match (#2985)', () => {
       small: { id: 'shared-model', provider: 'openai', baseUrl: 'http://small/v1' },
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     };
     expect(resolveBinding('shared-model', bindings)).toMatchObject({ provider: 'anthropic', baseUrl: 'http://local/v1' });
   });
@@ -803,6 +805,7 @@ describe('contextWindowOverrideFor', () => {
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     expect(contextWindowOverrideFor('qwen-3.8-27b')).toBe(128_000);
   });
@@ -813,6 +816,7 @@ describe('contextWindowOverrideFor', () => {
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     expect(contextWindowOverrideFor('gpt-4o')).toBeUndefined();
   });
@@ -825,6 +829,7 @@ describe('contextWindowOverrideFor', () => {
       small: { id: 'shared-model', contextWindow: 64_000 },
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     expect(contextWindowOverrideFor('shared-model')).toBe(128_000);
   });
@@ -839,6 +844,7 @@ describe('contextLimitFor + autoCompactLimitFor honour slot contextWindow overri
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     // 'local' resolves to 'qwen-3.8-27b' which has a contextWindow override
     expect(contextLimitFor('local')).toBe(128_000);
@@ -852,6 +858,7 @@ describe('contextLimitFor + autoCompactLimitFor honour slot contextWindow overri
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     // Providers call contextLimitFor with the resolved concrete id — this is the real path.
     expect(contextLimitFor('qwen-3.8-27b')).toBe(128_000);
@@ -863,6 +870,7 @@ describe('contextLimitFor + autoCompactLimitFor honour slot contextWindow overri
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     // qwen-3.8-27b has no MODEL_AUTOCOMPACT_BUDGET entry → returns full window
     expect(autoCompactLimitFor('qwen-3.8-27b')).toBe(128_000);
@@ -886,6 +894,7 @@ describe('contextLimitFor + autoCompactLimitFor honour slot contextWindow overri
       local: DEFAULT_SLOT_BINDINGS.local,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     // gpt-4o is normally 128k in the table; override raises it to 200k.
     expect(contextLimitFor('gpt-4o')).toBe(200_000);
@@ -903,6 +912,7 @@ describe('contextLimitFor + autoCompactLimitFor honour slot contextWindow overri
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     expect(maxOutputTokensFor('qwen-3.8-27b')).toBe(without);
   });
@@ -990,6 +1000,7 @@ describe('maxOutputTokensOverrideFor', () => {
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     expect(maxOutputTokensOverrideFor('my-model')).toBe(32_768);
   });
@@ -1000,6 +1011,7 @@ describe('maxOutputTokensOverrideFor', () => {
       small: DEFAULT_SLOT_BINDINGS.small,
       medium: DEFAULT_SLOT_BINDINGS.medium,
       large: DEFAULT_SLOT_BINDINGS.large,
+      subagent: { id: '' },
     });
     expect(maxOutputTokensOverrideFor('other-model')).toBeUndefined();
   });
