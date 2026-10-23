@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.334.0] - 2026-10-23
+
 ### Added
 - add `subagent` routing slot for provider-independent subagent inference (#4324) (872115b62)
 
