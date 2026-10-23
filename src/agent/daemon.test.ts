@@ -19,6 +19,7 @@ import type { AgentConfig, Message } from './types.js';
 import { validateScheduledTask, type ScheduledTask } from './daemon/triggers.js';
 import { CronScheduler } from './daemon/scheduler.js';
 import { startDaemon, type DaemonHandle } from './daemon.js';
+import { registerTasksWithQuarantine } from './daemon.startup-register.js';
 import { getDaemonStateDir, getAfkHome } from '../paths.js';
 import { toScheduledTask } from './daemon/schedule-store.js';
 
@@ -542,6 +543,59 @@ describe('CronScheduler.fireOnStart (Phase 6)', () => {
     const records = await scheduler.fireOnStart();
     expect(records[0].status).toBe('skipped');
     expect(records[0].skipReason).toBe('cooldown');
+  });
+});
+
+describe('registerTasksWithQuarantine', () => {
+  let scheduler: CronScheduler;
+  let telemetryPath: string;
+
+  beforeEach(() => {
+    telemetryPath = tmpTelemetryFile();
+    scheduler = new CronScheduler({ telemetryPath });
+  });
+
+  afterEach(async () => {
+    await scheduler.stop();
+    rmSync(telemetryPath, { force: true });
+  });
+
+  it('quarantines a duplicate taskId instead of throwing, leaving the first registration intact', () => {
+    // scheduler.register() throws "already registered" on a duplicate taskId.
+    // registerTasksWithQuarantine must catch that error and warn rather than
+    // crashing the daemon startup loop (#4052, #4161).
+    const task: ScheduledTask = {
+      taskId: 'dup-task',
+      command: '/ok',
+      trigger: 'cron',
+      cronExpression: '* * * * *',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      // First registration succeeds; second is a duplicate.
+      registerTasksWithQuarantine(scheduler, [task, task]);
+      // The original registration must survive.
+      expect(scheduler.list().map((t) => t.taskId)).toEqual(['dup-task']);
+      // A warn must have been emitted for the duplicate.
+      expect(warnSpy).toHaveBeenCalledOnce();
+      expect(warnSpy.mock.calls[0]![0]).toMatch(/dup-task/);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('quarantines a malformed runAt without disrupting valid tasks', () => {
+    const good: ScheduledTask = { taskId: 'good', command: '/ok', trigger: 'cron', cronExpression: '* * * * *' };
+    const bad = { taskId: 'bad-runat', command: '/bad', trigger: 'cron' as const, runAt: 'not-a-date' } as unknown as ScheduledTask;
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      registerTasksWithQuarantine(scheduler, [bad, good]);
+      expect(scheduler.list().map((t) => t.taskId)).toEqual(['good']);
+      expect(warnSpy).toHaveBeenCalledOnce();
+      expect(warnSpy.mock.calls[0]![0]).toMatch(/bad-runat/);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
 

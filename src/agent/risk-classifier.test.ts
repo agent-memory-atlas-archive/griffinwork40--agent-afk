@@ -385,6 +385,13 @@ describe('classifyRisk — bash safe', () => {
     expect(classifyRisk('bash', { command: 'grep -rn truncate src/' }, ctx)).toBe('high');
   });
 
+  it('grep -rn rsync src/ → high (known Tier-2 over-gate, same FS_MUTATING set)', () => {
+    // `rsync` is in the 17-verb FS_MUTATING set but absent from BASH_MEDIUM/
+    // BASH_HIGH, so a grep arg of `rsync` reaches the classifyBashCommand guard
+    // and triggers the same CMD_START-unanchored over-gate as `truncate` above.
+    expect(classifyRisk('bash', { command: 'grep -rn rsync src/' }, ctx)).toBe('high');
+  });
+
   it('grep -rn dd src/ → high (known Tier-2 over-gate, same FS_MUTATING set)', () => {
     expect(classifyRisk('bash', { command: 'grep -rn dd src/' }, ctx)).toBe('high');
   });

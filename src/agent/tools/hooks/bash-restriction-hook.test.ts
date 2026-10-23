@@ -457,6 +457,10 @@ describe('createBashRestrictionHook — quoted heredoc data (#3850)', () => {
     `git commit -F - <<EOF\n${mention}\nEOF`,
     // Consumer executes stdin.
     `sh <<'EOF'\ngit commit -F - <<'INNER'\n${mention}\nINNER\nEOF`,
+    // Single-quoted -c: quote style must not open a fail-open path. A bash -c
+    // with single-quoted argument is semantically identical to double-quoted;
+    // the block boundary must be quote-style independent.
+    `bash -c 'cat ${mention}/Google/Chrome/Default/Login\\ Data'`,
   ])('keeps unsafe git-commit heredoc variants blocked: %s', (command) => {
     expect(hook(ctx(command)).decision).toBe('block');
   });
