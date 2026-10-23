@@ -10,6 +10,7 @@
 
 import { InputCore } from './input-core.js';
 import * as Paste from './terminal-compositor.paste.js';
+import { shouldFilePickerSubmit } from './input/file-picker-predicate.js';
 import { isSoftNewlineEnter, endsWithBackslashContinuation } from './input/enter-decision.js';
 import { handleEnterIdleSubmit, handleEnterStreamingQueue } from './terminal-compositor.input-dispatch.enter.submit.js';
 import type { KeyInfo, SubmissionPayload } from './terminal-compositor.types.js';
@@ -207,7 +208,7 @@ export function handleEnter(self: KeyDispatchHost, key: KeyInfo, sequence: strin
       // for the directory's contents. File → accept AND fall through to
       // submit so the user doesn't need a second Enter after the final
       // file pick.
-      if (!applied || candidateValue?.endsWith('/')) return true;
+      if (!applied || !shouldFilePickerSubmit(candidateValue)) return true;
     } else if (kind !== 'slash') {
       return true;
     } else if (!applied) {

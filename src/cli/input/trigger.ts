@@ -6,7 +6,8 @@
  * pop the dropdown and which entries to show.
  */
 
-import { readdirSync, promises as fsp, type Dirent } from 'fs';
+import { readdirSync, statSync, promises as fsp, type Dirent } from 'fs';
+import { join } from 'path';
 import { list as listSlashCommands, aliasEntries, lookup } from '../slash/registry.js';
 import { matchSlashCandidates, isSubsequence, type CommandEntry } from './slash-match.js';
 import { resolveQuery, MAX_FILE_MATCHES } from '../multi-line-reader.js';
@@ -130,10 +131,13 @@ export function buildSlashUniverse(): CommandEntry[] {
  * `fs.Dirent` (from `readdir(dir, { withFileTypes: true })`) satisfies this
  * structurally, and tests can supply plain objects without stubbing the
  * whole class. Only `name` and `isDirectory()` are ever consulted.
+ * `isSymbolicLink` is optional — present on real Dirents, absent on
+ * test stubs (treated as non-symlink).
  */
 export interface FileDirent {
   name: string;
   isDirectory(): boolean;
+  isSymbolicLink?(): boolean;
 }
 
 /**
@@ -278,7 +282,23 @@ export async function filterFileCandidatesAsync(
     return buildFileCandidates(cached.entries, query, rootDir, homeDir);
   }
   try {
-    const entries: Dirent[] = await fsp.readdir(scanDir, { withFileTypes: true });
+    const raw: Dirent[] = await fsp.readdir(scanDir, { withFileTypes: true });
+    // Resolve symlinks: for any entry that is a symbolic link, stat the
+    // target to check whether it resolves to a directory. Wrap matching
+    // entries so buildFileCandidates (which only reads isDirectory()) sees
+    // the correct flag without a statSync on the hot keystroke path.
+    const entries: FileDirent[] = await Promise.all(
+      raw.map(async (d): Promise<FileDirent> => {
+        if (!d.isSymbolicLink()) return d;
+        try {
+          const st = await fsp.stat(join(scanDir, d.name));
+          if (st.isDirectory()) {
+            return { name: d.name, isDirectory: () => true, isSymbolicLink: () => true };
+          }
+        } catch { /* broken symlink — treat as file */ }
+        return d;
+      }),
+    );
     scanCache.set(scanDir, { entries, at: Date.now() });
     return buildFileCandidates(entries, query, rootDir, homeDir);
   } catch {
@@ -305,7 +325,18 @@ export function filterFileCandidates(
 ): Candidate[] {
   const { scanDir } = resolveQuery(query, rootDir, homeDir);
   try {
-    const entries = readdirSync(scanDir, { withFileTypes: true });
+    const raw = readdirSync(scanDir, { withFileTypes: true });
+    // Resolve symlinks synchronously (one-time prefetch path, not keystroke path).
+    const entries: FileDirent[] = raw.map((d): FileDirent => {
+      if (!d.isSymbolicLink()) return d;
+      try {
+        const st = statSync(join(scanDir, d.name));
+        if (st.isDirectory()) {
+          return { name: d.name, isDirectory: () => true, isSymbolicLink: () => true };
+        }
+      } catch { /* broken symlink — treat as file */ }
+      return d;
+    });
     scanCache.set(scanDir, { entries, at: Date.now() });
     return buildFileCandidates(entries, query, rootDir, homeDir);
   } catch {
