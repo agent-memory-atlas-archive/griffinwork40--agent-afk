@@ -117,16 +117,19 @@ describe('sumBillingUsage', () => {
     // Identity path: a is absent, b is already 'mixed'.  The short-circuit must
     // propagate 'mixed' without emitting a second warning.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const mixed = sumBillingUsage(
-      anthropicBilling({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 }),
-      openAICompatibleBilling(20, 10, 3),
-    )!;
-    warnSpy.mockClear(); // discard the construction warn
-    const result = sumBillingUsage(undefined, mixed);
-    expect(result).toEqual(mixed);
-    expect(result).not.toBe(mixed); // must be a copy, not the same reference
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
+    try {
+      const mixed = sumBillingUsage(
+        anthropicBilling({ input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 }),
+        openAICompatibleBilling(20, 10, 3),
+      )!;
+      warnSpy.mockClear(); // discard the construction warn
+      const result = sumBillingUsage(undefined, mixed);
+      expect(result).toEqual(mixed);
+      expect(result).not.toBe(mixed); // must be a copy, not the same reference
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it('re-summing a mixed record does not warn again', () => {
