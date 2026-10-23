@@ -136,11 +136,6 @@ export class OpenAICompatibleProvider implements ModelProvider {
     this._stateStore = opts.stateStore;
 
     const schemas: AnthropicToolDef[] = [...builtinToolSchemas, ...readOnlyGitSchemas()];
-    // Executor-supplied `agent` def advertises named agent types when a
-    // registry is wired — parity with anthropic-direct (see agents/tool-def.ts).
-    if (opts.subagentExecutor) schemas.push(opts.subagentExecutor.describeAgentTool?.() ?? agentTool);
-    if (opts.skillExecutor) schemas.push(skillTool);
-    if (opts.composeExecutor) schemas.push(composeTool);
     if (opts.readOnlyMemory === true) {
       schemas.push(memorySearchTool);
     } else {
@@ -158,6 +153,15 @@ export class OpenAICompatibleProvider implements ModelProvider {
     // SubagentHandleImpl wiring (setSubscribeHandler) not yet supported by this provider.
     // Only publish + query are advertised; subscribe goes through anthropic-direct only.
     schemas.push(...(this.workspaceStore !== undefined ? [workspacePublishTool, workspaceQueryTool] : []), getRuntimeStateTool);
+    // Nesting tools — placed AFTER memory/state/get_runtime_state (#4217) so
+    // variation in their schemas (present vs absent at max depth, or a
+    // different `agent_type` property when a registry is wired) invalidates
+    // the fewest cached tokens. Executor-supplied `agent` def advertises
+    // named agent types when a registry is wired — parity with
+    // anthropic-direct (see agents/tool-def.ts).
+    if (opts.subagentExecutor) schemas.push(opts.subagentExecutor.describeAgentTool?.() ?? agentTool);
+    if (opts.skillExecutor) schemas.push(skillTool);
+    if (opts.composeExecutor) schemas.push(composeTool);
     // Custom (consumer-registered) tool schemas are appended last so their
     // names never silently shadow a builtin. A custom schema whose name
     // collides with an already-present builtin (or an earlier custom tool) is
