@@ -33,6 +33,16 @@ export interface ToolLaneFlushHost {
   order: string[];
   agentIdStack: string[];
   readonly compactScrollback: boolean;
+  /**
+   * Synthetic ids that have been absorbed into a committed ancestor block via
+   * {@link flushSource}. Any tool events arriving after absorption with one of
+   * these ids as their `agentContext` are silently dropped by
+   * {@link ToolLane.addStartWithAgentContext} — the parent is gone from the
+   * lane and recreating a child under it would produce an orphan root.
+   *
+   * The set grows monotonically during a turn; cleared on lane reset (flush()).
+   */
+  absorbedIds: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,9 +142,12 @@ export function flushSource(
     ? formatAgentChildren(parentEntry, children, childMap, homeDir, ancestorIsLast, host.compactScrollback).join('\n')
     : formatAgentSummary(parentEntry, children, childMap, homeDir, ancestorIsLast, host.compactScrollback);
 
-  // Remove collected entries from the lane.
+  // Remove collected entries from the lane and record them as absorbed so
+  // any future tool events whose agentContext points at one of these ids are
+  // silently dropped instead of re-creating a detached orphan root.
   for (const id of collected) {
     host.entries.delete(id);
+    host.absorbedIds.add(id);
   }
   host.order = host.order.filter((id) => !collected.has(id));
 

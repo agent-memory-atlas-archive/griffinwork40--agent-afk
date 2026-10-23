@@ -51,6 +51,16 @@ export class ToolLane {
   private order: string[] = [];
   private agentIdStack: string[] = [];
   /**
+   * Synthetic ids absorbed by a prior {@link flushSource} call. Checked in
+   * {@link addStartWithAgentContext} to drop tool events whose parent was
+   * already committed to scrollback — prevents orphan roots in committed
+   * scrollback when a still-running child calls into a deleted parent lane row.
+   *
+   * Populated by {@link flushSource} (via {@link ToolLaneFlushHost.absorbedIds});
+   * cleared by {@link flush} when the whole lane is reset at turn end.
+   */
+  private absorbedIds = new Set<string>();
+  /**
    * Tracks the last displayed elapsed-second value per in-flight tool entry so
    * {@link checkElapsedDisplayNeedsUpdate} can detect second-boundary crossings
    * without repainting on every 80 ms tick. Keyed by `toolUseId`; entries are
@@ -152,6 +162,12 @@ export class ToolLane {
     agentContext: string | undefined,
     maxWidth?: number,
   ): void {
+    // Drop events whose agentContext was absorbed by a prior flushSource.
+    // The parent's lane row no longer exists; creating a child under it would
+    // produce a dangling agentContext that surfaces as an orphan root in
+    // committed scrollback. The overlay loses live detail for that child, but
+    // scrollback stays clean — this is the Direction 2 trade-off chosen in #4329.
+    if (agentContext !== undefined && this.absorbedIds.has(agentContext)) return;
     // Same rationale as addStart: strip ANSI at storage time so LLM-emitted
     // escapes can't reach palette.dim() on any downstream render surface.
     const safeInput = stripAnsi(toolInput);
@@ -540,7 +556,18 @@ export class ToolLane {
   }
 
   flush(homeDir?: string): string[] {
+    // Clear the absorbed-id set on full flush (turn end). The set is
+    // turn-scoped: once the whole lane is reset, a new turn starts fresh.
+    this.absorbedIds.clear();
     return flushImpl(this as unknown as import('./tool-lane.flush.js').ToolLaneFlushHost, homeDir);
+  }
+
+  /**
+   * Returns `true` if `id` was absorbed by a prior {@link flushSource} call
+   * during the current turn. Used by tests to assert the absorbed-id guard.
+   */
+  isAbsorbed(id: string): boolean {
+    return this.absorbedIds.has(id);
   }
 
 
