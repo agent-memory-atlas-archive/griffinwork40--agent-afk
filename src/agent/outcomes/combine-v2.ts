@@ -105,6 +105,7 @@ export function collapseSingleCountVotes(votes: Vote[]): Vote[] {
   const seen = new Set<string>();
   return votes.filter((v) => {
     if (!SINGLE_COUNT_LFS.has(v.lf)) return true;
+    if (v.vote !== -1) return true; // only collapse negative votes
     if (seen.has(v.lf)) return false;
     seen.add(v.lf);
     return true;
