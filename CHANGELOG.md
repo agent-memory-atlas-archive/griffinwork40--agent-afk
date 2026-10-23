@@ -11,6 +11,29 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Added
+- warn at load time when AFK.md overlay exceeds 10k tokens (#4292) (aa4181981)
+
+### Fixed
+- deflake tailLedger via onCaughtUp synchronization barrier (#4332) (ce9a5a0d8)
+- guard disk roundtrip assertion with toBeDefined check (dbbeaf0c6)
+- handle Anthropic 403 with opportunistic token refresh (#4316) (870bf07f4)
+- add kind/startedAt to ToolEntry literals; use synthetic POSIX path in Windows-portable test (5020f67ea)
+- count fix_of_fix at most once toward the two-minor-negatives rule (#4289) (232bdee09)
+- shorten paths before SGR styling in grouped bash rows (83013a341)
+- run shortenPaths before styleBashCommand in grouped path (698963add)
+- correct false drain guarantee and overly-restrictive JSDoc (7f4915f72)
+- style grouped bash entries before flattening newlines (6f2a33a1f)
+- address remaining advisory findings from 2026-10-15 triage (52f0ba827)
+- pin Scenario 2 reconciliation tests (3575d334c)
+- clarify decideStatus JSDoc and add missing unsupported test (e80a28b6e)
+- stale comment, blockReason backticks, false-positive note, normalizeSeps early return, Windows tests, show-p tests (121feeb65)
+- re-export buildSubagentBlockCorpus from contracts.ts; fix stale JSDoc in contracts.test.ts (6bd809364)
+
+### Changed
+- remove deprecated completeWithWire wrapper (bc5589349)
+- pin Scenario 2 idempotency-key header forwarding defect (63be9cdbc)
+
 ## [5.332.0] - 2026-10-22
 
 ### Added
