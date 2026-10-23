@@ -60,9 +60,10 @@ const defaultClientFactory: CompleteWireClientFactory = (opts) => new OpenAI(opt
  * @param authDeps - Injectable auth-resolver dependencies (env/fs). Used by
  *   tests to drive the Responses-wire path without real credentials.  Production
  *   callers omit this and get the real env + file-system resolvers.
- *
+ */
 /**
- * finished reply from one cut at `maxTokens` (ghost-text suggestions).
+ * Returns both the reply text and the stop reason, so callers can detect
+ * a `max_tokens` cut (ghost-text truncation detection).
  */
 export async function completeWithWireWithStop(
   input: OpenAIOneShotInput,
