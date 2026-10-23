@@ -70,7 +70,15 @@ export interface LspSymbolResult {
 /** Subcommand accepted by the `code_symbols` tool. */
 export type SymbolSubcommand = 'definition' | 'references';
 
-/** Default LSP server command — shared by `queryLspSymbol` and `handleCodeSymbols`. */
+/**
+ * Default LSP server command — shared by `queryLspSymbol` and `handleCodeSymbols`.
+ *
+ * The `as const` assertion intentionally narrows the exported type from
+ * `readonly string[]` to `readonly ["typescript-language-server", "--stdio"]`.
+ * This tuple type is strictly backward-compatible (the array is still iterable
+ * and spreadable) and allows callers to rely on the exact literal values without
+ * a runtime lookup. Override via the `serverCmd` parameter when testing.
+ */
 export const DEFAULT_LSP_CMD = Object.freeze(['typescript-language-server', '--stdio'] as const);
 
 // ── Internal helpers ─────────────────────────────────────────────────────────

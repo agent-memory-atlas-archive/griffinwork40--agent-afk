@@ -437,7 +437,7 @@ process.stdin.resume();
       // Poll for the sentinel file (written by the fake server on spawn),
       // then abort immediately — no fixed wall-clock delay needed.
       const abortOnSpawn = (async () => {
-        const deadline = Date.now() + 5_000;
+        const deadline = Date.now() + 4_000;
         while (Date.now() < deadline) {
           try {
             await stat(sentinelPath);
@@ -456,7 +456,7 @@ process.stdin.resume();
         nodeCmd(scriptPath),
         controller.signal,
       );
-      await abortOnSpawn; // ensure the polling loop is settled
+      await abortOnSpawn; // drain the polling loop so any late abort() calls complete before assertions
       expect(result.locations).toEqual([]);
       expect(result.error).toBe('Aborted');
     } finally {
