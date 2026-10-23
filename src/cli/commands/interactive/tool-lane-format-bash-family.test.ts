@@ -62,6 +62,8 @@ describe('verbFamily', () => {
     // Width-truncated forms: trailing ellipsis (…) must still floor to danger.
     expect(families('rm…')).toEqual([['rm…', 'danger']]);
     expect(families('dd… if=/dev/zero of=/dev/sda')).toEqual([['dd…', 'danger']]);
+    // Width-truncated network verbs also survive the ellipsis strip.
+    expect(families('curl\u2026')).toEqual([['curl\u2026', 'network']]);
   });
 
   it('wrappers of a dangerous command are dangerous too', () => {
