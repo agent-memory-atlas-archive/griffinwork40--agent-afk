@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   combineV2,
+  collapseSingleCountVotes,
   effectiveSeverity,
   computeConfidenceV2,
 } from './combine-v2.js';
@@ -426,6 +427,72 @@ describe('combineV2 rule 8: unknown', () => {
     expect(r.label).toBe('unknown');
     expect(r.confidence).toBe(0);
     expect(r.basis).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// collapseSingleCountVotes
+// ---------------------------------------------------------------------------
+
+describe('collapseSingleCountVotes', () => {
+  it('collapses multiple fix_of_fix negative votes to one', () => {
+    const votes = [
+      makeVote('fix_of_fix', -1, 'weak', { severity: 'minor', evidence: 'PR #1' }),
+      makeVote('fix_of_fix', -1, 'weak', { severity: 'minor', evidence: 'PR #2' }),
+      makeVote('fix_of_fix', -1, 'weak', { severity: 'minor', evidence: 'PR #3' }),
+    ];
+    const result = collapseSingleCountVotes(votes);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.lf).toBe('fix_of_fix');
+    expect(result[0]!.evidence).toBe('PR #1'); // first one kept
+  });
+
+  it('passes through a single fix_of_fix vote unchanged', () => {
+    const votes = [
+      makeVote('fix_of_fix', -1, 'weak', { severity: 'minor', evidence: 'PR #1' }),
+    ];
+    const result = collapseSingleCountVotes(votes);
+    expect(result).toHaveLength(1);
+  });
+
+  it('does not collapse non-SINGLE_COUNT_LFS votes (e.g. ci)', () => {
+    const votes = [
+      makeVote('ci', -1, 'weak', { evidence: 'PR-1 failed' }),
+      makeVote('ci', -1, 'weak', { evidence: 'PR-2 failed' }),
+    ];
+    const result = collapseSingleCountVotes(votes);
+    expect(result).toHaveLength(2);
+  });
+
+  it('passes through fix_of_fix votes with vote !== -1 (non-negative guard)', () => {
+    // If lf-fof ever gains a positive emission path, those votes must not be collapsed
+    const votes = [
+      makeVote('fix_of_fix', 1, 'weak', { evidence: 'hypothetical positive #1' }),
+      makeVote('fix_of_fix', 1, 'weak', { evidence: 'hypothetical positive #2' }),
+      makeVote('fix_of_fix', -1, 'weak', { severity: 'minor', evidence: 'PR #3' }),
+    ];
+    const result = collapseSingleCountVotes(votes);
+    // Both positive votes pass through; the single negative vote is kept
+    expect(result).toHaveLength(3);
+    const positives = result.filter((v) => v.vote === 1);
+    const negatives = result.filter((v) => v.vote === -1);
+    expect(positives).toHaveLength(2);
+    expect(negatives).toHaveLength(1);
+  });
+
+  it('handles mixed lf names: collapses fix_of_fix independently of other lfs', () => {
+    const votes = [
+      makeVote('fix_of_fix', -1, 'weak', { severity: 'minor', evidence: 'PR #1' }),
+      makeVote('fix_of_fix', -1, 'weak', { severity: 'minor', evidence: 'PR #2' }),
+      makeVote('budget_cap', -1, 'weak', { severity: 'minor' }),
+      makeVote('budget_cap', -1, 'weak', { severity: 'minor' }),
+    ];
+    const result = collapseSingleCountVotes(votes);
+    // fix_of_fix collapses to 1; budget_cap is not in SINGLE_COUNT_LFS → both kept
+    const fof = result.filter((v) => v.lf === 'fix_of_fix');
+    const bc = result.filter((v) => v.lf === 'budget_cap');
+    expect(fof).toHaveLength(1);
+    expect(bc).toHaveLength(2);
   });
 });
 

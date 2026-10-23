@@ -645,6 +645,36 @@ describe('rescoreSettledUnknown', () => {
     expect(updated?.history.at(-1)?.reason).toContain('was failed');
   });
 
+  it('includeFailed: fof + another minor negative keeps the failed label', async () => {
+    // Regression guard: two minor negatives (fof collapsed to one + budget_cap) still
+    // satisfy rule 4 (two or more minor negatives → failed). The rescore must NOT
+    // relabel such records to succeeded — the fof collapse reduces N fof votes to 1,
+    // but a second distinct minor negative means rule 4 still fires.
+    const id = 'rescore-failed-fof-plus-minor-001';
+    writeRecord(
+      {
+        ...makeSettledUnknown(id, [
+          // Multiple fof votes — collapsed to one by collapseSingleCountVotes
+          fofVote(1),
+          fofVote(2),
+          // A second independent minor negative keeps rule 4 firing
+          { lf: 'budget_cap', vote: -1, strength: 'weak', severity: 'minor', evidence: 'cap hit', observed_at: NOW },
+        ]),
+        label: 'failed',
+      },
+      tmpDir,
+    );
+
+    const result = await rescoreSettledUnknown({ outcomesDir: tmpDir, includeFailed: true });
+    // Must NOT be relabeled: fof(collapsed=1) + budget_cap = 2 minor negatives → rule 4 → failed
+    expect(result.scanned).toBe(1);
+    expect(result.relabeled).toBe(0);
+    expect(result.skipped).toBe(1);
+
+    const rec = readRecord(id, tmpDir);
+    expect(rec?.label).toBe('failed');
+  });
+
   it('includeFailed: never touches a record carrying explicit /bad feedback', async () => {
     const id = 'rescore-failed-explicit-001';
     const bad: Vote = { lf: 'explicit_feedback', vote: -1, strength: 'strong', severity: 'critical', evidence: '/bad', observed_at: NOW };
