@@ -82,9 +82,14 @@ export function useScrollPin(): UseScrollPinResult {
     // A user scroll-up always lowers scrollTop; a reflow that grows the
     // content (narrower viewport, padding added) leaves scrollTop unchanged.
     let lastTop = el.scrollTop;
+    let lastHeight = el.scrollHeight;
     function handleScroll(): void {
       if (el === null) return;
-      const userScrolledUp = el.scrollTop < lastTop;
+      // Content removal (Retry/edit/rewind drops items) shrinks scrollHeight and the
+      // browser clamps scrollTop down with it: that is layout, not a user scroll-up.
+      const shrank = el.scrollHeight < lastHeight;
+      lastHeight = el.scrollHeight;
+      const userScrolledUp = el.scrollTop < lastTop && !shrank;
       lastTop = el.scrollTop;
       if (pinnedRef.current && !userScrolledUp
         && el.scrollHeight - el.scrollTop - el.clientHeight > PINNED_THRESHOLD_PX) {

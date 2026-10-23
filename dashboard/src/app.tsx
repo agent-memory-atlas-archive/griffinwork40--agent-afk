@@ -88,7 +88,8 @@ function Dashboard() {
   // Layout effect: scroll in the same commit that appends a live draft, so the
   // draft is never painted below the fold (content-visibility:auto skips it).
   useEffect(() => {
-    if (isPinned) scrollToBottom();
+    // The user's own new message always brings the view down (send, Retry, edit).
+    if (isPinned || items.at(-1)?.kind === 'user') scrollToBottom();
     else notifyNewContent();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, cmdItems.length]);
@@ -362,8 +363,8 @@ function Dashboard() {
                   onNewSession={() => void handleNewSession()}
                   starting={starting}
                   onSuggest={(text) => { if (selectedSessionId) setPrefill({ text, nonce: Date.now(), sessionId: selectedSessionId }); }}
-                  onRetry={() => void retry(lastUserText(items)).catch(rewindFailed)}
-                  onEdit={(text) => void editAndResend(text).catch(rewindFailed)}
+                  onRetry={() => { scrollToBottom(); void retry(lastUserText(items)).catch(rewindFailed); }}
+                  onEdit={(text) => { scrollToBottom(); void editAndResend(text).catch(rewindFailed); }}
                   isBusy={isBusy}
                   currentModel={currentModel}
                   serverCwd={selectedSession?.cwd ?? newSessionCwd}
@@ -406,6 +407,7 @@ function Dashboard() {
                   onModelSelect={setSelectedModel}
                   currentModel={currentModel}
                   onCommandStart={(input) => {
+                    scrollToBottom();
                     if (/^\/clear(?:\s|$)/.test(input)) {
                       clearStartedAt.current[selectedSession.id] = resetEpochs.current[selectedSession.id] ?? 0;
                     }

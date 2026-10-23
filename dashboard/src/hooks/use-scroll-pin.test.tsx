@@ -215,3 +215,23 @@ describe('useScrollPin — regression: reload with ?session= stayed at the top (
     restore();
   });
 });
+
+describe('content removal is not a user scroll-up', () => {
+  it('stays pinned when Retry/edit shrinks the content and the browser clamps scrollTop down', () => {
+    const el = buildScrollEl();
+    document.body.appendChild(el);
+    const { result } = renderHook(() => {
+      const pin = useScrollPin();
+      if (!pin.containerRef.current) pin.containerRef.current = el;
+      return pin;
+    });
+    act(() => { fireScroll(el, 750); });
+    expect(result.current.isPinned).toBe(true);
+    // Items removed: content shrinks from 1000 to 600 and scrollTop lands 100px above the bottom.
+    Object.defineProperty(el, 'scrollHeight', { configurable: true, value: 600 });
+    act(() => { fireScroll(el, 300); });
+    expect(result.current.isPinned).toBe(true);
+    expect(result.current.showScrollButton).toBe(false);
+    document.body.removeChild(el);
+  });
+});

@@ -13,6 +13,8 @@ export function fuzzyScore(text: string, query: string): number {
   if (!t) return 0;
   if (t === q) return 1;
   if (t.startsWith(q)) return 0.95;
+  // Slash commands: "model" is a prefix match for "/model".
+  if (t.startsWith('/') && !q.startsWith('/') && t.slice(1).startsWith(q)) return t.slice(1) === q ? 0.99 : 0.95;
   const at = t.indexOf(q);
   if (at > 0) return isWordStart(t, at) ? 0.9 : 0.8;
   // Subsequence: every query char in order.
@@ -38,7 +40,14 @@ function isWordStart(t: string, i: number): boolean {
 /** cmdk `filter`: score an item by its best keyword (never by its opaque value). */
 export function paletteFilter(_value: string, search: string, keywords?: string[]): number {
   if (!keywords || keywords.length === 0) return 0;
+  // The first keyword is the item's primary label. Secondary keywords (a model
+  // tag, a description) are capped just below a label prefix match (0.95), so
+  // typing a command's name always ranks it above commands that merely mention
+  // the word in their summary.
   let best = 0;
-  for (const k of keywords) best = Math.max(best, fuzzyScore(k, search));
+  keywords.forEach((k, i) => {
+    const s = fuzzyScore(k, search);
+    best = Math.max(best, i === 0 ? s : Math.min(s, 0.93));
+  });
   return best;
 }
