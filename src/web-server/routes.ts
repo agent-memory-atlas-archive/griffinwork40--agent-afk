@@ -446,7 +446,7 @@ async function dispatchSlashForWeb(
       ctx.releaseTurn?.(sessionId);
       sendJson(res, 422, {
         error: 'native_command',
-        message: `"${text}" is a native command — use POST /api/sessions/${sessionId}/commands instead`,
+        message: `"${text.slice(0, 64)}" is a native command — use POST /api/sessions/${sessionId}/commands instead`,
       });
       return true;
   }
