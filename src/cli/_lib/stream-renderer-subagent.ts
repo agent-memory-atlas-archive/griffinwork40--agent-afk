@@ -158,6 +158,13 @@ export function handleSubagentEvent(
       // H2 fix: clean up the overlay throttle entry on the error path too.
       _overlayLastUpdate.delete(parentId);
       settleSubagentError(ctx.toolLane, parentId, event.error.message);
+      // Record this subagent as rendered on the error path too — mirrors the
+      // done path in finalizeSubagent. Without this, emitSubagentCompletion
+      // (Channel B) emits a duplicate completion line for every errored
+      // subagent after teardownTurn resets suppressSubagentCompletion.
+      if (ctx.completionWriter?.renderedSubagentIds && sourceId) {
+        ctx.completionWriter.renderedSubagentIds.add(sourceId);
+      }
       // Route through the full composed frame so the orchestrator's live-
       // thinking paragraph is preserved. (Issue #389.)
       if (ctx.isTTY && ctx.orchestratorCtx) {
