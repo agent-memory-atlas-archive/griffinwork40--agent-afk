@@ -205,11 +205,16 @@ export function __fileScanCacheSize(): number {
  * like `@src/inp` match `src/cli/input/` without displacing prefix hits. Both
  * buckets are capped together at MAX_FILE_MATCHES.
  *
- * Directory flag is derived from the Dirent (`isDirectory()`), NOT a follow-up
- * `statSync`. Tradeoff: a symlink that points at a directory reports as a
- * symlink (not a directory) and therefore loses its trailing `/`. That is an
- * accepted cosmetic loss — dropping the per-entry stat is what keeps the scan
- * off the blocking syscall path.
+ * Directory flag: this pure core derives the flag from `isDirectory()` on the
+ * Dirent and performs no `stat` call itself. Symlinks are resolved by the
+ * callers before reaching this function:
+ * - `filterFileCandidatesAsync` (async path, ~line 290–301) stats each symlink
+ *   entry and marks it as a directory when its target is one, so symlinked
+ *   directories get a trailing `/`.
+ * - `filterFileCandidates` (sync path, ~line 330–339) does the same.
+ * Broken symlinks and symlinks to non-directory targets are left as
+ * non-directories (no trailing `/`). Callers that pass raw unresolved Dirents
+ * will see symlink entries as non-directories.
  */
 export function buildFileCandidates(
   entries: FileDirent[],

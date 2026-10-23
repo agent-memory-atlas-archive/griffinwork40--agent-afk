@@ -460,6 +460,12 @@ describe('filterFileCandidatesAsync', () => {
     expect(vals).toContain('@link-dir/');
   });
 
+  it('broken symlink is kept as a file (no trailing /), promise does NOT reject', async () => {
+    symlinkSync(join(tmpRoot, 'nowhere-target'), join(tmpRoot, 'broken-link'));
+    const vals = (await filterFileCandidatesAsync('broken', tmpRoot)).map((c) => c.value);
+    expect(vals).toEqual(['@broken-link']);
+  });
+
   it('fs error → empty candidates, promise does NOT reject', async () => {
     await expect(filterFileCandidatesAsync('/no/such/dir/x', '/nonexistent-cwd')).resolves.toEqual([]);
   });
@@ -529,6 +535,11 @@ describe('invalidateFileScanCache', () => {
 });
 
 describe('filterFileCandidates — sync path warms the shared cache', () => {
+  it('broken symlink is kept as a file (no trailing /)', () => {
+    symlinkSync(join(tmpRoot, 'nowhere-target'), join(tmpRoot, 'broken-link'));
+    expect(filterFileCandidates('broken', tmpRoot).map((c) => c.value)).toEqual(['@broken-link']);
+  });
+
   it('a sync scan populates the cache so a later async lookup is a hit', async () => {
     filterFileCandidates('al', tmpRoot);
     const spy = vi.spyOn(fsp, 'readdir');
