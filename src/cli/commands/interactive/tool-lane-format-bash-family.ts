@@ -77,6 +77,9 @@ export function verbFamily(plain: string, span: Span): VerbFamily {
   const word = plain.slice(span.start, span.end);
   const rawVerb = word.split('/').pop() ?? word;
   // Strip a trailing ellipsis (width-truncated word) before the floor lookup.
+  // Only U+2026 (…) is stripped — intentionally matches the single Unicode
+  // character the UI inserts on truncation, not ASCII "..." (three separate
+  // code points), which could appear in a real filename or option value.
   const verb = rawVerb.endsWith('\u2026') ? rawVerb.slice(0, -1) : rawVerb;
   if (DANGER_VERBS.has(verb)) return 'danger';
   const raw = plain.slice(span.start, span.segmentEnd).trim();
