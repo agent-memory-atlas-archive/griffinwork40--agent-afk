@@ -15,6 +15,13 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 - warn at load time when AFK.md overlay exceeds 10k tokens (#4292) (aa4181981)
 
 ### Fixed
+- raise macOS CI timeout, fix daemon teardown race, fix tailLedger flake (#4255) (fe358f8f7)
+- risk-classifier dd over-gate test + resize ghost-erase clamp assertions (#4253) (c0ccae422)
+- add cwd field to wait_for command conditions (#4237) (53e2679c9)
+- add handler tests for lost-outcome reconnect exhaustion framing (#3981) (30bd25dec)
+- status-line render nits and shadow-git observe decision filter (lane C) (#4210) (3bbd2c609)
+- fix release() test, stale comment, and inline invariant comment (#4243) (42c1fa9dc)
+- enforce maxBudgetUsd across REPL /clear cycles (cause 4) (#4280) (1f696573b)
 - deflake tailLedger via onCaughtUp synchronization barrier (#4332) (ce9a5a0d8)
 - guard disk roundtrip assertion with toBeDefined check (dbbeaf0c6)
 - handle Anthropic 403 with opportunistic token refresh (#4316) (870bf07f4)
