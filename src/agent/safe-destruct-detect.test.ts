@@ -346,6 +346,14 @@ describe('createSafeDestructDetect (two-tier hook)', () => {
       expect(d.decision).not.toBe('block');
     });
 
+    // False-positive boundary: `git stash --flag list` is blocked because the
+    // lookahead checks only the first word after `stash` (which is `--flag`,
+    // not `list`). This accepted false-positive is documented in the pattern.
+    it('blocks git stash --flag show (accepted false-positive boundary)', () => {
+      const ids = detectDestructiveCommands('git stash --flag show');
+      expect(ids).toContain('git-stash-mutating');
+    });
+
     // OBSERVE (not block) when not in a worktree — no sessionCwd
     it('does NOT block git stash pop when no sessionCwd is set (root-session use)', () => {
       const h = createSafeDestructDetect();
