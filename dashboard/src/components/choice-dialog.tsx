@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
+import { requestComposerFocus } from '@/lib/composer-focus';
 import type { ChoiceRequest } from '@/hooks/use-choice-progress';
 import { Search } from 'lucide-react';
 
@@ -205,13 +206,10 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
     filterRef.current?.focus();
     return () => {
       mounted.current = false;
-      // Defer focus so React's commit (removing the dialog from DOM) runs first.
-      // Prefer the composer textarea (data-testid) so keyboard users land there.
-      const textarea =
-        document.querySelector<HTMLElement>('[data-testid="composer-textarea"]') ??
-        document.querySelector<HTMLElement>('textarea');
-      const target = textarea ?? previousFocusRef.current;
-      setTimeout(() => { target?.focus(); }, 0);
+      // The composer is disabled while the /model command is in flight, so a
+      // direct focus() here races its re-enable. Ask the composer to focus
+      // itself once it is enabled again (requestComposerFocus).
+      if (!requestComposerFocus()) previousFocusRef.current?.focus();
     };
   }, []);
 
@@ -235,12 +233,8 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
       if (!busy) {
         // Dismiss UI immediately so the session becomes interactive again.
         // Then POST null to the server in the background to unblock the coroutine.
-        const textarea =
-          document.querySelector<HTMLElement>('[data-testid="composer-textarea"]') ??
-          document.querySelector<HTMLElement>('textarea');
-        const target = textarea ?? previousFocusRef.current;
         onAnswered();
-        setTimeout(() => { target?.focus(); }, 0);
+        if (!requestComposerFocus()) previousFocusRef.current?.focus();
         // Fire-and-forget: let the server know the choice was cancelled.
         void apiFetch(
           `/api/sessions/${encodeURIComponent(sessionId)}/choices/${encodeURIComponent(request.corrId)}`,
@@ -331,11 +325,8 @@ function ModelPickerDialog({ sessionId, request, onAnswered, groups, currentMode
           <button type="button" disabled={busy}
             className="rounded border px-3 py-2 text-sm hover:bg-accent"
             onClick={() => {
-              const textarea =
-                document.querySelector<HTMLElement>('[data-testid="composer-textarea"]') ??
-                document.querySelector<HTMLElement>('textarea');
               void answer(null);
-              setTimeout(() => { (textarea ?? previousFocusRef.current)?.focus(); }, 0);
+              requestComposerFocus();
             }}>Cancel</button>
           <button type="button" disabled={busy || !selectedAlias}
             className="rounded bg-brand px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"

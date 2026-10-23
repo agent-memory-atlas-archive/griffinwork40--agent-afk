@@ -22,6 +22,7 @@ import type { UseQueueResult } from '@/hooks/use-queue';
 import { useCommandControl } from '@/hooks/use-command-control';
 import { useComposerHistory } from '@/hooks/use-composer-history';
 import { useComposerDraft } from '@/hooks/use-composer-draft';
+import { useComposerFocusRequest } from '@/lib/composer-focus';
 
 interface ComposerProps {
   sessionId: string;
@@ -158,6 +159,8 @@ export function Composer({
   }, [text, draft]);
 
   const disabled = sessionMode === 'readonly';
+  // A closed modal (e.g. the /model picker) hands focus back once enabled.
+  useComposerFocusRequest(textareaRef, !disabled && !submitting);
   const slashQuery = getSlashQuery(text);
   const acVisible = slashQuery !== null && (commands?.length ?? 0) > 0;
   const acFiltered = acVisible
