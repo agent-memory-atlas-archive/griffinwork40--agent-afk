@@ -273,7 +273,14 @@ function Dashboard() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      <CommandPalette onNavigate={handleNavigate} />
+      <CommandPalette
+        onNavigate={handleNavigate}
+        sessions={sessions}
+        onSelectSession={handleSelectSession}
+        {...(selectedSession?.mode === 'live' && selectedSessionId
+          ? { onInsertCommand: (text: string) => { setActiveNav('sessions'); setPrefill({ text, nonce: Date.now(), sessionId: selectedSessionId }); } }
+          : {})}
+      />
       <KeyboardShortcuts onNavigate={handleNavigate} />
 
       {/* Desktop sidebar */}

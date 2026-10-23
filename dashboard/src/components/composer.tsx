@@ -57,7 +57,7 @@ export function clearCommandsCache(): void {
   commandsCache = null;
 }
 
-async function fetchCommands(): Promise<SlashCommand[]> {
+export async function fetchCommands(): Promise<SlashCommand[]> {
   if (commandsCache) return commandsCache;
   const data = await apiFetch<{ commands: SlashCommand[] }>('/api/commands');
   commandsCache = data.commands;
