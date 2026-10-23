@@ -307,7 +307,8 @@ async function dispatch(
   }
 
   if (path === '/api/sessions' && method === 'GET') {
-    await handleListSessions(ctx, res, new Map(owner?.list?.().map((session) => [session.id, session.model])));
+    const ownedList = owner?.list?.() ?? [];
+    await handleListSessions(ctx, res, new Map(ownedList.map((s) => [s.id, s.model])), new Map(ownedList.map((s) => [s.id, s.cwd])));
     return;
   }
 

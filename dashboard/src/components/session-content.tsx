@@ -94,6 +94,7 @@ export function SessionContent({
           ) : selectedSession.mode === 'live' ? (
             <div className="mx-auto w-full max-w-xl px-5 py-10 text-center">
               <h2 className="text-2xl font-semibold tracking-tight text-foreground">What can we work on?</h2>
+              <WorkspaceChips cwd={selectedSession.cwd ?? serverCwd} model={currentModel} />
               <p className="mt-3 text-sm leading-relaxed">Ask a question, explore your project, or turn an idea into working code.</p>
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 {[
@@ -121,7 +122,7 @@ export function SessionContent({
   // folder chip shows immediately on the welcome screen without waiting for
   // the ledger meta record to propagate through listWebSessions.
   const anyCwd = serverCwd ?? sessions.find((s) => s.cwd)?.cwd;
-  const folderName = anyCwd ? anyCwd.replace(/\/+$/, '').split('/').pop() ?? anyCwd : undefined;
+  const folderName = folderNameOf(anyCwd);
 
   return (
     <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -208,5 +209,24 @@ function TranscriptWithCommands({
         ),
       )}
     </div>
+  );
+}
+
+/** Repo/folder name of a cwd (last path segment), or undefined. */
+function folderNameOf(cwd: string | undefined): string | undefined {
+  if (!cwd) return undefined;
+  const trimmed = cwd.replace(/[/\\]+$/, '');
+  return trimmed.split(/[/\\]/).pop() || cwd;
+}
+
+/** Folder (repo name) + model chips for an empty session's welcome screen. */
+export function WorkspaceChips({ cwd, model }: { cwd?: string; model?: string }) {
+  const folder = folderNameOf(cwd);
+  if (!folder && !model) return null;
+  return (
+    <p className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground" data-testid="workspace-chips">
+      {folder && <span className="rounded bg-secondary px-1.5 py-0.5 font-mono" title={cwd} data-testid="folder-chip">{folder}</span>}
+      {model && <span className="rounded bg-secondary px-1.5 py-0.5 font-mono" data-testid="model-chip">{model}</span>}
+    </p>
   );
 }

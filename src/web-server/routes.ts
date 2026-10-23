@@ -125,8 +125,23 @@ function requireOwned(ctx: RouteContext, res: ServerResponse, id: string): boole
   return false;
 }
 
-export async function handleListSessions(ctx: RouteContext, res: ServerResponse, ownedModels: ReadonlyMap<string, string> = new Map()): Promise<void> {
-  const sessions = (await listWebSessions(ctx.owned)).map((session) => ({ ...session, ...(ownedModels.has(session.id) ? { model: ownedModels.get(session.id) } : {}) }));
+/**
+ * Contract: owned sessions are enriched from the owner's authoritative record.
+ * `model` always; `cwd` only when the ledger has not supplied one yet (a fresh
+ * session writes no ledger meta until its first turn, so the welcome screen
+ * would otherwise have no folder to show).
+ */
+export async function handleListSessions(
+  ctx: RouteContext,
+  res: ServerResponse,
+  ownedModels: ReadonlyMap<string, string> = new Map(),
+  ownedCwds: ReadonlyMap<string, string> = new Map(),
+): Promise<void> {
+  const sessions = (await listWebSessions(ctx.owned)).map((session) => ({
+    ...session,
+    ...(ownedModels.has(session.id) ? { model: ownedModels.get(session.id) } : {}),
+    ...(session.cwd === undefined && ownedCwds.has(session.id) ? { cwd: ownedCwds.get(session.id) } : {}),
+  }));
   sendJson(res, 200, { sessions });
 }
 
