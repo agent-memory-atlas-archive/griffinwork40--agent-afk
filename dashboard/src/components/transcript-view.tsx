@@ -142,10 +142,16 @@ function renderTextItem(item: TranscriptItem, isStreamingOrOpts: boolean | Rende
   }
 }
 
-/** True when a streaming draft has text the user can actually see. */
+/**
+ * True when a draft has text the user can actually see. A line holding only
+ * markdown syntax ("1.", "-", "#", ">") renders as an empty list item /
+ * heading, so it does not count yet.
+ */
 function hasVisibleText(item: TranscriptItem): boolean {
   if (item.kind !== 'assistant' && item.kind !== 'thinking') return false;
-  return item.text.slice(0, fenceSafeLength(item.text)).trim().length > 0;
+  return item.text.slice(0, fenceSafeLength(item.text))
+    .replace(/^[ \t]*(?:[-*+]|\d+[.)]|#{1,6}|>)[ \t]*$/gm, '')
+    .trim().length > 0;
 }
 
 /**
@@ -158,20 +164,26 @@ function hasVisibleText(item: TranscriptItem): boolean {
 export function workingState(items: readonly TranscriptItem[], turnActive: boolean): { showWorking: boolean; workingPhase: WorkingPhase; runningTool?: string } {
   const lastItem = items[items.length - 1];
   let runningTool: string | undefined;
+  let lastUser = -1;
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i]!;
-    if (it.kind === 'user') break;
-    if (it.kind === 'tool' && it.status === 'running') { runningTool = it.name; break; }
+    if (it.kind === 'user') { lastUser = i; break; }
+    if (it.kind === 'tool' && it.status === 'running' && runningTool === undefined) runningTool = it.name;
   }
   // A SEALED draft with visible text also counts: the final segment seals
   // (live_seal / live_end) ~150 ms before the durable `done` clears
   // turnActive, and counting only `streaming` flashed "Thinking 0s" under
   // every finished answer. A running tool still wins: the pre-tool text
   // seals when the tool starts and "Running <tool>" must stay visible.
-  const hasDraft = items.some((i) => {
+  // Sealed drafts count only AFTER the last user item: a previous turn's
+  // sealed draft (not yet claimed/settled) must never hide this turn's
+  // indicator. Drafts render after every durable item, so a draft before the
+  // last user item cannot exist; the index guard covers both orders.
+  const hasDraft = items.some((i, idx) => {
     const live = liveStateOf(i);
     if (!hasVisibleText(i)) return false;
-    return live === 'streaming' || (live === 'sealed' && !runningTool);
+    if (live === 'streaming') return true;
+    return live === 'sealed' && idx > lastUser && !runningTool;
   });
   const lastWasTool = lastItem?.kind === 'tool' || lastItem?.kind === 'notice';
   const workingPhase: WorkingPhase = runningTool ? 'running' : lastWasTool ? 'writing' : 'thinking';

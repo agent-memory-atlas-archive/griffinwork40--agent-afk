@@ -63,6 +63,23 @@ describe('workingState (indicator visibility + phase)', () => {
     expect(workingState([user, { ...tool, status: 'ok' as const }, next], true)).toMatchObject({ showWorking: true });
   });
 
+  it("a previous turn's sealed draft must not hide the next turn's indicator", async () => {
+    const { workingState } = await import('./transcript-view');
+    const u1 = { kind: 'user' as const, id: 'u1', text: 'first' };
+    const prevSealed = { kind: 'assistant' as const, id: 'd1', text: 'Old answer', live: 'sealed' };
+    const u2 = { kind: 'user' as const, id: 'u2', text: 'second' };
+    expect(workingState([u1, prevSealed, u2], true)).toMatchObject({ showWorking: true, workingPhase: 'thinking' });
+    // And in the overlay order (drafts after every durable item) the current turn's sealed text counts.
+    expect(workingState([u1, u2, { ...prevSealed, id: 'd2' }], true).showWorking).toBe(false);
+  });
+
+  it('a bare markdown marker ("1.") is not visible text yet', async () => {
+    const { workingState } = await import('./transcript-view');
+    const user = { kind: 'user' as const, id: 'u', text: 'q' };
+    expect(workingState([user, { kind: 'assistant' as const, id: 'd', text: '1.', live: 'streaming' }], true).showWorking).toBe(true);
+    expect(workingState([user, { kind: 'assistant' as const, id: 'd', text: '1. One', live: 'streaming' }], true).showWorking).toBe(false);
+  });
+
   it('reports Running <tool> while the newest tool has no result, then Writing', async () => {
     const { workingState } = await import('./transcript-view');
     const user = { kind: 'user' as const, id: 'u', text: 'q' };
