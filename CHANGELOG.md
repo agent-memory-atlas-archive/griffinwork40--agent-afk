@@ -11,6 +11,33 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Added
+- add `subagent` routing slot for provider-independent subagent inference (#4324) (872115b62)
+
+### Fixed
+- SHA-pin all GitHub Actions, bump vite, cap daemon body size (2e5227d63)
+- add seenToolUseIds to child-activity-select test fixtures (f47fd70b0)
+- pin softprops/action-gh-release to SHA in publish workflow (4268ce8f0)
+- annotate actionName as string to satisfy TS2367 lint:tests ratchet (4ac3863bb)
+- fix LSP test timing and document DEFAULT_LSP_CMD type (fff9e2586)
+- fix bash lexer comments, guards, and test coverage (346b6cd5b)
+- fix blockReason backticks and add stash false-positive boundary test (4d1b22b94)
+- fix 403 hint and update transient-retry invariant comment (63540874c)
+- fix dangling JSDoc on completeWithWireWithStop (eb3d6c15a)
+- stamp renderedSubagentIds on error path to prevent duplicate Channel B lines (2bbf6d6f4)
+- stall annotation never re-creates flushed lane entries; label parents awaiting children (ea15ee44d)
+- suppress hook completion line for subagents the tool lane already rendered (5bd27e2e0)
+- do not stack spine-only separator rows between nested agent commits (6e7c92c9a)
+- count each subagent tool call once in Done summary (aa6f9bf26)
+- address advisory findings from #4292 review (78c03e423)
+- add subagent slot ENV_KEYS and dispatch integration test (46669f5fc)
+- fix vacuous tests and improve idempotency-header test coverage (8c5f3dc92)
+- add vote-sign guard and unit tests for collapseSingleCountVotes (9acf9c227)
+- bump ip-address 10.7.3 → 10.7.4 + dismiss 7 stale Dependabot alerts (#4336) (dc4c83a50)
+
+### Changed
+- replace inlined slot constants in hints.ts with lazy getters (7963a558d)
+
 ## [5.333.0] - 2026-10-23
 
 ### Added
