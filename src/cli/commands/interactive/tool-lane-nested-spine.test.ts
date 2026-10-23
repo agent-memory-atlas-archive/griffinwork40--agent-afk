@@ -183,6 +183,81 @@ describe('multi-line outcome spine continuity (hiddenLineCount + tailPreview)', 
 });
 
 // ---------------------------------------------------------------------------
+// D: no stacked spine-only separator rows between consecutive nested commits
+// ---------------------------------------------------------------------------
+
+describe('flushSource — no consecutive separator-only rows for nested agents (defect D)', () => {
+  /**
+   * Defect D: flushSource appends scrollbackSeparator(depth) after every
+   * per-agent commit. At depth > 0 that is a dim spine string (│  per
+   * ancestor). When several nested agents complete without an agentResultSummary
+   * their flushSource returns ONLY the separator (no block), so N consecutive
+   * such commits produce N consecutive spine-only rows in the scrollback.
+   *
+   * Trigger conditions:
+   *  - Leaf agents have no agentResultSummary set (blockLines=[])
+   *  - Their parent agents have headerEmitted=true and no remaining children
+   *    → flushSource(parent) returns just [separator]
+   *  - Multiple such parents complete in sequence → stacking
+   *
+   * Contract after fix: no two consecutive elements in the combined output of
+   * multiple flushSource calls may both be separator-only rows (every non-empty
+   * char is │ or space, after ANSI-strip).
+   *
+   * Topology used (3-level, 3 mid-agents each with a leaf flushed first):
+   *   ◉ skill (live)
+   *   │ ├─ Agent(orch)
+   *   │ │  ├─ Agent(mid1) → [Agent(mid1_leaf)]   ← leaf flushed first
+   *   │ │  ├─ Agent(mid2) → [Agent(mid2_leaf)]   ← leaf flushed first
+   *   │ │  ╰─ Agent(mid3) → [Agent(mid3_leaf)]   ← leaf flushed first
+   *   then mid1/mid2/mid3 flushed → each returns only ["│  │"] → stacking
+   */
+  function isSpineOnlyRow(line: string): boolean {
+    const plain = stripAnsi(line).trimEnd();
+    // A separator-only row consists solely of │ and spaces (no other chars).
+    return plain.length > 0 && /^[│ ]+$/.test(plain);
+  }
+
+  it('nested agents with no summary flushed after children produce no back-to-back spine-only rows', () => {
+    const lane = new ToolLane();
+    lane.addStartWithAgentContext('skill-1', 'skill', '(root)', undefined);
+    lane.addStartWithAgentContext('orch', 'Agent', '(orch)', 'skill-1');
+
+    for (const mid of ['mid1', 'mid2', 'mid3']) {
+      lane.addStartWithAgentContext(mid, 'Agent', `(${mid})`, 'orch');
+      const leaf = `${mid}_leaf`;
+      lane.addStartWithAgentContext(leaf, 'Agent', `(${leaf})`, mid);
+      lane.addResult(leaf, makeResult('done'));
+      // No setAgentResultSummary — this is the trigger condition
+      lane.addResult(mid, makeResult('done'));
+      // No setAgentResultSummary for mid either
+    }
+
+    // Flush leaves first (triggers headerEmitted=true on ancestors)
+    // then flush parents — each parent returns only [separator]
+    const order = ['mid1_leaf', 'mid2_leaf', 'mid3_leaf', 'mid1', 'mid2', 'mid3'];
+    const combined: string[] = [];
+    for (const id of order) {
+      combined.push(...lane.flushSource(id));
+    }
+
+    // Check no two consecutive elements are both spine-only rows.
+    for (let i = 0; i < combined.length - 1; i++) {
+      const curr = combined[i]!;
+      const next = combined[i + 1]!;
+      if (isSpineOnlyRow(curr) && isSpineOnlyRow(next)) {
+        throw new Error(
+          `Consecutive spine-only rows at indices ${i} and ${i + 1}:\n` +
+          `  [${i}] ${JSON.stringify(curr)}\n` +
+          `  [${i + 1}] ${JSON.stringify(next)}\n` +
+          `Full output:\n${combined.map((l, idx) => `  [${idx}] ${JSON.stringify(l)}`).join('\n')}`,
+        );
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Depth-graded spine dimming — spineChalk() / colorizeIndent() coverage
 // ---------------------------------------------------------------------------
 

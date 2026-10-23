@@ -139,8 +139,17 @@ export function flushSource(
   host.order = host.order.filter((id) => !collected.has(id));
 
   const blockLines = childBlock === '' ? [] : [childBlock];
-  const separator = scrollbackSeparator(ancestorIsLast.length);
-  return [...ancestorLines, ...blockLines, separator];
+  // Separator invariant: only emit when there is a block to separate.
+  // At depth 0 the separator is '' (a blank breathing-row that commitSubagentBlock
+  // peels off and commits via a separate commitAbove('')). At depth > 0 it is a
+  // dim spine string. When blockLines is empty (no content was rendered for this
+  // agent — e.g. headerEmitted=true + no children remaining + no summary), the
+  // commit contributes nothing visible, so appending a separator would stack
+  // consecutive spine-only rows when several such agents complete in sequence
+  // (defect D). Suppressing it is safe: the separator's sole purpose is visual
+  // spacing AFTER a rendered block; with no block there is nothing to space from.
+  const separatorRows = blockLines.length > 0 ? [scrollbackSeparator(ancestorIsLast.length)] : [];
+  return [...ancestorLines, ...blockLines, ...separatorRows];
 }
 
 // ---------------------------------------------------------------------------
