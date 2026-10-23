@@ -36,7 +36,13 @@ export function useTabNotification({
 }: UseTabNotificationOptions): void {
   const prevLiveTurnsRef = useRef(liveTurns);
   const hasBadgeRef = useRef(false);
-  const originalTitleRef = useRef(document.title);
+  // Strip any stale badge prefix so a remount after unmount-with-badge doesn't
+  // capture the already-badged title and leak the prefix permanently (B-4).
+  const originalTitleRef = useRef(
+    document.title.startsWith(BADGE_PREFIX)
+      ? document.title.slice(BADGE_PREFIX.length)
+      : document.title
+  );
 
   // Clear badge on focus.
   useEffect(() => {

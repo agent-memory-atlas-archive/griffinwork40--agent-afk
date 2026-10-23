@@ -70,63 +70,66 @@ export async function handleRewind(
     return;
   }
 
-  if (!ctx.executeSessionControl || !ctx.getSession) {
-    sendJson(res, 501, {
-      error: 'rewind_not_supported',
-      message: 'rewind requires a full session owner (not attach-only mode)',
-    });
-    return;
-  }
-
-  const record = body as Record<string, unknown> | null | undefined;
-  const mode = typeof record?.['mode'] === 'string' ? record['mode'] : undefined;
-  if (mode !== 'retry' && mode !== 'edit') {
-    sendJson(res, 400, {
-      error: 'bad_request',
-      message: 'body must be { mode: "retry" } or { mode: "edit", text: string }',
-    });
-    return;
-  }
-  // Edit requires text. Retry MAY carry the prompt as the browser displays it
-  // (the ledger's recorded `input`, i.e. what the user typed); the provider's
-  // reloaded history can lead with drained framework context that the strip
-  // heuristic does not always recognise, e.g. a bare `[placeholder-prevent] …`.
-  const bodyText = typeof record?.['text'] === 'string' ? record['text'].trim() : '';
-  const editText = mode === 'edit' ? bodyText : undefined;
-  if (mode === 'edit' && !editText) {
-    sendJson(res, 400, {
-      error: 'bad_request',
-      message: 'edit mode requires a non-empty text field',
-    });
-    return;
-  }
-
-  const rewindCmd = coreCommands.find((c) => c.name === '/rewind');
-  if (!rewindCmd) {
-    sendJson(res, 501, { error: 'rewind_not_supported', message: '/rewind command not found' });
-    return;
-  }
-
-  const session = ctx.getSession(sessionId);
-  if (!session) {
-    sendJson(res, 404, { error: 'session_not_found', message: `no live session ${sessionId}` });
-    return;
-  }
-
-  const stats = getStats(sessionId);
-  if (!stats) {
-    sendJson(res, 404, { error: 'session_not_found', message: `no stats for ${sessionId}` });
-    return;
-  }
-
-  const writer = new BufferingWriter();
-  // Invariant: choose '0' always selects the most-recent user turn (newest-first list).
-  const ctx2 = createWebSlashContext({ current: session }, stats, writer, stats.cwd ?? process.cwd());
-  ctx2.choose = async () => '0';
-  const writerText = () => stripVTControlCharacters(writer.getChunks().join('')).trim();
-
+  // Reserve the turn slot immediately so concurrent requests cannot slip
+  // through the TOCTOU gap between isBusy returning false and the slot being
+  // claimed. All remaining validation and execution run inside the try block.
   ctx.reserveTurn?.(sessionId);
   try {
+    if (!ctx.executeSessionControl || !ctx.getSession) {
+      sendJson(res, 501, {
+        error: 'rewind_not_supported',
+        message: 'rewind requires a full session owner (not attach-only mode)',
+      });
+      return;
+    }
+
+    const record = body as Record<string, unknown> | null | undefined;
+    const mode = typeof record?.['mode'] === 'string' ? record['mode'] : undefined;
+    if (mode !== 'retry' && mode !== 'edit') {
+      sendJson(res, 400, {
+        error: 'bad_request',
+        message: 'body must be { mode: "retry" } or { mode: "edit", text: string }',
+      });
+      return;
+    }
+    // Edit requires text. Retry MAY carry the prompt as the browser displays it
+    // (the ledger's recorded `input`, i.e. what the user typed); the provider's
+    // reloaded history can lead with drained framework context that the strip
+    // heuristic does not always recognise, e.g. a bare `[placeholder-prevent] …`.
+    const bodyText = typeof record?.['text'] === 'string' ? record['text'].trim() : '';
+    const editText = mode === 'edit' ? bodyText : undefined;
+    if (mode === 'edit' && !editText) {
+      sendJson(res, 400, {
+        error: 'bad_request',
+        message: 'edit mode requires a non-empty text field',
+      });
+      return;
+    }
+
+    const rewindCmd = coreCommands.find((c) => c.name === '/rewind');
+    if (!rewindCmd) {
+      sendJson(res, 501, { error: 'rewind_not_supported', message: '/rewind command not found' });
+      return;
+    }
+
+    const session = ctx.getSession(sessionId);
+    if (!session) {
+      sendJson(res, 404, { error: 'session_not_found', message: `no live session ${sessionId}` });
+      return;
+    }
+
+    const stats = getStats(sessionId);
+    if (!stats) {
+      sendJson(res, 404, { error: 'session_not_found', message: `no stats for ${sessionId}` });
+      return;
+    }
+
+    const writer = new BufferingWriter();
+    // Invariant: choose '0' always selects the most-recent user turn (newest-first list).
+    const ctx2 = createWebSlashContext({ current: session }, stats, writer, stats.cwd ?? process.cwd());
+    ctx2.choose = async () => '0';
+    const writerText = () => stripVTControlCharacters(writer.getChunks().join('')).trim();
+
     const result = await ctx.executeSessionControl(sessionId, rewindCmd, ctx2, 'conversation');
 
     // Only a successful conversation rewind returns a prefill result; every

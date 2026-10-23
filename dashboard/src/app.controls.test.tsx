@@ -21,7 +21,7 @@ vi.mock('./hooks/use-pending-approvals', () => ({
   usePendingApprovals: () => ({ approvals: [], pendingSessionIds: new Set() }),
 }));
 vi.mock('./hooks/use-scroll-pin', () => ({
-  useScrollPin: () => ({ containerRef: { current: null }, scrollToBottom: vi.fn(), isPinned: true }),
+  useScrollPin: () => ({ containerRef: { current: null }, scrollToBottom: vi.fn(), isPinned: true, showScrollButton: false, hasNewContent: false, notifyNewContent: vi.fn() }),
 }));
 
 let streams: ReadableStreamDefaultController<Uint8Array>[];

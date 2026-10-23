@@ -152,7 +152,12 @@ export function useLiveDrafts(): UseLiveDraftsResult {
         const turn = turnOf(event);
         if (liveTurnRef.current?.turn === turn) liveTurnRef.current.ended = true;
         // Older turns' claims can never be hit again (frames are turn-ordered).
-        for (const k of claimedRef.current) if (Number(k.split(':')[0]) < turn) claimedRef.current.delete(k);
+        // Guard against malformed keys by using Number.isFinite instead of a
+        // raw Number() cast (NaN < turn is always false, leaking the key).
+        for (const k of claimedRef.current) {
+          const t = Number(k.split(':')[0]);
+          if (Number.isFinite(t) && t < turn) claimedRef.current.delete(k);
+        }
         for (const [k, d] of map) {
           if (d.turn > turn) continue; // a next turn's draft is not ended by this frame
           if (event.reason === 'aborted') {
@@ -188,12 +193,15 @@ export function useLiveDrafts(): UseLiveDraftsResult {
   }, [publishNow]);
 
   const settle = useCallback(() => {
-    // Only drafts of turns whose live_end arrived: a next turn's sealed
-    // (pre-tool) draft must survive the previous turn's late `done`.
+    // Drop sealed drafts for the current turn and all earlier turns, regardless
+    // of whether live_end arrived. A durable `done`/`stopped` record means the
+    // turn is over even if the connection dropped before live_end was received.
+    // Future turn drafts (d.turn > cur.turn) are protected: they are a next
+    // turn's pre-tool sealed draft and must survive the previous turn's late `done`.
     const cur = liveTurnRef.current;
     let changed = false;
     for (const [k, d] of draftsRef.current) {
-      const ended = !cur || d.turn < cur.turn || cur.ended;
+      const ended = !cur || d.turn <= cur.turn;
       if (d.state === 'sealed' && ended) { draftsRef.current.delete(k); changed = true; }
     }
     if (changed) publishNow();

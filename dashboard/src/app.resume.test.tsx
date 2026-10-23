@@ -43,6 +43,7 @@ vi.mock('./hooks/use-scroll-pin', () => ({
     scrollToBottom: vi.fn(),
     isPinned: true,
     showScrollButton: false,
+    hasNewContent: false,
     notifyNewContent: vi.fn(),
   }),
 }));

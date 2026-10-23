@@ -86,6 +86,12 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
   }, [sessionId]);
 
   // Reset transcript state before feeding events from the replacement stream.
+  // Drafts are cleared here only for a session/revision switch (generation === 0):
+  // a ledger reset (generation > 0) already delivered `live_reset` in-order from
+  // the SSE hook, and the server writes the rebuilt snapshot right behind that
+  // frame; calling clearAll after render would erase the just-delivered snapshot.
+  // Merging into one effect eliminates the race where Effect 2 (clearAll) fired
+  // after the new SSE stream had already delivered a live_snapshot into drafts.
   useEffect(() => {
     resetIdCounter();
     processedCountRef.current = 0;
@@ -95,13 +101,8 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
     setTotals(EMPTY_TOTALS);
     setTurnActive(false);
     setLiveTurns(0);
-  }, [sessionId, revision, generation]);
-
-  // Drafts are dropped only for a NEW stream (session/revision). A ledger
-  // reset (generation) already delivered `live_reset` in-order from the SSE
-  // hook, and the server writes the rebuilt snapshot right behind the reset
-  // frame; clearing here (after render) would erase that snapshot.
-  useEffect(() => { live.clearAll(); }, [sessionId, revision]); // clearAll is stable
+    if (generation === 0) live.clearAll();
+  }, [sessionId, revision, generation, live]); // live is stable; clearAll is stable
 
   // Feed new SSE events into the transcript incrementally. We track how many
   // events we have processed via a ref to avoid depending on items/totals as
