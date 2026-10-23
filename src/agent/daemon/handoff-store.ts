@@ -54,12 +54,6 @@ export interface HandoffRoute {
  * won === true  — this caller claimed the record and wrote the answer.
  * won === false — another caller already claimed it (first-writer-wins CAS).
  */
-/** Prefix of the error message thrown by {@link updateHandoffAnswer} when the
- *  record no longer exists.  Consumers (e.g. the web-server race handler) must
- *  match against this constant rather than a hand-rolled string literal so that
- *  a rename here is caught at compile time instead of silently at runtime. */
-export const HANDOFF_STORE_NO_RECORD_PREFIX = 'handoff-store: no record found' as const;
-
 export interface UpdateHandoffResult {
   won: boolean;
 }
@@ -393,6 +387,12 @@ export interface UpdateHandoffAnswerOpts {
  * @throws If no record exists for the taskId.
  * @returns UpdateHandoffResult — won: true if this caller claimed the record.
  */
+/** Prefix of the error message thrown by {@link updateHandoffAnswer} when the
+ *  record no longer exists.  Consumers (e.g. the web-server race handler) must
+ *  match against this constant rather than a hand-rolled string literal so that
+ *  a rename here is caught at compile time instead of silently at runtime. */
+export const HANDOFF_STORE_NO_RECORD_PREFIX = 'handoff-store: no record found' as const;
+
 export async function updateHandoffAnswer(
   taskId: string,
   answer: unknown,

@@ -461,10 +461,16 @@ describe('createBashRestrictionHook — quoted heredoc data (#3850)', () => {
     expect(hook(ctx(command)).decision).toBe('block');
   });
 
-  it('blocks bash -c credential-theft (quote style must not affect fail-closed boundary)', () => {
-    // This is a direct credential-read via bash -c, not a git-commit heredoc.
-    // It belongs outside the git-commit suite to make its distinct threat model clear.
+  it('blocks bash -c credential-theft (single-quoted variant)', () => {
+    // Direct credential-read via bash -c; not a git-commit heredoc.
+    // Kept outside the git-commit suite to make its distinct threat model clear.
     const command = `bash -c 'cat ${mention}/Google/Chrome/Default/Login\\ Data' <<'EOF'\nignored body\nEOF`;
+    expect(hook(ctx(command)).decision).toBe('block');
+  });
+
+  it('blocks bash -c credential-theft (double-quoted variant)', () => {
+    // Quote style must not affect fail-closed boundary.
+    const command = `bash -c "cat ${mention}/Google/Chrome/Default/Login\\ Data" <<'EOF'\nignored body\nEOF`;
     expect(hook(ctx(command)).decision).toBe('block');
   });
 });
