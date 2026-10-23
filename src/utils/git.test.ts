@@ -6,9 +6,22 @@
  * ESM constraint on node:child_process built-ins.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { resolveRepoRoot, resolveRepoRootSync, clearRepoRootSyncCache } from './git.js';
+import { describe, it, expect, beforeEach, vi, type MockInstance } from 'vitest';
 import type { ExecFileSyncForGit } from './git.js';
+
+// vi.mock hoists above imports, so git.ts receives the mocked execFileSync.
+// The mock defaults to the real implementation; individual tests override via
+// mockExecFileSync (the typed reference returned by vi.mocked()).
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
+});
+
+// Must import AFTER vi.mock so the module receives the mocked binding.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+const { resolveRepoRoot, resolveRepoRootSync, clearRepoRootSyncCache } = await import('./git.js');
+const { execFileSync: _mockRef } = await import('node:child_process');
+const mockExecFileSync = _mockRef as unknown as MockInstance;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -176,57 +189,64 @@ describe('resolveRepoRootSync', () => {
 describe('resolveRepoRootSync memoization', () => {
   beforeEach(() => {
     clearRepoRootSyncCache();
+    mockExecFileSync.mockReset();
   });
 
-  it('memoizes: second call with same cwd does not invoke execFileSync again', () => {
+  it('cache hit: second call with same cwd skips execFileSync', () => {
+    // vi.mock replaces the real execFileSync at the module level, so
+    // production code (no custom executor) exercises the cache path.
+    mockExecFileSync.mockReturnValue('/home/user/myrepo\n');
+
+    resolveRepoRootSync({ cwd: '/home/user/myrepo' });
+    resolveRepoRootSync({ cwd: '/home/user/myrepo' });
+    expect(mockExecFileSync).toHaveBeenCalledTimes(1); // second call hits cache
+  });
+
+  it('cache miss after clearRepoRootSyncCache', () => {
+    mockExecFileSync.mockReturnValue('/home/user/myrepo\n');
+
+    resolveRepoRootSync({ cwd: '/home/user/myrepo' });
+    clearRepoRootSyncCache();
+    resolveRepoRootSync({ cwd: '/home/user/myrepo' });
+    expect(mockExecFileSync).toHaveBeenCalledTimes(2); // cache cleared → re-executes
+  });
+
+  it('LRU eviction: 11th distinct cwd evicts the first entry', () => {
+    mockExecFileSync.mockImplementation((_file: string, _args: string[], opts: Record<string, unknown>) => {
+      return `${(opts as { cwd: string }).cwd}\n`;
+    });
+
+    // Fill cache with 10 entries (cap), then add an 11th.
+    for (let i = 0; i < 11; i++) {
+      resolveRepoRootSync({ cwd: `/home/user/repo${i}` });
+    }
+    expect(mockExecFileSync).toHaveBeenCalledTimes(11); // all 11 are cold misses
+
+    // Re-request the first entry — it was evicted, so execFileSync fires again.
+    // This insert also evicts repo1 (now the oldest) to stay at cap.
+    resolveRepoRootSync({ cwd: '/home/user/repo0' });
+    expect(mockExecFileSync).toHaveBeenCalledTimes(12);
+
+    // repo1 was evicted when repo0 was re-inserted, so this is a cache miss.
+    // Reinserting repo1 evicts repo2 (now the oldest).
+    resolveRepoRootSync({ cwd: '/home/user/repo1' });
+    expect(mockExecFileSync).toHaveBeenCalledTimes(13);
+
+    // repo3 is still cached — verify a surviving entry hits the cache.
+    resolveRepoRootSync({ cwd: '/home/user/repo3' });
+    expect(mockExecFileSync).toHaveBeenCalledTimes(13); // cache hit, no new call
+  });
+
+  it('custom execFileSync bypasses cache (test-isolation contract)', () => {
     let callCount = 0;
     const exec: ExecFileSyncForGit = (_file, _args, _opts) => {
       callCount += 1;
       return '/home/user/myrepo\n';
     };
 
-    // First call — execFileSync is not invoked because we supply a custom
-    // executor which bypasses the cache (test-isolation contract).
-    // To test memoization we must use the module-scope cache path (no
-    // execFileSync option). We indirectly test that by calling without a
-    // custom executor twice and confirming the result is stable; the real
-    // cache-hit path is validated via clearRepoRootSyncCache below.
-    //
-    // Direct memoization test: call twice with a custom executor — cache is
-    // bypassed each time (by design), so callCount increments twice.
     resolveRepoRootSync({ cwd: '/home/user/myrepo', execFileSync: exec });
     resolveRepoRootSync({ cwd: '/home/user/myrepo', execFileSync: exec });
-    expect(callCount).toBe(2); // custom executor → cache bypassed, always called
-  });
-
-  it('module-scope cache: second call without custom executor hits cache', () => {
-    // We can only observe cache behaviour indirectly because the real
-    // execFileSync would spawn a child process. Test the cache key/eviction
-    // logic by priming the cache via the internal Map exposed through
-    // clearRepoRootSyncCache, then verifying clear works.
-    clearRepoRootSyncCache(); // no-op on empty cache — must not throw
-    // Confirm that after clearing, a custom-executor call still succeeds.
-    const result = resolveRepoRootSync({
-      cwd: '/home/user/myrepo',
-      execFileSync: makeSyncExec('/home/user/myrepo/.git\n'),
-      mode: 'git-common-dir',
-    });
-    expect(result).toBe('/home/user/myrepo');
-  });
-
-  it('LRU eviction: inserting 11 distinct entries does not throw', () => {
-    // Fill the cache beyond REPO_ROOT_CACHE_MAX (10) via the internal path.
-    // Since custom executors bypass the cache, we verify the eviction guard
-    // at least does not break anything by calling clearRepoRootSyncCache
-    // between iterations (simulating a fresh-slate process).
-    for (let i = 0; i < 11; i++) {
-      clearRepoRootSyncCache();
-      const root = resolveRepoRootSync({
-        cwd: `/home/user/repo${i}`,
-        execFileSync: makeSyncExec(`/home/user/repo${i}\n`),
-      });
-      expect(root).toBe(`/home/user/repo${i}`);
-    }
+    expect(callCount).toBe(2); // cache bypassed each time
   });
 });
 
@@ -238,9 +258,7 @@ describe('resolveRepoRootSync — non-git-dir and spawn errors', () => {
   it('throws "Not in a git repository." when cwd is not a git repo', () => {
     // Simulate git exiting non-zero (execFileSync throws for non-zero exit).
     const exec: ExecFileSyncForGit = () => {
-      const err = new Error('Command failed: git rev-parse --show-toplevel');
-      (err as NodeJS.ErrnoException).status = 128;
-      throw err;
+      throw new Error('Command failed: git rev-parse --show-toplevel');
     };
     expect(() => resolveRepoRootSync({ cwd: '/tmp/not-a-repo', execFileSync: exec })).toThrow(
       'Not in a git repository.',

@@ -213,7 +213,11 @@ export function resolveRepoRootSync(options?: ResolveRepoRootSyncOptions): strin
       result = root;
     }
 
-    // LRU eviction: drop oldest entry when cap is reached.
+    // Invariant: Map-as-LRU promotion ordering. `Map.keys().next().value`
+    // evicts the oldest entry ONLY because every cache hit above promotes via
+    // delete-then-reinsert (the `has()` path returns early, but a future read
+    // path must preserve this). Without promotion, a frequently-accessed key
+    // inserted early would be evicted first despite being hot.
     if (!customExec) {
       if (repoRootSyncCache.size >= REPO_ROOT_CACHE_MAX) {
         const oldest = repoRootSyncCache.keys().next().value;
