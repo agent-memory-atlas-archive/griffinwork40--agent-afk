@@ -168,3 +168,50 @@ describe('useScrollPin — regression: layout scroll events must not unpin (fan-
     document.body.removeChild(el);
   });
 });
+
+describe('useScrollPin — regression: reload with ?session= stayed at the top (smoke-stream reload)', () => {
+  /**
+   * After a reload, transcript items can land before the session list, so the
+   * items effect scrolls an empty pane; the transcript renders once the list
+   * resolves, with no data dependency changing. Growth with no scroll event must
+   * still re-pin while pinned, and must not when the user has scrolled up.
+   */
+  function setup() {
+    const observers: Array<() => void> = [];
+    const prev = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class { constructor(cb: () => void) { observers.push(cb); } observe() {} unobserve() {} disconnect() {} } as never;
+    const size = { height: 844, client: 751 };
+    const el = document.createElement('div');
+    el.appendChild(document.createElement('div'));
+    Object.defineProperty(el, 'scrollHeight', { get: () => size.height, configurable: true });
+    Object.defineProperty(el, 'clientHeight', { get: () => size.client, configurable: true });
+    el.scrollTop = 0;
+    document.body.appendChild(el);
+    const hook = renderHook(() => {
+      const pin = useScrollPin();
+      if (!pin.containerRef.current) pin.containerRef.current = el;
+      return pin;
+    });
+    const grow = (h: number) => { size.height = h; act(() => { for (const cb of observers) cb(); }); };
+    const restore = () => { globalThis.ResizeObserver = prev; document.body.removeChild(el); hook.unmount(); };
+    return { el, hook, grow, restore, observers };
+  }
+
+  it('re-pins to the bottom when content grows with no scroll event', () => {
+    const { el, grow, restore, observers } = setup();
+    expect(observers.length).toBe(1);
+    grow(4380);
+    expect(el.scrollTop).toBe(4380);
+    restore();
+  });
+
+  it('leaves the position alone when the user has scrolled up', () => {
+    const { el, hook, grow, restore } = setup();
+    grow(4380);
+    act(() => { el.scrollTop = 100; el.dispatchEvent(new Event('scroll')); });
+    expect(hook.result.current.isPinned).toBe(false);
+    grow(6000);
+    expect(el.scrollTop).toBe(100);
+    restore();
+  });
+});

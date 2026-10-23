@@ -76,8 +76,10 @@ describe('workingState (indicator visibility + phase)', () => {
   it('a bare markdown marker ("1.") is not visible text yet', async () => {
     const { workingState } = await import('./transcript-view');
     const user = { kind: 'user' as const, id: 'u', text: 'q' };
-    expect(workingState([user, { kind: 'assistant' as const, id: 'd', text: '1.', live: 'streaming' }], true).showWorking).toBe(true);
-    expect(workingState([user, { kind: 'assistant' as const, id: 'd', text: '1. One', live: 'streaming' }], true).showWorking).toBe(false);
+    const marker = { kind: 'assistant' as const, id: 'd', text: '1.', live: 'streaming' };
+    const worded = { kind: 'assistant' as const, id: 'd', text: '1. One', live: 'streaming' };
+    expect(workingState([user, marker], true).showWorking).toBe(true);
+    expect(workingState([user, worded], true).showWorking).toBe(false);
   });
 
   it('reports Running <tool> while the newest tool has no result, then Writing', async () => {

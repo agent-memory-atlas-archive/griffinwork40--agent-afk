@@ -102,8 +102,25 @@ export function useScrollPin(): UseScrollPinResult {
       if (pinned) setHasNewContent(false);
     }
 
+    // Invariant: while pinned, ANY growth of the content re-pins to the bottom,
+    // not only growth that a React effect knows about. Effects key on data
+    // (items, session id), but layout can change with no data change. After a
+    // reload with ?session=, the transcript items can arrive before the session
+    // list; the items effect scrolls while nothing is rendered (height = the
+    // viewport), then the list resolves, the transcript renders 4000px tall, and
+    // no dependency changes, so the page sat at scrollTop 0 forever.
+    // A layout-driven size change emits no scroll event, so only an observer sees it.
+    const content = el.firstElementChild;
+    const ro = typeof ResizeObserver === 'undefined' || content === null ? null : new ResizeObserver(() => {
+      if (pinnedRef.current && el.scrollHeight - el.scrollTop - el.clientHeight > PINNED_THRESHOLD_PX) {
+        el.scrollTop = el.scrollHeight;
+        lastTop = el.scrollTop;
+      }
+    });
+    if (ro !== null && content !== null) ro.observe(content);
+
     el.addEventListener('scroll', handleScroll, { passive: true });
-    return () => el.removeEventListener('scroll', handleScroll);
+    return () => { ro?.disconnect(); el.removeEventListener('scroll', handleScroll); };
   }, []);
 
   const scrollToBottom = useCallback(() => {
