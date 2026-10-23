@@ -117,7 +117,7 @@ export function classifyError(err: unknown): ClassifiedError {
     return {
       kind: 'auth',
       userMessage: 'Access denied (HTTP 403). Your account seat may have been removed or subscription access is inactive.',
-      hint: 'Check your subscription at https://console.anthropic.com/settings/billing, or switch accounts with `afk login`.',
+      hint: 'Check your subscription at https://console.anthropic.com/settings/billing, or switch accounts with `afk login --force`.',
       exitCode: 1,
       raw: err,
     };
