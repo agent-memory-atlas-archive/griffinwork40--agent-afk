@@ -255,6 +255,15 @@ if (isDirectRun) {
 
     // For non-interactive commands (afk chat, afk status, etc.), print the
     // update banner immediately — those commands don't do a screen clear.
+    //
+    // Two detection strategies are used here intentionally:
+    //   1. argv-based (argv.length <= 2, argv[2] === 'interactive'|'i'): runs
+    //      BEFORE program.parseAsync() so Commander option/command state is not
+    //      yet populated — this is the only mechanism available at this point.
+    //   2. Commander name-based (actionCommand.name() !== 'interactive'): used
+    //      in the preAction hook below, AFTER Commander has parsed the argv.
+    //      Both strategies are correct for their respective call sites; argv is
+    //      consulted only pre-parse, Commander state only post-parse.
     const isInteractiveInvocation =
       process.argv.length <= 2 ||
       process.argv[2] === 'interactive' ||

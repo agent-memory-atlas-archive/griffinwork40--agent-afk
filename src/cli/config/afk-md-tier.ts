@@ -165,6 +165,10 @@ const projectScopeHeader = (path: string): string =>
  */
 export function warnIfAfkMdOversize(result: AfkMdResult): void {
   if (result.estimatedTokens <= OVERLAY_TOKEN_WARN_THRESHOLD) return;
+  // Guard: empty paths means no file contributed content — nothing to warn about.
+  // loadAfkMd() never returns a non-null result with empty paths, so this branch
+  // is unreachable from current callers; the guard documents and enforces that.
+  if (result.paths.length === 0) return;
   const key = result.paths.join('\0');
   if (warnedAfkMdSize.has(key)) return;
   warnedAfkMdSize.add(key);
