@@ -129,6 +129,38 @@ describe('warnIfAfkMdOversize()', () => {
     expect(warnSpy).toHaveBeenCalledOnce();
   });
 
+  it('warns independently for two different oversized path sets', () => {
+    // Positive dedup complement: each distinct path set gets its own warning.
+    // This guards against the empty-key collapse bug (paths.join('\0') === ''
+    // when paths is empty) by verifying that two *different* non-empty path
+    // sets each produce exactly one warning — i.e. the dedup key is
+    // path-set-specific, not global.
+    warnIfAfkMdOversize({
+      content: 'x',
+      paths: ['/tmp/project-a/AFK.md'],
+      estimatedTokens: OVERLAY_TOKEN_WARN_THRESHOLD + 1,
+    });
+    warnIfAfkMdOversize({
+      content: 'x',
+      paths: ['/tmp/project-b/AFK.md'],
+      estimatedTokens: OVERLAY_TOKEN_WARN_THRESHOLD + 1,
+    });
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+
+    // Calling again with the same path sets produces no additional warnings.
+    warnIfAfkMdOversize({
+      content: 'x',
+      paths: ['/tmp/project-a/AFK.md'],
+      estimatedTokens: OVERLAY_TOKEN_WARN_THRESHOLD + 1,
+    });
+    warnIfAfkMdOversize({
+      content: 'x',
+      paths: ['/tmp/project-b/AFK.md'],
+      estimatedTokens: OVERLAY_TOKEN_WARN_THRESHOLD + 1,
+    });
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('populates estimatedTokens on the result', () => {
     const cwd = join(tmpRoot, 'project-tokens');
     mkdirSync(cwd, { recursive: true });
