@@ -137,7 +137,7 @@ describe('preAction hook — deferred AFK.md size warning flush', () => {
   it('flushes deferred warnings for non-interactive commands', () => {
     // Simulate the preAction hook logic from index.ts for a non-interactive command.
     deferAfkMdSizeWarnings();
-    const actionName = 'chat';
+    const actionName: string = 'chat';
     if (actionName !== 'interactive') flushDeferredAfkMdSizeWarnings();
     // No messages were buffered, so warn is not called — but deferral was ended
     // (subsequent direct calls emit immediately).
