@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.335.0] - 2026-10-24
+
 ### Added
 - **Web chat UI overhaul**: live token streaming with full-length answers (b57ad799a), ⌘K palette indexing sessions and commands (16e0cd196), responsive single-textarea composer with retry/edit wiring (82a5c54bd), one-tap new chat in the phone header (8884d3b5d), layout & navigation UX (edfced3d8), turn controls & composer (5d8a79d72), legible tool rows with collapsible code and fast long transcripts (469fae359), WorkingIndicator placeholder for slow turns (82b0deaba), D2 code highlighting and a11y fixes (293879196), D4 tool rows & shell polish (003b76546), E2 design-pass-2 non-streaming fixes (8905a006b)
 
