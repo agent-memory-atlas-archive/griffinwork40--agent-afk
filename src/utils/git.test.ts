@@ -6,6 +6,7 @@
  * ESM constraint on node:child_process built-ins.
  */
 
+import { resolve as resolvePath } from 'node:path';
 import { describe, it, expect, beforeEach, vi, type MockInstance } from 'vitest';
 import type { ExecFileSyncForGit } from './git.js';
 
@@ -373,11 +374,14 @@ describe('resolveRepoRootSync — --separate-git-dir via git-common-dir', () => 
     // When inside the main worktree, git outputs the relative path ".git".
     // path.resolve(cwd, '.git') should give the absolute git dir, and
     // dirname of that is the repo root.
+    // Use resolvePath so the fake cwd is platform-native (Windows prepends
+    // a drive letter via path.resolve, which the implementation also uses).
+    const fakeCwd = resolvePath('/home/user/main-repo');
     const root = resolveRepoRootSync({
       mode: 'git-common-dir',
-      cwd: '/home/user/main-repo',
+      cwd: fakeCwd,
       execFileSync: makeSyncExec('.git\n'),
     });
-    expect(root).toBe('/home/user/main-repo');
+    expect(root).toBe(fakeCwd);
   });
 });
