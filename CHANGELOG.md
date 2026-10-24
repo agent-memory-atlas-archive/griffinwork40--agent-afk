@@ -11,6 +11,17 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Fixed
+- adopt a Claude account switch at turn start, no /reauth needed (#4259) (4f14beed9)
+- improve chip color contrast for WCAG AA compliance (827e18173)
+- populate model field in WebSessionSummary (ec21c7659)
+- error-path teardown test, dedup test, and perf doc (64c03bb03)
+- address advisory findings from 2026-10-23 PR triage (75cf5c839)
+- address advisory findings from 2026-10-23 triage batch (a70bbeb67)
+- add --force to 401 hint and tighten classifier test (47d94075a)
+- short-option = guard and missing bash-lexer tests (fa37cbc02)
+- assert 60_000 fallback timeout, remove stray blank lines (b8c1dd82f)
+
 ## [5.335.0] - 2026-10-24
 
 ### Added
