@@ -344,6 +344,31 @@ describe('planGitRead (#4058): new subcommand allowlist', () => {
     const plan = planGitRead({ subcommand: 'log', args: ['--diff-filter=M', '--oneline'] }, CWD);
     expect(plan.ok).toBe(true);
   });
+
+  it('log accepts -n (shorthand for --max-count)', () => {
+    const plan = planGitRead({ subcommand: 'log', args: ['-n', '--max-count=5', '--oneline'] }, CWD);
+    expect(plan.ok).toBe(true);
+    expect(plan.ok && plan.argv).toContain('-n');
+  });
+
+  it('log accepts -i and --regexp-ignore-case (case-insensitive grep)', () => {
+    const planI = planGitRead({ subcommand: 'log', args: ['-i', '--grep=fix', '--oneline'] }, CWD);
+    expect(planI.ok).toBe(true);
+    const planLong = planGitRead({ subcommand: 'log', args: ['--regexp-ignore-case', '--grep=fix'] }, CWD);
+    expect(planLong.ok).toBe(true);
+  });
+
+  it('log accepts --not (revision exclusion)', () => {
+    const plan = planGitRead({ subcommand: 'log', args: ['--oneline', '--not', 'origin/main'] }, CWD);
+    expect(plan.ok).toBe(true);
+    expect(plan.ok && plan.argv).toContain('--not');
+  });
+
+  it('rev-list accepts --not (revision exclusion)', () => {
+    const plan = planGitRead({ subcommand: 'rev-list', args: ['--count', 'HEAD', '--not', 'origin/main'] }, CWD);
+    expect(plan.ok).toBe(true);
+    expect(plan.ok && plan.argv).toContain('--not');
+  });
 });
 
 describe('planGitRead (#4058): injection rejection for new subcommands', () => {

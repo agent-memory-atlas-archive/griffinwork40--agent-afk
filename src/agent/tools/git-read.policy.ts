@@ -41,7 +41,7 @@ const DIFF_FORMAT = ['--stat', '--numstat', '--shortstat', '--name-only', '--nam
 const POLICIES: Record<GitReadSubcommand, SubcommandPolicy> = {
   status: { flags: ['-s', '--short', '-b', '--branch', '--porcelain', '--porcelain=v1', '--porcelain=v2', '--untracked-files=no', '--untracked-files=normal', '--untracked-files=all', '--ignored'], valued: [], forced: [], revs: false },
   log: {
-    flags: ['--oneline', '--graph', '--decorate', '--all', '--merges', '--no-merges', '--first-parent', '--reverse', '-p', '--patch', '--follow', ...DIFF_FORMAT],
+    flags: ['--oneline', '--graph', '--decorate', '--all', '--merges', '--no-merges', '--first-parent', '--reverse', '-p', '--patch', '--follow', '-n', '-i', '--regexp-ignore-case', '--not', ...DIFF_FORMAT],
     valued: ['--format=', '--pretty=', '--author=', '--committer=', '--grep=', '--since=', '--until=', '--after=', '--before=', '--max-count=', '--skip=', '--date=', '--unified=', '--diff-filter='],
     forced: ['--no-ext-diff', '--no-textconv'], revs: true,
   },
@@ -71,7 +71,7 @@ const POLICIES: Record<GitReadSubcommand, SubcommandPolicy> = {
 
   // rev-list: walks commit graph, no writes. --objects/--disk-usage omitted (can be
   // very expensive / expose object layout). --stdin omitted (network of stdin).
-  'rev-list': { flags: ['--count', '--oneline', '--reverse', '--merges', '--no-merges', '--first-parent', '--ancestry-path', '--topo-order', '--date-order'], valued: ['--max-count=', '--max-age=', '--min-age=', '--since=', '--until=', '--after=', '--before=', '--format=', '--pretty=', '--author=', '--committer=', '--grep='], forced: [], revs: true },
+  'rev-list': { flags: ['--count', '--oneline', '--reverse', '--merges', '--no-merges', '--first-parent', '--ancestry-path', '--topo-order', '--date-order', '--not'], valued: ['--max-count=', '--max-age=', '--min-age=', '--since=', '--until=', '--after=', '--before=', '--format=', '--pretty=', '--author=', '--committer=', '--grep='], forced: [], revs: true },
 
   // reflog: forced to `show` (the read-only subcommand). `expire`/`delete` are write
   // subcommands and are structurally blocked because `forced` prepends `show` and the
