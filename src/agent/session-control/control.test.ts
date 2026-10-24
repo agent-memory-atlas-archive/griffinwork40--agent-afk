@@ -159,6 +159,7 @@ describe('setSessionName', () => {
     const onName = vi.fn();
     expect(setSessionName(stats, 'My Name', { onName })).toEqual({ ok: true, name: 'name', saved: false });
     expect(onName).toHaveBeenCalledWith('name');
+    expect(stats.nameExplicit).toBe(true); // /name is shown verbatim by surfaces
     expect(persist).not.toHaveBeenCalled();
     stats.totalTurns = 1;
     expect(setSessionName(stats, 'new')).toEqual({ ok: true, name: 'new', saved: true });

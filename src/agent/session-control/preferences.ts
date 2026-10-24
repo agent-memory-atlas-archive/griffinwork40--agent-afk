@@ -21,6 +21,8 @@ export function setSessionName(
   const name = slugifySessionName(raw.trim());
   if (!name) return { ok: false };
   stats.name = name;
+  stats.nameExplicit = true;
+  stats.displayName = sessionDisplayName(raw);
   options.onName?.(name);
   if (stats.totalTurns === 0) return { ok: true, name, saved: false };
   try {
@@ -30,6 +32,14 @@ export function setSessionName(
     // Renaming itself succeeded, even if its durable write did not.
     return { ok: true, name, saved: false, saveError };
   }
+}
+
+/** Max characters kept of a verbatim `/name` (display only; the slug is capped separately). */
+const MAX_DISPLAY_NAME_LEN = 80;
+
+/** The typed `/name` text, made safe to display: no control chars, single spaces, capped. */
+export function sessionDisplayName(raw: string): string {
+  return raw.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_DISPLAY_NAME_LEN).trim();
 }
 
 export const THINKING_MODES: readonly ThinkingUiMode[] = ['summary', 'live', 'digest', 'off'];

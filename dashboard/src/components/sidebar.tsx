@@ -1,12 +1,13 @@
 import { cn } from '@/lib/utils';
 import type { SessionSummary } from '@/types/api';
 import { SessionCard } from './session-card';
-import { PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Plus, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { listNavItems } from '@/lib/nav-registry';
 
 export function Sidebar({
   sessions,
   pendingSessionIds,
+  busySessionIds,
   selectedSessionId,
   onSelectSession,
   onResumeSession,
@@ -14,9 +15,16 @@ export function Sidebar({
   onNavChange,
   collapsed,
   onToggleCollapse,
+  onNewSession,
+  starting = false,
+  runningSessionId,
 }: {
+  onNewSession?: () => void;
+  starting?: boolean;
+  runningSessionId?: string | null;
   sessions: SessionSummary[];
   pendingSessionIds: Set<string>;
+  busySessionIds?: Set<string>;
   selectedSessionId: string | null;
   onSelectSession: (id: string) => void;
   /** Called when user clicks Resume on a readonly session card. */
@@ -30,7 +38,8 @@ export function Sidebar({
     <aside
       className={cn(
         'flex h-full shrink-0 flex-col border-r bg-card transition-[width] duration-200',
-        collapsed ? 'w-14' : 'w-72',
+        collapsed ? 'w-72 md:w-14' : 'w-72',
+        'max-w-[85vw]',
       )}
     >
       {/* Header */}
@@ -43,7 +52,7 @@ export function Sidebar({
         )}
         <button
           onClick={onToggleCollapse}
-          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:block"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? (
@@ -53,6 +62,14 @@ export function Sidebar({
           )}
         </button>
       </div>
+
+      {onNewSession && (
+        <button onClick={onNewSession} disabled={starting} title="Start a new chat"
+          className="mx-2 mt-3 flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand px-2 text-sm font-medium text-primary-foreground disabled:opacity-60">
+          <Plus className="size-4 shrink-0" />
+          {!collapsed && (starting ? 'Starting…' : 'New chat')}
+        </button>
+      )}
 
       {/* Navigation */}
       <nav className="flex flex-col gap-0.5 p-2">
@@ -90,7 +107,9 @@ export function Sidebar({
                   key={s.id}
                   session={s}
                   pendingSessionIds={pendingSessionIds}
+                  busySessionIds={busySessionIds}
                   selected={selectedSessionId === s.id}
+                  running={runningSessionId === s.id}
                   onSelect={onSelectSession}
                   onResume={onResumeSession}
                 />

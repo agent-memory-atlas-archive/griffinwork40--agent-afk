@@ -22,7 +22,7 @@ import { AgentSession } from '../agent/session/agent-session.js';
 import { createDefaultHookRegistry } from '../agent/default-hook-registry.js';
 import { seedPersistedGrants } from '../agent/permissions-store.js';
 import { getApiKeyForModel, resolveBaseSystemPrompt } from '../cli/shared-helpers.js';
-import { wireWebSession, type WebSessionWiringInternal } from './session-owner.wiring.js';
+import { prewarmWebSessionMcp, wireWebSession, type WebSessionWiringInternal } from './session-owner.wiring.js';
 
 import type { AgentConfig } from '../agent/types.js';
 import type { PermissionMode } from '../agent/types/sdk-types.js';
@@ -33,6 +33,7 @@ import { FastModeController } from '../agent/fast-mode.js';
 import { WebSessionControl, type SessionControlResult } from './session-owner.control.js';
 import type { SlashCommand, SlashContext } from '../cli/slash/types.js';
 import { drainAndPersistTurn } from './session-owner.autosave.js';
+import type { LiveSink } from './live-broker.js';
 import { errorMessage } from '../utils/errors.js';
 import { initSessionStats, getStats } from './session-owner.slash.js';
 
@@ -107,7 +108,13 @@ export class SessionOwner {
     this.cancelChoices = cancel;
   }
 
+  private liveSink?: LiveSink; // Live-text tap (web-server/live-broker.ts); prewarm: session-owner.mcp-warm.ts
+  setLiveSink(sink: LiveSink | undefined): void { this.liveSink = sink; }
+  prewarm(): () => Promise<void> { return prewarmWebSessionMcp(this.baseCwd); }
+
   constructor(private readonly options: SessionOwnerOptions) {}
+
+  get defaultModel(): string { return this.options.model; }
 
   private get baseCwd(): string {
     return this.options.cwd ?? process.cwd();
@@ -306,8 +313,7 @@ export class SessionOwner {
           // The ledger is written as a side effect of the turn; the SSE route
           // tails it. Draining runs the turn to completion, then the completed
           // turn is saved to the session sidecar.
-          await drainAndPersistTurn(session, message, this.autosavers.get(sessionId), this.controls.has(sessionId) ? undefined : sessionId);
-
+          await drainAndPersistTurn(session, message, this.autosavers.get(sessionId), this.controls.has(sessionId) ? undefined : sessionId, this.liveSink && { sink: this.liveSink, sessionId });
         } finally {
           const remaining = (this.pending.get(sessionId) ?? 1) - 1;
           if (remaining > 0) this.pending.set(sessionId, remaining);

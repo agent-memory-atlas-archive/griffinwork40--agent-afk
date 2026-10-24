@@ -156,7 +156,9 @@ describe('WebSessionControl', () => {
       await setSessionModel(ctx.session.current, ctx.stats, args);
       return 'continue';
     }), s.ctx, 'opus');
-    expect(model.session).toEqual({ model: 'opus', name: 'a-new-name' });
+    // The wire carries the name exactly as typed; the slug stays the resume key.
+    expect(model.session).toEqual({ model: 'opus', name: 'A New Name', nameExplicit: true });
+    expect(s.stats.displayName).toBe('A New Name');
     saver.saveTurn('next', 'answer', { sessionId: 'fresh-provider', totalCostUsd: 0.1 });
     expect(saver.stats).toBe(s.stats);
     expect(s.stats).toMatchObject({ totalTurns: 1, name: 'a-new-name', model: 'opus', sessionId: 'stable-web' });

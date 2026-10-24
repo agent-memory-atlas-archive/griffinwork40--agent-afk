@@ -43,6 +43,8 @@ vi.mock('./hooks/use-scroll-pin', () => ({
     scrollToBottom: vi.fn(),
     isPinned: true,
     showScrollButton: false,
+    hasNewContent: false,
+    notifyNewContent: vi.fn(),
   }),
 }));
 vi.mock('./hooks/use-queue', () => ({
@@ -94,8 +96,9 @@ describe('App — sidebar Resume uses the dedicated resume route', () => {
   it('does not offer Resume on a session that is running in another process', async () => {
     vi.mocked(api.apiFetch).mockResolvedValue({ models: [], commands: [] });
     render(<App />);
-    const ended = await screen.findAllByText('ended-session');
-    const running = await screen.findAllByText('running-in-repl');
+    // humanizeTitle converts slug titles: 'ended-session' -> 'Ended session'
+    const ended = await screen.findAllByText('Ended session');
+    const running = await screen.findAllByText('Running in repl');
     const resumeIn = (el: HTMLElement) =>
       el.closest('.group')?.querySelector('button[aria-label="Resume this session"]') ?? null;
     for (const el of ended) expect(resumeIn(el)).not.toBeNull();

@@ -13,8 +13,9 @@
  * useSseStream if they need to e.g. visually separate replay from live.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSseStream } from '@/hooks/use-sse-stream';
+import { useLiveDrafts } from '@/hooks/use-live-drafts';
 import { useChoiceProgress } from '@/hooks/use-choice-progress';
 import type { ChoiceRequest, CommandProgress } from '@/hooks/use-choice-progress';
 import type { StreamStatus } from '@/hooks/use-sse-stream';
@@ -60,7 +61,9 @@ export interface UseTranscriptResult {
 export function useTranscript(sessionId: string | null, onReset?: () => void): UseTranscriptResult {
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const revision = sessionId ? revisions[sessionId] ?? 0 : 0;
-  const { events, status, error, generation } = useSseStream(sessionId, revision, onReset);
+  // Live drafts (id-less live_* frames) never enter `events`; see use-live-drafts.
+  const live = useLiveDrafts();
+  const { events, status, error, generation } = useSseStream(sessionId, revision, onReset, live.onLive);
   const { choices, progress } = useChoiceProgress(events);
 
   const [items, setItems] = useState<TranscriptItem[]>([]);
@@ -83,6 +86,12 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
   }, [sessionId]);
 
   // Reset transcript state before feeding events from the replacement stream.
+  // Drafts are cleared here only for a session/revision switch (generation === 0):
+  // a ledger reset (generation > 0) already delivered `live_reset` in-order from
+  // the SSE hook, and the server writes the rebuilt snapshot right behind that
+  // frame; calling clearAll after render would erase the just-delivered snapshot.
+  // Merging into one effect eliminates the race where Effect 2 (clearAll) fired
+  // after the new SSE stream had already delivered a live_snapshot into drafts.
   useEffect(() => {
     resetIdCounter();
     processedCountRef.current = 0;
@@ -92,7 +101,8 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
     setTotals(EMPTY_TOTALS);
     setTurnActive(false);
     setLiveTurns(0);
-  }, [sessionId, revision, generation]);
+    if (generation === 0) live.clearAll();
+  }, [sessionId, revision, generation, live]); // live is stable; clearAll is stable
 
   // Feed new SSE events into the transcript incrementally. We track how many
   // events we have processed via a ref to avoid depending on items/totals as
@@ -116,19 +126,21 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
       const frame = raw as { record?: unknown; replay?: boolean; type?: string };
       // Sideband choice/progress frames are not ledger records.
       if (frame.type === 'choice_request' || frame.type === 'choice_settled' ||
-          frame.type === 'choice_stream_boundary' || frame.type === 'progress') continue;
+          frame.type === 'choice_stream_boundary' || frame.type === 'progress' ||
+          frame.type?.startsWith('live_')) continue;
       const record = (frame.record ?? raw) as LedgerRecordLike;
       const isReplay = frame.replay === true;
 
       // Track turn activity: user records start a turn; done/error records end it.
       if (record.kind === 'user') {
         nextTurnActive = true;
-      } else if (record.kind === 'done' || record.kind === 'error') {
+      } else if (record.kind === 'done' || record.kind === 'error' || record.kind === 'stopped') {
         nextTurnActive = false;
+        live.settle();
       }
 
-      // Count live (non-replay) done records for the flush trigger.
-      if (record.kind === 'done' && !isReplay) {
+      // Count live (non-replay) done/stopped records for the flush trigger.
+      if ((record.kind === 'done' || record.kind === 'stopped') && !isReplay) {
         liveTurnsDelta += 1;
       }
 
@@ -140,6 +152,13 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
       // case we set hasMutation so we trigger a re-render of the items array.
       const item = ledgerRecordToItem(record, toolIndex, subagentIndexRef.current);
       if (item !== undefined) {
+        // A durable segment replaces its live draft and REUSES the draft's id,
+        // so React keeps the same DOM node (no remount/flicker).
+        const seg = (record as { seg?: unknown }).seg;
+        if (typeof seg === 'number' && (item.kind === 'assistant' || item.kind === 'thinking')) {
+          const draftId = live.claim(item.kind === 'assistant' ? 'text' : 'thinking', seg);
+          if (draftId !== undefined) item.id = draftId;
+        }
         newItems.push(item);
       } else if (record.kind === 'tool_result' || record.kind === 'subagent_lifecycle') {
         // Mutated an existing item in place; signal re-render.
@@ -178,5 +197,8 @@ export function useTranscript(sessionId: string | null, onReset?: () => void): U
     }
   }, [events, generation]);
 
-  return { items, totals, status, error, turnActive, liveTurns, clear, choices, progress };
+  // Drafts always render after every durable item.
+  const merged = useMemo(() => live.drafts.length === 0 ? items : [...items, ...live.drafts], [items, live.drafts]);
+
+  return { items: merged, totals, status, error, turnActive, liveTurns, clear, choices, progress };
 }

@@ -26,19 +26,10 @@ import {
   handlePrompt,
   header,
   sendJson,
-  type RouteContext,
 } from './routes.js';
 import { handleStream } from './stream-route.js';
 import { handleGetToolResult } from './routes.tool-results.js';
-import {
-  handleCreateSchedule,
-  handleDaemonStatus,
-  handleDeleteSchedule,
-  handleListSchedules,
-  handleScheduleHistory,
-  handleToggleSchedule,
-  handleUpdateSchedule,
-} from './routes.schedules.js';
+import { dispatchScheduleRoute } from './server.schedules.js';
 import { handleListModels } from './routes.models.js';
 import { handleSearchMemory, handleGetHotMemory } from './routes.memory.js';
 import { handleListBgJobs, handleGetBgJob } from './routes.bg-jobs.js';
@@ -46,8 +37,10 @@ import { handleGetConfig } from './routes.config.js';
 import { handleListHandoffs, handleAnswerHandoff } from './routes.handoffs.js';
 import { handleCommand } from './routes.commands.js';
 import { ChoiceBroker } from './choice-broker.js';
+import { wireLive, type ServerContext } from './server.live.js';
 import { handleChoiceAnswer } from './routes.choices.js';
 import { handleResumeSession } from './routes.resume.js';
+import { handleRewind } from './routes.rewind.js';
 import { resumeStoredSessionById } from './session-owner.lifecycle.js';
 
 import { errorMessage } from '../utils/errors.js';
@@ -150,14 +143,16 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
   bridge.install();
   const choiceBroker = new ChoiceBroker();
   options.owner?.setChoiceCancellation?.((id) => choiceBroker.cancelSession(id));
+  const live = wireLive(options.owner);
 
   /** Abort controllers for in-flight SSE streams, so shutdown can end them. */
   const streams = new Set<AbortController>();
 
-  const ctx: RouteContext = {
+  const ctx: ServerContext = {
     owned,
     bridge,
     choiceBroker,
+    liveBroker: live.liveBroker,
     submitPrompt:
       options.submitPrompt ??
       (options.owner
@@ -196,7 +191,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
 
   const server = createServer((req, res) => {
     const auth: StaticAuth = { token, docKey, nonces };
-    void dispatch(req, res, ctx, auth, host, actualPort(server), streams).catch((err: unknown) => {
+    void dispatch(req, res, ctx, auth, host, actualPort(server), streams, options.owner).catch((err: unknown) => {
       if (res.headersSent) {
         res.end();
         return;
@@ -223,6 +218,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
       bridge.uninstall();
       choiceBroker.cancelAll();
       options.owner?.setChoiceCancellation?.(undefined);
+      const liveStopped = live.stop(); // MCP spare disconnect runs beside socket teardown
       // Invariant: abort live SSE streams BEFORE awaiting `server.close()`.
       // `close()` stops accepting new connections but waits for existing ones
       // to end, and an event-stream response never ends on its own — it tails
@@ -244,6 +240,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
       const closed = new Promise<void>((resolve) => server.close(() => resolve()));
       server.closeAllConnections();
       await closed;
+      await liveStopped;
     },
   };
 }
@@ -279,11 +276,12 @@ function actualPort(server: Server): number {
 async function dispatch(
   req: IncomingMessage,
   res: ServerResponse,
-  ctx: RouteContext,
+  ctx: ServerContext,
   auth: StaticAuth,
   host: string,
   port: number,
   streams: Set<AbortController>,
+  owner?: SessionOwner,
 ): Promise<void> {
   const rawUrl = req.url ?? '/';
   const path = rawUrl.split('?')[0] ?? '/';
@@ -309,13 +307,14 @@ async function dispatch(
   }
 
   if (path === '/api/sessions' && method === 'GET') {
-    await handleListSessions(ctx, res);
+    const ownedList = owner?.list?.() ?? [];
+    await handleListSessions(ctx, res, new Map(ownedList.map((s) => [s.id, s.model])), new Map(ownedList.map((s) => [s.id, s.cwd])));
     return;
   }
 
   const streamMatch = /^\/api\/sessions\/([^/]+)\/stream$/.exec(path);
   if (streamMatch?.[1] && method === 'GET') {
-    await handleStream(req, res, decodeURIComponent(streamMatch[1]), streams, ctx.choiceBroker);
+    await handleStream(req, res, decodeURIComponent(streamMatch[1]), streams, ctx.choiceBroker, ctx.liveBroker);
     return;
   }
 
@@ -356,6 +355,9 @@ async function dispatch(
     return;
   }
 
+  const rewindMatch = /^\/api\/sessions\/([^/]+)\/rewind$/.exec(path);
+  if (rewindMatch?.[1] && method === 'POST') { await handleRewind(ctx, res, decodeURIComponent(rewindMatch[1]), await readBody(req)); return; }
+
   const interruptMatch = /^\/api\/sessions\/([^/]+)\/interrupt$/.exec(path);
   if (interruptMatch?.[1] && method === 'POST') {
     await handleInterrupt(ctx, res, decodeURIComponent(interruptMatch[1]));
@@ -388,41 +390,11 @@ async function dispatch(
     return;
   }
 
-  // ---- schedule management routes ------------------------------------------
-  if (path === '/api/schedules' && method === 'GET') {
-    await handleListSchedules(res);
-    return;
-  }
-  if (path === '/api/schedules' && method === 'POST') {
-    await handleCreateSchedule(res, await readBody(req));
-    return;
-  }
-  const scheduleIdMatch = /^\/api\/schedules\/([^/]+)$/.exec(path);
-  if (scheduleIdMatch?.[1] && method === 'PATCH') {
-    await handleUpdateSchedule(res, decodeURIComponent(scheduleIdMatch[1]), await readBody(req));
-    return;
-  }
-  if (scheduleIdMatch?.[1] && method === 'DELETE') {
-    await handleDeleteSchedule(res, decodeURIComponent(scheduleIdMatch[1]));
-    return;
-  }
-  const toggleMatch = /^\/api\/schedules\/([^/]+)\/toggle$/.exec(path);
-  if (toggleMatch?.[1] && method === 'POST') {
-    await handleToggleSchedule(res, decodeURIComponent(toggleMatch[1]));
-    return;
-  }
-  const historyMatch = /^\/api\/schedules\/([^/]+)\/history$/.exec(path);
-  if (historyMatch?.[1] && method === 'GET') {
-    await handleScheduleHistory(res, decodeURIComponent(historyMatch[1]));
-    return;
-  }
-  if (path === '/api/daemon/status' && method === 'GET') {
-    await handleDaemonStatus(res);
-    return;
-  }
+  // ---- schedule management + daemon status (server.schedules.ts) ------------
+  if (await dispatchScheduleRoute(res, path, method, () => readBody(req))) return;
 
   if (path === '/api/models' && method === 'GET') {
-    handleListModels(res);
+    handleListModels(res, owner?.defaultModel);
     return;
   }
 

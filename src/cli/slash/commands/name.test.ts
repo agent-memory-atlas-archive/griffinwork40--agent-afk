@@ -102,4 +102,33 @@ describe('/name', () => {
     expect(stats.name).toBe('keep-me');
     expect(lines.some((l) => /WARN:.*Invalid name/i.test(l))).toBe(true);
   });
+
+  it('REPL output is unchanged: slug plus the resume hint (no capabilities = REPL)', async () => {
+    const stats = makeStats({ totalTurns: 1, sessionId: 'sdk-repl', model: 'haiku' });
+    const { ctx, lines } = makeCtx(stats);
+    await nameCmd.handler(ctx, 'Job queue research');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/^SUCCESS:.*Named.*job-queue-research/);
+    expect(lines[1]).toMatch(/Resume:.*afk interactive.*job-queue-research/);
+    // Explicit REPL capabilities (consoleOutput) behave identically.
+    const repl = makeCtx(makeStats({ totalTurns: 1, sessionId: 'sdk-repl2', model: 'haiku' }));
+    repl.ctx.capabilities = new Set(['sessionControl', 'consoleOutput']);
+    await nameCmd.handler(repl.ctx, 'Job queue research');
+    expect(repl.lines).toEqual(lines.map((l) => l.replace('sdk-repl', 'sdk-repl2')));
+  });
+
+  it('web surface: echoes the name as typed, no terminal resume hint, slug stays the resume key', async () => {
+    const stats = makeStats({ totalTurns: 1, sessionId: 'sdk-web', model: 'haiku' });
+    const { ctx, lines } = makeCtx(stats);
+    ctx.capabilities = new Set(['sessionControl', 'choose', 'progress']);
+    await nameCmd.handler(ctx, 'Job queue research');
+    expect(stats.name).toBe('job-queue-research');
+    expect(stats.displayName).toBe('Job queue research');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('Job queue research');
+    expect(lines.join('\n')).not.toMatch(/afk interactive|Resume:/);
+    const stored = loadSession('sdk-web');
+    expect(stored?.name).toBe('job-queue-research');
+    expect(stored?.displayName).toBe('Job queue research');
+  });
 });

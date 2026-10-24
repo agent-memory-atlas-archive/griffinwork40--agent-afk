@@ -25,7 +25,7 @@ export interface CommandResponse {
   blocks: CommandOutputBlock[];
   control: CommandControl;
   /** Authoritative owner metadata after successful session controls. */
-  session?: { model?: string; name?: string; thinkingUi?: 'summary' | 'live' | 'digest' | 'off' };
+  session?: { model?: string; name?: string; nameExplicit?: boolean; thinkingUi?: 'summary' | 'live' | 'digest' | 'off' };
 }
 
 /** Normalised `SlashResult` for the wire. All variants represented. */

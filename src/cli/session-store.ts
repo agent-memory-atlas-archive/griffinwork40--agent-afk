@@ -40,6 +40,10 @@ export interface StoredSession {
   /** Human-readable session name (kebab-case). Optional — absent on legacy
    * sidecars saved before naming existed; those resolve by id/sessionId. */
   name?: string;
+  /** True when `name` came from `/name` (shown verbatim), absent when auto-derived. */
+  nameExplicit?: boolean;
+  /** Verbatim `/name` text for display; `name` remains the slug resume key. */
+  displayName?: string;
   /** Origin surface ('cli' | 'telegram' | 'daemon' | 'web'). Absent on legacy sidecars → 'cli'. */
   source?: 'cli' | 'telegram' | 'daemon' | 'web';
   /** Telegram chat id when source === 'telegram' (reverse lookup). */
@@ -191,6 +195,11 @@ export function saveSession(
   const payload: StoredSession = {
     sessionId: stats.sessionId,
     ...(stats.name ? { name: stats.name } : {}),
+    // Invariant: written right after `name` (before `turns`) so the web
+    // session list's head-only sidecar read sees it (session-name-head.ts).
+    ...(stats.name && stats.nameExplicit ? { nameExplicit: true } : {}),
+    // Same head-read invariant as nameExplicit: before `turns`.
+    ...(stats.name && stats.nameExplicit && stats.displayName ? { displayName: stats.displayName } : {}),
     ...(stats.source ? { source: stats.source } : {}),
     ...(stats.actor ? { actor: stats.actor } : {}),
     ...(stats.telegramChatId !== undefined ? { telegramChatId: stats.telegramChatId } : {}),

@@ -8,7 +8,7 @@ export { clearConversation } from './clear.js';
 export { compactConversation, type CompactConversationResult, type CompactProgress } from './compact.js';
 export { setSessionModel, type SetSessionModelResult } from './model.js';
 export {
-  setSessionName, type SetSessionNameResult, type SessionNameOptions,
+  setSessionName, sessionDisplayName, type SetSessionNameResult, type SessionNameOptions,
   THINKING_MODES, getSessionThinking, setSessionThinking,
   readSessionFast, setSessionFast,
 } from './preferences.js';

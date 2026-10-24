@@ -27,7 +27,7 @@ export interface CommandResponse {
   blocks: CommandOutputBlock[];
   control: CommandControl;
   /** Authoritative session metadata after a successful control operation. */
-  session?: { model?: string; name?: string; thinkingUi?: ThinkingUiMode };
+  session?: { model?: string; name?: string; nameExplicit?: boolean; thinkingUi?: ThinkingUiMode };
 }
 
 /** Display-only preference; hiding thinking never removes transcript data. */

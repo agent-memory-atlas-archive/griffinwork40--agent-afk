@@ -363,6 +363,19 @@ describe('startWebServer — owned sessions', () => {
     expect(prompt.status).toBe(202);
   });
 
+  it('lists an owned, still-empty session with the owner cwd and model (welcome folder chip)', async () => {
+    const owned = new Set<string>(['sess-empty-cwd']);
+    const fake = {
+      owned,
+      list: () => [{ id: 'sess-empty-cwd', cwd: '/work/my-repo', model: 'haiku', createdAt: 'now' }],
+    };
+    const h = await start({ owner: fake as never });
+    const res = await fetch(api(h, '/api/sessions'), { headers: { Authorization: `Bearer ${h.token}` } });
+    const body = await res.json() as { sessions: Array<{ id: string; cwd?: string; model?: string }> };
+    const row = body.sessions.find((s) => s.id === 'sess-empty-cwd');
+    expect(row).toMatchObject({ cwd: '/work/my-repo', model: 'haiku' });
+  });
+
   it('409s a prompt to a session this process does not own', async () => {
     const h = await start({ owner: { owned: new Set<string>() } as never });
     const res = await post(h, '/api/sessions/foreign-id/prompt', { text: 'hi' });

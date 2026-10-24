@@ -159,6 +159,18 @@ export interface SessionStats {
    */
   name?: string;
   /**
+   * True when `name` was chosen explicitly (`/name`), false/absent when it was
+   * auto-derived from the first user message. Surfaces show an explicit name
+   * verbatim and may humanize a derived slug for display.
+   */
+  nameExplicit?: boolean;
+  /**
+   * The explicit `/name` exactly as typed (trimmed, control characters and
+   * runs of whitespace collapsed). `name` stays the slug: it is the resume key
+   * `--resume <name>` matches. Absent for derived names. Display-only.
+   */
+  displayName?: string;
+  /**
    * Effective working directory for the session — the `cwd` passed to the
    * provider, or `process.cwd()` when none was overridden (e.g. `--worktree`
    * supplies an override). Captured at bootstrap and treated as immutable

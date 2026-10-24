@@ -16,6 +16,8 @@ export interface SessionSummary {
   surface?: string;
   updatedAt?: string;
   title?: string;
+  /** True when `title` is an explicit `/name`: display verbatim (see lib/session-title). */
+  titleExplicit?: boolean;
   alive?: boolean;
   model?: string;
 }

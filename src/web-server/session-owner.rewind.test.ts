@@ -157,7 +157,13 @@ describe('web rewind durable projection', () => {
       expect(rows).toContainEqual(expect.objectContaining({ kind: 'tool_result', toolUseId: 'tool-1', toolName: 'Read', content: 'retained output' }));
       expect(JSON.stringify(rows)).not.toMatch(/third|model-only|framework context/);
       expect(rows.filter((r) => r.kind === 'done')).toEqual([expect.objectContaining({ kind: 'done' }), expect.objectContaining({ kind: 'done' })]);
-      expect(rows.filter((r) => r.kind === 'done').every((r) => r.costUsd === undefined)).toBe(true);
+      // The pre-rewind ledger had real cost records (mock emits 0.001/turn);
+      // the projection now carries that total in the last done record so the
+      // browser meter does not reset to $0 after a rewind.
+      const doneRows = rows.filter((r) => r.kind === 'done');
+      // At most one done record may carry costUsd (the last/only retained turn).
+      const withCost = doneRows.filter((r) => r.costUsd !== undefined);
+      expect(withCost.length).toBeLessThanOrEqual(1);
     } finally { await s.control.close(); await s.session.close(); }
   });
 

@@ -192,6 +192,20 @@ function endTurnCheckpoint(ctx: TurnDriverContext, checkpoint: FileCheckpointReg
   }
 }
 
+/**
+ * Invariant: an ESC/Stop interrupt (abort reason 'interrupted') usually ends
+ * the turn through the loop's own graceful-abort terminal, which carries the
+ * ACCUMULATED usage (stopReason null, or a prior round's 'tool_use'). Stamp it
+ * exactly like the synthesized interrupt terminal (query-events.ts) so every
+ * consumer — the web ledger's `stopped` marker included — sees the same reason
+ * whichever path ended the turn. Other aborts (close, timeout, budget) and
+ * natural ends pass through untouched.
+ */
+function stampInterrupted<E extends Extract<ProviderEvent, { type: 'turn.completed' }>>(event: E, signal: AbortSignal): E {
+  if (!signal.aborted || signal.reason !== 'interrupted') return event;
+  return { ...event, usage: { ...event.usage, stopReason: 'interrupted', resultSubtype: 'interrupted' } };
+}
+
 /** Drive the session: emit `session.init`, then loop user turns until closed. */
 export async function* driveTurns(ctx: TurnDriverContext): AsyncGenerator<ProviderEvent, void, void> {
   yield { type: 'session.init', info: buildSessionInfo(ctx) };
@@ -292,7 +306,7 @@ export async function* driveTurns(ctx: TurnDriverContext): AsyncGenerator<Provid
       // already saw end.
       let turnEmittedTerminal = false;
       try {
-        for await (const event of ctx.retry.turnWithRetries(runInput, () => ctx.state.closed)) {
+        for await (let event of ctx.retry.turnWithRetries(runInput, () => ctx.state.closed)) {
           // P2 (Codex review): yield `turn.completed` BEFORE the closed-return
           // so stream-consumer.ts's `setLastResponseMetadata` fires and
           // `AgentSession.lastStopReason` is populated. Without this, a
@@ -307,6 +321,7 @@ export async function* driveTurns(ctx: TurnDriverContext): AsyncGenerator<Provid
           // the downstream synthesize-terminal logic correct: no second terminal
           // is emitted after we return.
           if (event.type === 'turn.completed') {
+            event = stampInterrupted(event, controller.signal);
             ctx.state.lastUsage = event.usage;
             ctx.abort.clear(controller);
             turnEmittedTerminal = true;

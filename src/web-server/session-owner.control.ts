@@ -7,7 +7,7 @@ import { clearConversation } from '../agent/session-control/index.js';
 import { FastModeController } from '../agent/fast-mode.js';
 import { resolveModelId } from '../agent/session/model-resolution.js';
 import { SessionLedgerWriter, type LedgerPayload } from '../agent/session-ledger.js';
-import { projectJournalMessages, readProjectionMessages } from './session-owner.projection.js';
+import { projectJournalMessages, readLedgerCostTotals, readLedgerToolDurations, readProjectionMessages } from './session-owner.projection.js';
 import { archiveSessionLedger } from './ledger-archive.js';
 import { getSessionLedgerDir, getSessionLedgerPath } from '../paths.js';
 import { recordTurn } from '../cli/slash/session-stats.js';
@@ -120,10 +120,12 @@ export class WebSessionControl {
       : await cmd.handler(ctx, args);
     this.stats.sessionId = this.id;
     this.onMetadata({ model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}) });
+    // An explicit /name is shown exactly as typed; `name` (the slug) stays the resume key.
+    const shownName = this.stats.nameExplicit ? (this.stats.displayName ?? this.stats.name) : this.stats.name;
     if (cmd.name === '/model' || cmd.name === '/name' || cmd.name === '/thinking') {
       // Metadata is authoritative even when validation rejected the requested value.
       this.persist();
-      return { result, session: { model: String(this.stats.model), ...(this.stats.name ? { name: this.stats.name } : {}), ...(cmd.name === '/thinking' ? { thinkingUi: this.stats.thinkingUi ?? 'live' } : {}) } };
+      return { result, session: { model: String(this.stats.model), ...(this.stats.name ? { name: shownName, ...(this.stats.nameExplicit ? { nameExplicit: true } : {}) } : {}), ...(cmd.name === '/thinking' ? { thinkingUi: this.stats.thinkingUi ?? 'live' } : {}) } };
     }
     return { result };
   }
@@ -135,9 +137,13 @@ export class WebSessionControl {
     const rewind = this.session.rewindConversation;
     this.session.rewindConversation = async (index) => {
       await readProjectionMessages(this.session); // fail closed BEFORE provider mutation
+      // Read cost totals from the CURRENT ledger before it is archived so we
+      // can inject them into the rebuilt projection (journals carry no billing).
+      const priorCost = await readLedgerCostTotals(this.id);
+      const toolDurations = await readLedgerToolDurations(this.id);
       const result = await rewind.call(this.session, index);
       if (result.rewound) {
-        const retained = projectJournalMessages(await readProjectionMessages(this.session));
+        const retained = projectJournalMessages(await readProjectionMessages(this.session), priorCost, toolDurations);
         // Unlike clear, rewind doesn't seal the AgentSession's same-id writer.
         await this.session.sealEventLedger();
         await this.resetProjection(retained);

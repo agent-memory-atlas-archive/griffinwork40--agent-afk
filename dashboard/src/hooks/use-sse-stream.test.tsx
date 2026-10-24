@@ -20,7 +20,7 @@ it('drops stale ephemeral requests on reconnect but retains ledger history and n
   await waitFor(() => expect(result.current.events).toHaveLength(1));
   act(() => old.close());
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2), { timeout: 2000 });
-  expect(result.current.events).toContainEqual({ type: 'choice_stream_boundary' });
+  await waitFor(() => expect(result.current.events).toContainEqual({ type: 'choice_stream_boundary' }));
   act(() => fresh.enqueue(new TextEncoder().encode('data: {"type":"choice_request","request":{"corrId":"new"}}\n\n')));
   await waitFor(() => expect(result.current.events).toHaveLength(3));
 });
