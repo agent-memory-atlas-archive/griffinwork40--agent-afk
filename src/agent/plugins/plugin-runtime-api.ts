@@ -51,22 +51,37 @@ export function _resetDefaultStateStore(): void {
 
 /**
  * Build the state-store slice of {@link PluginApi}.
- * An optional factory overrides `makeDefaultStateStore` for test injection.
+ *
+ * @param pluginId - Plugin name from the manifest (e.g. `"afk-moat"`). When
+ *   provided, every namespace is prefixed with `plugin:<pluginId>:` so plugins
+ *   are sandboxed and cannot read or write host-owned namespaces.
+ *   When omitted (legacy / test callers) namespaces are passed verbatim.
+ * @param factory - Optional factory override for the default StateStore, used
+ *   for test injection. When omitted the process singleton is used.
  */
 export function buildStateApiClosures(
+  pluginId?: string,
   factory?: () => ReturnType<typeof makeDefaultStateStore>,
 ): Pick<
   Required<PluginApi>,
   'stateGet' | 'statePut' | 'stateCas' | 'stateDel' | 'stateInsertIfAbsent' | 'stateQuery'
 > {
   const store = () => getOrCreateDefaultStateStore(factory);
+  // Invariant: plugin namespace sandboxing. All state operations for a
+  // code-backed plugin are scoped to `plugin:<pluginId>:` so a plugin
+  // cannot read, write, or delete host-owned namespaces (e.g. `usage`,
+  // `presence`, peer-inbox namespaces). When pluginId is absent the raw
+  // namespace is forwarded — only used by tests and legacy call sites that
+  // do not supply a plugin identity.
+  const scope = (ns: string): string =>
+    pluginId !== undefined && pluginId.length > 0 ? `plugin:${pluginId}:${ns}` : ns;
   return {
-    stateGet: (ns, key) => store().get(ns, key),
-    statePut: (ns, key, value, opts) => store().put(ns, key, value, opts),
-    stateCas: (ns, key, ev, value, opts) => store().cas(ns, key, ev, value, opts),
-    stateDel: (ns, key) => store().del(ns, key),
-    stateInsertIfAbsent: (ns, key, value, opts) => store().insertIfAbsent(ns, key, value, opts),
-    stateQuery: (ns, opts) => store().query(ns, opts),
+    stateGet: (ns, key) => store().get(scope(ns), key),
+    statePut: (ns, key, value, opts) => store().put(scope(ns), key, value, opts),
+    stateCas: (ns, key, ev, value, opts) => store().cas(scope(ns), key, ev, value, opts),
+    stateDel: (ns, key) => store().del(scope(ns), key),
+    stateInsertIfAbsent: (ns, key, value, opts) => store().insertIfAbsent(scope(ns), key, value, opts),
+    stateQuery: (ns, opts) => store().query(scope(ns), opts),
   };
 }
 

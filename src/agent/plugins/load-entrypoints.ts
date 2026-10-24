@@ -202,7 +202,20 @@ export function installPluginHooks(registry: HookRegistry): void {
       // no session id can never accidentally read an ancestor caller's identity.
       // Peer API methods (listSessions, sendToSession) fail closed on undefined,
       // which is correct: they must not operate with an unknown identity.
-      const sessionId = (ctx as { sessionId?: string }).sessionId;
+      // S-4: type-guard extraction instead of an unsafe cast. When
+      // sessionId is absent the ALS is still entered with undefined (clearing
+      // any outer context), but we log a warning so the absence is observable.
+      // Peer API methods (listSessions, sendToSession) fail closed on undefined.
+      const rawCtx = ctx as unknown as Record<string, unknown>;
+      const sessionId =
+        typeof rawCtx['sessionId'] === 'string' ? rawCtx['sessionId'] : undefined;
+      if (sessionId === undefined) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[plugin-hook] hook dispatched without a sessionId — peer API will fail closed for this invocation',
+          { event },
+        );
+      }
       const run = async (): Promise<HookDecision> => {
         try {
           return await handler(ctx, signal);
@@ -236,8 +249,22 @@ export type LoadEntrypointsOptions = {
    * code-backed plugin to register skills against the host's singleton registry
    * (see {@link PluginApi}). Modules with no default-export function still run
    * their top-level side-effects at import time (backward-compatible).
+   *
+   * Mutually exclusive with `buildPluginApi`: when `buildPluginApi` is supplied
+   * it takes precedence and this field is ignored.
    */
   pluginApi?: PluginApi;
+  /**
+   * Per-plugin API factory. When provided, called once per plugin with the
+   * resolved plugin name (from its manifest) and the plugin config; its return
+   * value is passed to the plugin's default-export function instead of
+   * `pluginApi`. Use this to inject per-plugin state closures (e.g. namespace
+   * scoping) that vary by plugin identity.
+   *
+   * Returned `undefined` falls back to `pluginApi`. Takes precedence over
+   * `pluginApi` when both are supplied.
+   */
+  buildPluginApi?: (pluginName: string | null, plugin: SdkPluginConfig) => PluginApi | undefined;
 };
 
 /**
@@ -267,7 +294,20 @@ export async function loadPluginEntrypoints(
       const mod = await importer(pathToFileURL(absPath).href);
       const entry = (mod as { default?: unknown } | undefined)?.default;
       if (typeof entry === 'function') {
-        await (entry as (api: PluginApi | undefined) => unknown)(opts.pluginApi);
+        // Resolve per-plugin API when buildPluginApi is supplied; fall back to
+        // the shared pluginApi. Plugin name is resolved from the manifest
+        // (.claude-plugin/plugin.json) — null when the manifest is absent or
+        // malformed, in which case per-plugin state scoping degrades gracefully
+        // to the shared pluginApi (no namespace prefix applied).
+        let effectiveApi: PluginApi | undefined = opts.pluginApi;
+        if (opts.buildPluginApi !== undefined) {
+          // Lazy-resolve the plugin name from its manifest. Keeps the hot path
+          // (no buildPluginApi) free of manifest I/O.
+          const { readPluginManifest } = await import('./plugin-manifest.js');
+          const pluginName = readPluginManifest(plugin.path).name;
+          effectiveApi = opts.buildPluginApi(pluginName, plugin) ?? opts.pluginApi;
+        }
+        await (entry as (api: PluginApi | undefined) => unknown)(effectiveApi);
       }
     } catch (error) {
       opts.onError?.(plugin, error);

@@ -70,20 +70,20 @@ describe('buildStateApiClosures — factory called exactly once (singleton)', ()
 
   it('factory is called 0 times before any state method is invoked', () => {
     const factory = vi.fn(() => makeMockStore());
-    buildStateApiClosures(factory);
+    buildStateApiClosures(undefined, factory);
     expect(factory).toHaveBeenCalledTimes(0);
   });
 
   it('factory is called exactly 1 time on first state method invocation', async () => {
     const factory = vi.fn(() => makeMockStore());
-    const api = buildStateApiClosures(factory);
+    const api = buildStateApiClosures(undefined, factory);
     await api.stateGet('ns', 'k');
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
   it('factory is NOT called again on subsequent calls (singleton reuse)', async () => {
     const factory = vi.fn(() => makeMockStore());
-    const api = buildStateApiClosures(factory);
+    const api = buildStateApiClosures(undefined, factory);
     await api.stateGet('ns', 'k1');
     await api.statePut('ns', 'k2', 'v');
     await api.stateDel('ns', 'k3');
@@ -92,9 +92,9 @@ describe('buildStateApiClosures — factory called exactly once (singleton)', ()
 
   it('factory is NOT called again after re-registration (same process singleton)', async () => {
     const factory = vi.fn(() => makeMockStore());
-    const api1 = buildStateApiClosures(factory);
+    const api1 = buildStateApiClosures(undefined, factory);
     await api1.stateGet('ns', 'k');
-    const api2 = buildStateApiClosures(factory);
+    const api2 = buildStateApiClosures(undefined, factory);
     await api2.statePut('ns', 'k2', 'v');
     expect(factory).toHaveBeenCalledTimes(1);
   });
@@ -102,7 +102,7 @@ describe('buildStateApiClosures — factory called exactly once (singleton)', ()
   it('each of the 6 state methods delegates to the store (call count 0 → 1)', async () => {
     const store = makeMockStore();
     const factory = vi.fn(() => store);
-    const api = buildStateApiClosures(factory);
+    const api = buildStateApiClosures(undefined, factory);
 
     expect(store._calls['get']).toBe(0);
     await api.stateGet('ns', 'k');
@@ -127,6 +127,60 @@ describe('buildStateApiClosures — factory called exactly once (singleton)', ()
     expect(store._calls['query']).toBe(0);
     await api.stateQuery('ns');
     expect(store._calls['query']).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S-2: namespace sandboxing — plugin:<id>: prefix applied at closure boundary
+// ---------------------------------------------------------------------------
+
+describe('buildStateApiClosures — namespace sandboxing (S-2)', () => {
+  beforeEach(() => _resetDefaultStateStore());
+  afterEach(() => _resetDefaultStateStore());
+
+  it('prefixes all 6 state methods with plugin:<pluginId>: when pluginId is given', async () => {
+    const store = makeMockStore();
+    const factory = vi.fn(() => store);
+    const api = buildStateApiClosures('my-plugin', factory);
+
+    await api.stateGet('config', 'k');
+    expect((store.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('plugin:my-plugin:config');
+
+    await api.statePut('data', 'k', 'v');
+    expect((store.put as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('plugin:my-plugin:data');
+
+    await api.stateCas('data', 'k', 1, 'v');
+    expect((store.cas as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('plugin:my-plugin:data');
+
+    await api.stateDel('cache', 'k');
+    expect((store.del as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('plugin:my-plugin:cache');
+
+    await api.stateInsertIfAbsent('locks', 'k', 'v');
+    expect((store.insertIfAbsent as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('plugin:my-plugin:locks');
+
+    await api.stateQuery('results');
+    expect((store.query as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('plugin:my-plugin:results');
+  });
+
+  it('passes namespace verbatim when pluginId is undefined (no prefix)', async () => {
+    const store = makeMockStore();
+    const factory = vi.fn(() => store);
+    const api = buildStateApiClosures(undefined, factory);
+
+    await api.stateGet('my-ns', 'k');
+    expect((store.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe('my-ns');
+  });
+
+  it('a plugin cannot read a host-owned namespace (plugin: prefix prevents collision)', async () => {
+    // A plugin using ns='usage' must reach 'plugin:my-plugin:usage', never 'usage'.
+    const store = makeMockStore();
+    const factory = vi.fn(() => store);
+    const api = buildStateApiClosures('my-plugin', factory);
+
+    await api.stateGet('usage', 'k');
+    const calledNs = (store.get as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as string;
+    expect(calledNs).not.toBe('usage');
+    expect(calledNs).toBe('plugin:my-plugin:usage');
   });
 });
 
