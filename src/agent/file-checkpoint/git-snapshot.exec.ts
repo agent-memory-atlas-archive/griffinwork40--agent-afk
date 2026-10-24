@@ -34,6 +34,9 @@ export const GIT_SNAPSHOT_GLOBAL_ARGS: readonly string[] = [
   '-c', 'core.safecrlf=false',
   '-c', 'advice.addEmbeddedRepo=false',
   '-c', 'color.ui=false',
+  // Disable all credential helpers so no snapshot git call can prompt for or
+  // store credentials (belt-and-suspenders alongside the env-var strip below).
+  '-c', 'credential.helper=',
 ];
 
 /**
@@ -48,11 +51,33 @@ export function snapshotArgs(hooksDir: string): string[] {
 /** What every git call in one snapshot operation shares. */
 export interface GitCtx { args: readonly string[]; env: GitEnv; deadline: number }
 
-/** Inherited env (sanctioned builder) minus every `GIT_*` override. */
+/**
+ * Pattern matching env-var names that carry credentials. Any key whose name
+ * (case-insensitive) ends in one of these suffixes is stripped, plus a
+ * belt-and-suspenders list of well-known names that might not match the regex
+ * (e.g. GOOGLE_APPLICATION_CREDENTIALS ends in _CREDENTIALS, not _CREDENTIAL).
+ */
+const CREDENTIAL_SUFFIX_RE = /_(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)$/i;
+const CREDENTIAL_EXACT: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'GITHUB_TOKEN',
+  'NPM_TOKEN',
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'AWS_SESSION_TOKEN',
+  'AZURE_CLIENT_SECRET',
+  'GOOGLE_APPLICATION_CREDENTIALS',
+];
+
+/** Inherited env (sanctioned builder) minus every `GIT_*` override and minus
+ * every credential env var, so no secret leaks into a git subprocess. */
 export function buildSnapshotEnv(): GitEnv {
   const base = buildChildEnv(undefined);
   for (const key of Object.keys(base)) {
-    if (key.startsWith('GIT_')) delete base[key];
+    if (key.startsWith('GIT_') || CREDENTIAL_SUFFIX_RE.test(key) || CREDENTIAL_EXACT.includes(key)) {
+      delete base[key];
+    }
   }
   return {
     ...base,

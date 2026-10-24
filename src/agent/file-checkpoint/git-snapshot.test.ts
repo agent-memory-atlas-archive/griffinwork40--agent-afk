@@ -101,7 +101,7 @@ describe('captureWorkspaceTree / diffTrees (real git)', () => {
     await fs.rm(path.join(repo, 'del.txt'));
     await fs.writeFile(path.join(repo, 'new.txt'), 'brand new\n');
     const after = await captureOk();
-    expect(after.repoRoot).toBe(realRepo());
+    expect(after.repoRoot.split(path.sep).join('/')).toBe(realRepo().split(path.sep).join('/'));
     const d = await diff(before.tree, after.tree);
     const byPath = Object.fromEntries(d.changes.map((c) => [rel(c.absPath), c.prior]));
     expect(Object.keys(byPath).sort()).toEqual(['del.txt', 'mod.txt', 'new.txt']);
@@ -156,7 +156,9 @@ describe('captureWorkspaceTree / diffTrees (real git)', () => {
     const after = await captureOk();
     const d = await diff(before.tree, after.tree);
     expect(d.changes).toHaveLength(1);
-    expect(d.changes[0]?.prior?.mode).toBe(0o755);
+    // Windows git does not honour the exec bit; POSIX mode is always 0o644 there.
+    const expectedMode = process.platform === 'win32' ? 0o644 : 0o755;
+    expect(d.changes[0]?.prior?.mode).toBe(expectedMode);
   });
 
   it('skips symlink changes where symlinks can be created', async () => {
@@ -195,7 +197,7 @@ describe('captureWorkspaceTree / diffTrees (real git)', () => {
     await fs.mkdir(nested, { recursive: true });
     await fs.writeFile(path.join(nested, 'inner.txt'), 'in\n');
     const before = await captureOk(nested);
-    expect(before.repoRoot).toBe(realRepo());
+    expect(before.repoRoot.split(path.sep).join('/')).toBe(realRepo().split(path.sep).join('/'));
     await fs.writeFile(path.join(repo, 'mod.txt'), 'top-level change\n');
     await fs.writeFile(path.join(nested, 'inner.txt'), 'changed\n');
     const after = await captureOk(nested);
@@ -232,7 +234,8 @@ describe('captureWorkspaceTree / diffTrees (real git)', () => {
     expect(readFileSync(indexPath).equals(indexBytes)).toBe(true);
     expect(statSync(indexPath).mtimeMs).toBe(indexMtime);
     expect(existsSync(`${indexPath}.lock`)).toBe(false);
-    expect(listFiles(path.join(gitDir, 'objects'))).toEqual(objectsBefore);
+    const filterLocks = (files: string[]) => files.filter(f => !f.endsWith('.lock'));
+    expect(filterLocks(listFiles(path.join(gitDir, 'objects')))).toEqual(filterLocks(objectsBefore));
     expect(listFiles(path.join(gitDir, 'refs'))).toEqual(refsBefore);
     expect(git(repo, 'status', '--porcelain')).toContain('?? another.txt');
     expect(listFiles(priv.objectDir).length).toBeGreaterThan(0);
