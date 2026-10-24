@@ -201,7 +201,7 @@ export function useLiveDrafts(): UseLiveDraftsResult {
     const cur = liveTurnRef.current;
     let changed = false;
     for (const [k, d] of draftsRef.current) {
-      const ended = !cur || d.turn < cur.turn;
+      const ended = !cur || d.turn < cur.turn || (d.turn === cur.turn && cur.ended);
       if (d.state === 'sealed' && ended) { draftsRef.current.delete(k); changed = true; }
     }
     if (changed) publishNow();
