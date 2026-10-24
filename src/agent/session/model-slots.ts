@@ -236,7 +236,12 @@ export const DIRECT_MODEL_ALIASES: Readonly<Record<string, string>> = {
 // working without path changes.
 export { OPENAI_MODEL_HINTS } from './model-slots.hints.js';
 import { getModelAliasesHint } from './model-slots.hints.js';
-/** Lazy-built to avoid circular-init TDZ; see model-slots.hints.ts. */
+/**
+ * Eagerly built at module-evaluation time by calling {@link getModelAliasesHint}.
+ * The lazy/cached pattern lives inside that function (model-slots.hints.ts) to
+ * avoid the circular-init TDZ between this file and its sibling; this constant
+ * itself is NOT lazy — it is populated on first import of model-slots.ts.
+ */
 export const MODEL_ALIASES_HINT: readonly string[] = getModelAliasesHint();
 
 /**
