@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.335.1] - 2026-10-24
+
 ### Fixed
 - adopt a Claude account switch at turn start, no /reauth needed (#4259) (4f14beed9)
 - improve chip color contrast for WCAG AA compliance (827e18173)
