@@ -11,6 +11,49 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Added
+- **Web chat UI overhaul**: live token streaming with full-length answers (b57ad799a), ⌘K palette indexing sessions and commands (16e0cd196), responsive single-textarea composer with retry/edit wiring (82a5c54bd), one-tap new chat in the phone header (8884d3b5d), layout & navigation UX (edfced3d8), turn controls & composer (5d8a79d72), legible tool rows with collapsible code and fast long transcripts (469fae359), WorkingIndicator placeholder for slow turns (82b0deaba), D2 code highlighting and a11y fixes (293879196), D4 tool rows & shell polish (003b76546), E2 design-pass-2 non-streaming fixes (8905a006b)
+
+### Fixed
+- settle() now drops current-turn sealed drafts when turn has ended (399fd1657)
+- promote git-cache hits to MRU via delete+re-insert (b51a08858)
+- move agent-type listing from tool description to system prompt for prefix-cache stability (a3f582b72)
+- prevent orphan roots when parent commits over running children (26cb94878)
+- resolve symlinked dirs + extract shouldFilePickerSubmit predicate (aa90c4c4c)
+- Enter on @file picker submits for files, navigates for directories (ac0cfa6db)
+- no blank frame between "Thinking" and the first answer text (e3def2bce)
+- transcript follows after Retry and send; ⌘K ranks command names first (501497883)
+- a reload keeps the transcript pinned to the bottom (27b3e485f)
+- sealed drafts only end the indicator for the current turn (b0cffc5ed)
+- mobile tables scroll sideways instead of wrapping rows tall (7600a116d)
+- welcome screen of an empty session shows folder and model (58f746f61)
+- /name shows exactly what was typed; no terminal hint on the web (7a6ab3318)
+- tool durations survive Retry and /rewind (e4e89fc4b)
+- no "Thinking 0s" flash under a finished answer (04b285d73)
+- picker Esc/Cancel/Select hands focus to the re-enabled composer (d908484ec)
+- highlighted code keeps its indentation (b5cb45bcc)
+- show an explicit /name verbatim; humanize only derived titles (2ed85556e)
+- layout scroll events no longer unpin the transcript (bab3a4d5c)
+- working indicator waits for visible text and shows Running <tool> (ce9fee658)
+- stream every turn live, not only the first after a reset (66c997225)
+- jump-to-latest button always visible when scrolled up (4421af279)
+- fix contrast violations in WorkingIndicator and session-model span (770933193)
+- grep/glob summaries keep the search pattern (8e843fb7c)
+- fix language label contrast in code-block header (2bd5f00ee)
+- boost contrast on Agent label and kbd shortcut chip (e2bfd9b68)
+- approval dismissal returns focus to the composer while a turn runs (b16d3e617)
+- spine grouping hung the tab on a `stopped` item (cdd937da9)
+- stamp stopReason 'interrupted' on a Stop that ends via the loop's terminal (6dcfece36)
+- idle live sessions stay "Idle", not "Done"; busy badge on mobile drawer (04ffaa2ac)
+- retry/edit are conversation-only rewinds of the newest prompt (3a68c04d1)
+- tighten /model picker radio selector to match sonnet alias not medium slot (3401991bc)
+- address advisory findings from multiple triage batches and reviews (35a87ece4) (d2b74ab3b) (edfc28665) (c9867b0db)
+- make git-common-dir relative-cwd assertion Windows-portable (92d9b2308)
+
+### Changed
+- model picker redesign + slash palette grouping (66d163f8b)
+- extract schedule/daemon routes from server.ts dispatch() (8b9105c42)
+
 ## [5.334.0] - 2026-10-23
 
 ### Added
