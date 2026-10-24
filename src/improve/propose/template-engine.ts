@@ -56,6 +56,8 @@ import {
   toolFailureDensityTemplate,
   closureAnomalyTemplate,
   closureAdviceFor as _closureAdviceFor,
+  likelyFilesForTool,
+  rootCauseFromClusterKey,
 } from './template-engine.templates-density.js';
 
 /** Optional injection seam for deterministic tests. */
@@ -106,7 +108,26 @@ export function proposeFromCard(card: FailureCard, ctx: TemplateContext): Improv
   const createdAt = (ctx.now ?? (() => new Date()))().toISOString();
   const hypothesis = template.hypothesis(card);
   const fixSketch = template.fixSketch(card);
-  const likelyFiles = template.likelyFiles.map((f) => ({ ...f }));
+
+  // H1 fix: for tool-failure-density cards, use the tool-specific helpers so
+  // the produced proposal is actually tool-aware at runtime, not generic.
+  // rootCauseFromClusterKey infers the root-cause class from the dominant
+  // cluster key; likelyFilesForTool surfaces the handler file first.
+  let likelyFiles: LikelyFile[];
+  let rootCauseClass: RootCauseClass;
+  if (card.pattern === 'tool-failure-density') {
+    const toolName =
+      typeof card.detail['toolName'] === 'string' ? card.detail['toolName'] : '';
+    const clusterKey =
+      typeof card.detail['dominantClusterKey'] === 'string'
+        ? card.detail['dominantClusterKey']
+        : '';
+    rootCauseClass = clusterKey ? rootCauseFromClusterKey(clusterKey) : template.rootCauseClass;
+    likelyFiles = likelyFilesForTool(toolName).map((f) => ({ ...f }));
+  } else {
+    rootCauseClass = template.rootCauseClass;
+    likelyFiles = template.likelyFiles.map((f) => ({ ...f }));
+  }
 
   // Compute risk: MAX of riskFloor and worst likelyFiles tier.
   const riskLevel = deriveRiskLevel(template.riskFloor, likelyFiles);
@@ -124,7 +145,7 @@ export function proposeFromCard(card: FailureCard, ctx: TemplateContext): Improv
     cardSlug: card.slug,
     title: buildTitle(card),
     hypothesis,
-    rootCauseClass: template.rootCauseClass,
+    rootCauseClass,
     evidenceRefs,
     fixSketch,
     likelyFiles,

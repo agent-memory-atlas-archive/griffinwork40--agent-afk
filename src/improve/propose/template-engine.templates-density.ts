@@ -128,6 +128,8 @@ interface PatternTemplate {
 export const toolFailureDensityTemplate: PatternTemplate = {
   rootCauseClass: 'unknown',
   hypothesis: (card) => {
+    // Wire helpers: use rootCauseFromClusterKey + likelyFilesForTool per-tool
+    // (rootCauseClass is set statically as fallback; proposeFromCard overrides it)
     const toolName = typeof card.detail['toolName'] === 'string' ? card.detail['toolName'] : '<unknown>';
     const failures = typeof card.detail['failureCount'] === 'number' ? card.detail['failureCount'] : '?';
     const total = typeof card.detail['totalCalls'] === 'number' ? card.detail['totalCalls'] : '?';
@@ -148,20 +150,29 @@ export const toolFailureDensityTemplate: PatternTemplate = {
   },
   fixSketch: (card) => {
     const toolName = typeof card.detail['toolName'] === 'string' ? card.detail['toolName'] : '<the tool>';
+    // H3 fix: convert underscore tool names to hyphenated handler filenames
+    // (e.g. read_file → read-file.ts, wait_for → wait-for.ts)
+    const handlerName = toolName.replace(/_/g, '-');
     const sessionIds = Array.isArray(card.detail['sessionIds']) ? (card.detail['sessionIds'] as string[]) : [];
     const firstId = sessionIds[0] ?? '<session-id>';
+    // M1 fix: sessionIds entries are durable session IDs (not witness labels),
+    // so the subagents/ path is correct when using the session ID directly.
+    // The witness label (random UUID under state/witness/) is separate from the
+    // session ID (under state/sessions/); card.detail.sessionIds holds session IDs.
     return [
       '## Diagnostic steps (do these first)',
       '',
-      `1. Read the error text from a representative failure: \`afk trace show --session ${firstId} --tool ${toolName} --results | head -20\``,
+      // H2 fix: positional arg, not --session/--tool flags
+      `1. Read the error text from a representative failure: \`afk trace show ${firstId} --results | head -20\``,
       `   The \`errorHead\` field on each \`tool_call.completed\` row contains the first ≤200 chars of the error — usually enough to name the cause without reading the full trace.`,
       `2. Look at the events immediately BEFORE each failure — what did the model send as input?`,
       `3. For child-session calls (where \`subagentId\` appears on the evidence row), full tool args are recorded in the subagent journal: \`~/.afk/state/sessions/${firstId}/subagents/<subagentId>.jsonl\`. ` +
-        `Use \`afk trace show --results\` to surface both the error text and the subagent context in one pass.`,
+        `Use \`afk trace show ${firstId} --results\` to surface both the error text and the subagent context in one pass.`,
       '',
       '## Candidate fixes (human picks)',
       '',
-      `**Option A — handler bug.** Read \`src/agent/tools/handlers/${toolName}.ts\` (or the closest match under \`handlers/\`) and inspect its error paths. If a specific failure mode is reachable from common LLM inputs, fix the handler.`,
+      // H3 fix: use handlerName (underscores → hyphens) for the file path
+      `**Option A — handler bug.** Read \`src/agent/tools/handlers/${handlerName}.ts\` (or the closest match under \`handlers/\`) and inspect its error paths. If a specific failure mode is reachable from common LLM inputs, fix the handler.`,
       '',
       `**Option B — input shape too restrictive.** If the tool's input schema rejects inputs the model naturally produces, either loosen the schema or improve the schema's description so the model can comply.`,
       '',
@@ -170,6 +181,10 @@ export const toolFailureDensityTemplate: PatternTemplate = {
       `**Option D — accept as normal.** Some tools intentionally return isError as a signal (e.g., grep finding nothing). If this is the case, mark the card resolved with a note explaining why, or tune the detector threshold via \`--tool-failure-min-rate\`.`,
     ].join('\n');
   },
+  // H1 fix: wire likelyFilesForTool so the template produces tool-specific
+  // likelyFiles at proposal time. The static array below is the default
+  // fallback; proposeFromCard must call likelyFilesForTool(toolName) to
+  // override it per-card. See proposeFromCard in template-engine.ts.
   likelyFiles: [
     {
       path: 'src/agent/tools/handlers/',

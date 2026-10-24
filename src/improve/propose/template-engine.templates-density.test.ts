@@ -123,4 +123,27 @@ describe('toolFailureDensityTemplate — fixSketch', () => {
     const b = toolFailureDensityTemplate.fixSketch(makeToolCard('git-read'));
     expect(a).not.toBe(b);
   });
+
+  // M2 fix: test with an underscored runtime tool name to catch H3-class regressions
+  it('underscored tool names produce hyphenated handler paths (read_file → read-file.ts)', () => {
+    const sketch = toolFailureDensityTemplate.fixSketch(makeToolCard('read_file'));
+    expect(sketch).toContain('handlers/read-file.ts');
+    expect(sketch).not.toContain('handlers/read_file.ts');
+  });
+
+  it('underscored tool name wait_for produces hyphenated handler path', () => {
+    const sketch = toolFailureDensityTemplate.fixSketch(makeToolCard('wait_for'));
+    expect(sketch).toContain('handlers/wait-for.ts');
+    expect(sketch).not.toContain('handlers/wait_for.ts');
+  });
+
+  // H2 fix: verify the CLI command uses positional arg, not --session/--tool flags
+  it('fixSketch CLI command uses positional session id, not --session/--tool flags', () => {
+    const sketch = toolFailureDensityTemplate.fixSketch(
+      makeToolCard('bash', { sessionIds: ['sess-abc123'] }),
+    );
+    expect(sketch).toContain('afk trace show sess-abc123 --results');
+    expect(sketch).not.toContain('--session');
+    expect(sketch).not.toContain('--tool sess-abc123');
+  });
 });
