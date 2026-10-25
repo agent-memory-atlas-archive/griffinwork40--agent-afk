@@ -11,6 +11,27 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Added
+- **LSP server pool**: persistent LspClient + LspServerPool with auto-detect, auto-install, and migrated code_symbols + post-edit diagnostics (#4272) (b4c1f012f)
+- **Plugin API**: add state store and peer messaging to PluginApi (afe6832e8)
+- cluster tool failures by normalized errorHead (#4229) (21ebc8518)
+- show background process counts in the health rail (9d7e043fa)
+
+### Fixed
+- context-pressure wind-down passes stale text or markup as answer (#3983) (37d910718)
+- only show table row separators after multi-line rows (#4391) (2f9e1d62b)
+- overwrite stale tool-stop reason on abort instead of preserving via ??= (#3965) (74dad4a3e)
+- normalize git_read count shorthand, empty pattern, and echoed subcommand (#4227) (6a49f9768)
+- widen log/rev-list allowlist and fix git-investigator prompt (59cdf065b)
+- worktree-isolated depth-2+ forks inherit correct write root (e91964135)
+- pin childSkillExecutorFactory cwd inheritance in worktree-isolated depth-2+ tests (553d5e192)
+- retire session from owner maps on /exit (8b5a08b5c)
+- bind plugin peer helpers to calling sessions (2cbcd5b24)
+- add sightingCount to track recurrence beyond evidence cap (6174b00be)
+- gate firstSeen/lastSeen update on new evidence, not scan wall clock (56acfe3df)
+- post-turn re-check for bg injections that land while a turn is claimed (fb380c038)
+- stamp STREAM_INCOMPLETE unconditionally in buffered-text branch (26fb5f1a9)
+
 ## [5.335.1] - 2026-10-24
 
 ### Fixed
