@@ -351,9 +351,9 @@ function resolveStreamResult<T>(
   // Invariant: stamp STREAM_INCOMPLETE UNCONDITIONALLY (`=`, not `??=`) before
   // the throw so buildResultFromError surfaces stopReason:'stream_incomplete'
   // on the failed result (letting callers distinguish a stream-incomplete
-  // failure from an ordinary error). This differs from the buffered-text branch
-  // above, which uses `??=` deliberately: a capped run that also streamed text
-  // reaches there with `tool_use_loop_capped` already set and must keep it.
+  // failure from an ordinary error). The buffered-text branch above likewise
+  // stamps unconditionally — `TOOL_USE_LOOP_CAPPED` returns early before
+  // reaching it (line 281), so no stale cap reason can arrive there either.
   // Nothing worth preserving can reach HERE — the cap case returned at the
   // tool_use_loop_capped branch, and cancel/abort threw just above. Any
   // stopReason still set is a clean terminal one (end_turn / max_tokens /
