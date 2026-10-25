@@ -26,6 +26,7 @@ import {
   buildResultFromMessage,
   buildResultFromError,
   createEmptyTrace,
+  isTerminalStopReason,
   STREAM_INCOMPLETE,
   type SubagentResult,
   type SubagentStatus,
@@ -288,10 +289,21 @@ function resolveStreamResult<T>(
     // provider-stream close, or a provider that ended without a final
     // message). Mark the run non-clean so `runToResult` surfaces it as an
     // incomplete partial (via `stopReason`) instead of a silent success —
-    // consumers prepend a parent-visible marker (annotateIfIncomplete). Use
-    // `??=` so a real terminal stopReason (if one somehow arrived) is never
-    // clobbered; reaching here implies none did.
-    handle._lastStopReason ??= STREAM_INCOMPLETE;
+    // consumers prepend a parent-visible marker (annotateIfIncomplete).
+    //
+    // IMPORTANT — use a conditional assignment, NOT `??=` (#3965):
+    // `_lastStopReason` may already hold a TOOL-STOP reason (`tool_use`,
+    // `tool_calls`) from the PREVIOUS completed round. `processDoneEvent`
+    // stamps `_lastStopReason` on every `done` event, including inter-round
+    // tool stops. When round N+1 is aborted here, the stale tool-stop reason
+    // from round N survives, `??=` keeps it, and `runToResult` treats the
+    // abort as a clean finish. Fix: only preserve the prior value if it is a
+    // genuine terminal reason (end_turn / stop / stop_sequence / pause_turn /
+    // max_tokens / length / max_output_tokens). A tool stop, a budget-cap
+    // sentinel, a wind-down sentinel, or `undefined` must all be overwritten.
+    if (!isTerminalStopReason(handle._lastStopReason)) {
+      handle._lastStopReason = STREAM_INCOMPLETE;
+    }
     return { role: 'assistant', content: handle._lastStreamedContent, timestamp: new Date() };
   }
   // Invariant: both wind-down triggers return incomplete partials, never opaque
