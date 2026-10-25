@@ -400,14 +400,16 @@ export class SessionOwner {
     this.owned.delete(id);
     this.sessions.delete(id);
     this.info.delete(id);
+    const control = this.controls.get(id);
     this.controls.delete(id);
     this.pending.delete(id);
     this.turns.delete(id);
     this.autosavers.delete(id);
     const mcpManager = this.mcpManagers.get(id);
     this.mcpManagers.delete(id);
-    // Close async but do not await — retire() is called from a sync context
-    // (handleWebExit returns a CommandControl, not a Promise<void>).
+    // Close async but do not await — retire() is called from an async context
+    // (handleWebExit is async) but callers do not await the cleanup.
+    if (control) control.close().catch(() => {});
     if (session) session.close().catch(() => {});
     if (mcpManager) mcpManager.disconnectAll().catch(() => {});
   }
