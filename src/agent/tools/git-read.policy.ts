@@ -41,6 +41,15 @@ const DIFF_FORMAT = ['--stat', '--numstat', '--shortstat', '--name-only', '--nam
 const POLICIES: Record<GitReadSubcommand, SubcommandPolicy> = {
   status: { flags: ['-s', '--short', '-b', '--branch', '--porcelain', '--porcelain=v1', '--porcelain=v2', '--untracked-files=no', '--untracked-files=normal', '--untracked-files=all', '--ignored'], valued: [], forced: [], revs: false },
   log: {
+    // `-n` is listed in `flags` (exact-match allowlist) rather than in `valued`
+    // because the allowlist checks tokens individually and `-n` takes its value
+    // as the *next* positional token, not as a `=`-joined suffix. This is
+    // semantically a valued option, not a boolean flag, but it is functionally
+    // correct: the count-shorthand normalizer in planGitRead rewrites `-n <N>`
+    // into `--max-count=<N>` before checkToken runs, so `-n` alone never
+    // reaches git verbatim. The tradeoff (boolean slot for a paired option) was
+    // accepted in #4371 because the normalizer makes the behavior correct and
+    // the prompt steers models toward `--max-count=` anyway (see schemas.git-read.ts).
     flags: ['--oneline', '--graph', '--decorate', '--all', '--merges', '--no-merges', '--first-parent', '--reverse', '-p', '--patch', '--follow', '-n', '-i', '--regexp-ignore-case', '--not', ...DIFF_FORMAT],
     valued: ['--format=', '--pretty=', '--author=', '--committer=', '--grep=', '--since=', '--until=', '--after=', '--before=', '--max-count=', '--skip=', '--date=', '--unified=', '--diff-filter='],
     forced: ['--no-ext-diff', '--no-textconv'], revs: true,
