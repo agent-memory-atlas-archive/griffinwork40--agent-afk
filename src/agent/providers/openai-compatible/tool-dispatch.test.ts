@@ -40,14 +40,14 @@ interface ScriptedTurn {
 
 let scriptedTurns: ScriptedTurn[] = [];
 let turnIndex = 0;
-let createCalls: Array<{ args: { messages: unknown[]; tools?: unknown[] } }> = [];
+let createCalls: Array<{ args: { messages: unknown[]; tools?: unknown[]; tool_choice?: unknown } }> = [];
 
 function installScriptedClient(): void {
   const factory: OpenAIClientFactory = () =>
     ({
       chat: {
         completions: {
-          create: async (args: { stream?: boolean; messages: unknown[]; tools?: unknown[] }) => {
+          create: async (args: { stream?: boolean; messages: unknown[]; tools?: unknown[]; tool_choice?: unknown }) => {
             createCalls.push({ args });
             if (!args.stream) throw new Error('test mock only supports streaming');
             const script = scriptedTurns[turnIndex++];
