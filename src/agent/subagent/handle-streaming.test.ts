@@ -372,7 +372,7 @@ describe('SubagentHandle streaming', () => {
       //
       // With `??=`: stale 'tool_use' would survive → stopReason:'tool_use'.
       // With the fix (isTerminalStopReason guard): overwritten → STREAM_INCOMPLETE.
-      let capturedHandle: SubagentHandleImpl | null = null;
+      let capturedHandle: SubagentHandleImpl<unknown> | null = null;
 
       const session: IAgentSession = {
         sessionId: 'mock-stale-reason',
