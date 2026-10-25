@@ -174,6 +174,9 @@ export class SubagentExecutor implements SubagentControl {
       ...(c.delegationBudget !== undefined ? { delegationBudget: c.delegationBudget } : {}), ...(c.hookRegistry !== undefined ? { hookRegistry: c.hookRegistry } : {}),
       ...(c.continuationRegistry !== undefined ? { continuationRegistry: c.continuationRegistry } : {}),
       ...(rootSessionId !== undefined ? { parentRootSessionId: rootSessionId } : {}),
+      ...(c.resolveApiKeyForModel !== undefined ? { resolveApiKeyForModel: c.resolveApiKeyForModel } : {}),
+      ...(c.childProviderFactory !== undefined ? { childProviderFactory: c.childProviderFactory } : {}),
+      ...(c.childSkillExecutorFactory !== undefined ? { childSkillExecutorFactory: c.childSkillExecutorFactory } : {}),
       // #3961: thread the root's billing-stream registry so depth-2+ abandoned
       // streams surface in rootManager.getPendingChildBillingStreams() at shutdown.
       parentBillingStreams: c.subagentManager.billingStreamRegistry,
