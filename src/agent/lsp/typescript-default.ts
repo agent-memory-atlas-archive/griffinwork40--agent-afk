@@ -10,8 +10,14 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { ServerDefinition, ServerSpec } from './server-spec.js';
 
-/** Default LSP server command (binary + stdio flag). */
-export const DEFAULT_LSP_CMD: readonly string[] = ['typescript-language-server', '--stdio'];
+/**
+ * Default LSP server command (binary + stdio flag).
+ *
+ * Frozen so callers can rely on object identity checks and the array is never
+ * mutated. The `as const` assertion narrows to a literal tuple; `Object.freeze`
+ * enforces the runtime invariant tested by lsp-symbols.test.ts.
+ */
+export const DEFAULT_LSP_CMD = Object.freeze(['typescript-language-server', '--stdio'] as const);
 
 /** TS/JS server definition. The registry lane replaces this in wave 2. */
 export const TYPESCRIPT_SERVER_DEFINITION: ServerDefinition = {
