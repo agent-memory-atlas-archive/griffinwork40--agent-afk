@@ -61,7 +61,11 @@ describe('bash side effects are rewindable (#4271 stage 2)', () => {
     const deps = { sessionId: SESSION, enableFileCheckpointing: true, _stateDir: state, writePolicy: context };
     const preview = await rewindFiles(deps, 't1', { dryRun: true });
     expect(new Set(preview.filesChanged)).toEqual(new Set(['one.txt', 'two.txt', 'three.txt', 'tracked.txt'].map((n) => join(repo, n))));
-    expect(preview.uncaptured?.some((note) => /ignored/i.test(note))).toBe(true);
+    // The bash call has status 'captured' (tracked files were snapshotted).
+    // git-ignored files are not restorable, but no per-call warning is emitted
+    // for a fully-captured entry — the standing advisory is only appended when
+    // at least one bash call was skipped or partial. (#1151e9cd)
+    expect(preview.uncaptured).toBeUndefined();
     expect(read('one.txt')).toBe('one-1\n');
 
     const result = await rewindFiles(deps, 't1');

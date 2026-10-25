@@ -45,6 +45,7 @@ export const GIT_SNAPSHOT_GLOBAL_ARGS: readonly string[] = [
  * private index can never run a user hook (`post-index-change`, …).
  */
 export function snapshotArgs(hooksDir: string): string[] {
+  if (/[=\n]/.test(hooksDir)) throw new Error(`git-snapshot: hooksDir contains invalid character ('=' or newline): ${hooksDir}`);
   return [...GIT_SNAPSHOT_GLOBAL_ARGS, '-c', `core.hooksPath=${hooksDir}`];
 }
 

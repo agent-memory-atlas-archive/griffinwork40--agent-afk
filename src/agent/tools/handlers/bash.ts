@@ -284,7 +284,7 @@ export function createBashHandler(
   return async (input: unknown, signal: AbortSignal, context?: ToolHandlerContext) => {
     let { command, timeout_ms, background, explicitTimeout, clampedTimeoutWarning } = parseBashInput(input);
 
-    const checkpoint = context?.fileCheckpoint ? await beginBashCheckpoint(context.fileCheckpoint, context.resolveBase ?? cwd ?? process.cwd(),
+    const checkpoint = context?.fileCheckpoint ? await beginBashCheckpoint(context.fileCheckpoint, cwd ?? context.resolveBase ?? process.cwd(),
       signal.aborted ? 'aborted before spawn' : background ? 'run_in_background' : undefined, signal) : undefined;
     if (signal.aborted) {
       await checkpoint?.finish('aborted before spawn');
