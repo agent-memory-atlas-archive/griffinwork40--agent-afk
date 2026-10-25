@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.336.0] - 2026-10-25
+
 ### Added
 - **LSP server pool**: persistent LspClient + LspServerPool with auto-detect, auto-install, and migrated code_symbols + post-edit diagnostics (#4272) (b4c1f012f)
 - **Plugin API**: add state store and peer messaging to PluginApi (afe6832e8)
