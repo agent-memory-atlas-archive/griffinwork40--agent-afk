@@ -11,6 +11,20 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Added
+- add /usage-awareness toggle to control model visibility of subscription usage (#4402) (4fe650879)
+
+### Fixed
+- use git_read-compatible flag forms in state survey (#4390) (a76a99e67)
+
+### Changed
+- bump the dev-minor-patch group with 3 updates (#4383) (eaec2cd7f)
+- bump pnpm/action-setup (#4384) (0d634bf4f)
+- bump vscode-jsonrpc from 9.0.3 to 10.0.0 (#4385) (771decc5a)
+- bump github/codeql-action/analyze from 3.39.1 to 4.39.1 (#4387) (88feeb9c6)
+- bump github/codeql-action/init from 3.39.1 to 4.39.1 (#4388) (4717c274d)
+- bump actions/checkout from 4.4.0 to 7.0.1 (#4389) (481ac0f76)
+
 ## [5.336.0] - 2026-10-25
 
 ### Added
