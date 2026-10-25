@@ -363,6 +363,7 @@ describe('SubagentExecutor — isolation:"worktree" wiring', () => {
   describe('#4374: depth-2+ nesting inherits worktree cwd', () => {
     it('childManager and child executor receive the worktree path, not the parent repo root', () => {
       let capturedExecutorCwd: string | undefined;
+      let capturedSkillInheritedCwd: string | undefined;
       const args: BuildChildConfigArgs = {
         parsed: { prompt: 'test' } as never,
         namedAgent: undefined,
@@ -374,6 +375,12 @@ describe('SubagentExecutor — isolation:"worktree" wiring', () => {
         defaultSubagentModel: 'sonnet',
         childProviderFactory: () => ({}) as never,
         createChildExecutor: (ctx) => { capturedExecutorCwd = ctx.cwd; return {} as never; },
+        // #4392: spy on the skill executor factory to verify nestingCwd threads
+        // through wireChildNesting to the childSkillExecutorFactory call site.
+        childSkillExecutorFactory: (_depth, _maxDepth, _signal, inheritedCwd) => {
+          capturedSkillInheritedCwd = inheritedCwd;
+          return {} as never;
+        },
       };
 
       const pre = buildChildConfigWithoutNesting(args);
@@ -391,6 +398,11 @@ describe('SubagentExecutor — isolation:"worktree" wiring', () => {
       // The child executor context's cwd should also be the worktree path,
       // so depth-2 buildChildConfig receives the correct currentCwd.
       expect(capturedExecutorCwd).toBe(worktreePath);
+
+      // #4392: childSkillExecutorFactory must also receive the worktree path as
+      // its inheritedCwd so that skill forks dispatched from depth-2+ agents
+      // inherit the correct write root, not the parent repo root.
+      expect(capturedSkillInheritedCwd).toBe(worktreePath);
     });
 
     it('non-isolated dispatch without parsed.cwd: nesting uses args.currentCwd', () => {
@@ -415,6 +427,7 @@ describe('SubagentExecutor — isolation:"worktree" wiring', () => {
     });
 
     it('explicit parsed.cwd without isolation: nesting inherits parsed.cwd, not executor cwd', () => {
+      let capturedSkillInheritedCwd: string | undefined;
       const args: BuildChildConfigArgs = {
         parsed: { prompt: 'test', cwd: '/data/project' } as never,
         namedAgent: undefined,
@@ -426,6 +439,12 @@ describe('SubagentExecutor — isolation:"worktree" wiring', () => {
         defaultSubagentModel: 'sonnet',
         childProviderFactory: () => ({}) as never,
         createChildExecutor: () => ({}) as never,
+        // #4392: verify childSkillExecutorFactory receives parsed.cwd as inheritedCwd
+        // (not the executor's currentCwd '/repo') when an explicit cwd is set.
+        childSkillExecutorFactory: (_depth, _maxDepth, _signal, inheritedCwd) => {
+          capturedSkillInheritedCwd = inheritedCwd;
+          return {} as never;
+        },
       };
 
       const pre = buildChildConfigWithoutNesting(args);
@@ -436,6 +455,9 @@ describe('SubagentExecutor — isolation:"worktree" wiring', () => {
 
       expect(result.childManager).toBeDefined();
       expect(result.childManager!.getReadScopeInputs().parentCwd).toBe('/data/project');
+
+      // #4392: childSkillExecutorFactory must receive parsed.cwd, not executor cwd.
+      expect(capturedSkillInheritedCwd).toBe('/data/project');
     });
   });
 });
