@@ -233,10 +233,9 @@ describe('renderMarkdownToTerminal', () => {
     /**
      * Inter-row separator contract.
      *
-     * A thin `├─┼─┤` line is inserted between every pair of data rows
-     * (but not after the last). For a 3-data-row table that means: 1
-     * header-to-data separator + 2 inter-row separators = 3 separator lines
-     * starting with `├`.
+     * A thin `├─┼─┤` line is inserted only after a multi-line (wrapped) row,
+     * not between every pair of data rows. Single-line rows produce no
+     * inter-row separator; only the header-to-data separator is emitted.
      */
     it('omits inter-row separators when all rows are single-line', () => {
       const sample = [
@@ -263,9 +262,78 @@ describe('renderMarkdownToTerminal', () => {
         '',
       ].join('\n');
       const out = stripAnsi(renderMarkdownToTerminal(sample, { maxWidth: 20 }));
-      const separators = out.split('\n').filter((l) => l.startsWith('├'));
+      const lines = out.split('\n');
+      const separators = lines.filter((l) => l.startsWith('├'));
       // header-to-data + one after the wrapped row = 2
       expect(separators).toHaveLength(2);
+      // The inter-row separator must sit AFTER the wrapped row content and
+      // BEFORE the next single-line row — not before the wrapped row.
+      const wrappedContentIdx = lines.findIndex((l) => l.includes('this text'));
+      const nextRowIdx = lines.findIndex((l) => l.includes('3') && l.includes('4'));
+      // Find the inter-row separator (second ├ line, after the header separator)
+      const interRowSepIdx = lines.findIndex(
+        (l, i) => l.startsWith('├') && i > wrappedContentIdx
+      );
+      expect(wrappedContentIdx).toBeGreaterThan(-1);
+      expect(nextRowIdx).toBeGreaterThan(-1);
+      expect(interRowSepIdx).toBeGreaterThan(wrappedContentIdx);
+      expect(interRowSepIdx).toBeLessThan(nextRowIdx);
+    });
+
+    it('emits no trailing separator when multi-line row is the last data row', () => {
+      // The last data row should never produce a trailing separator even if
+      // it wraps to multiple lines.
+      const sample = [
+        '| A | B |',
+        '|---|---|',
+        '| 1 | 2 |',
+        '| this text is long enough to wrap at a narrow width | 4 |',
+        '',
+      ].join('\n');
+      const out = stripAnsi(renderMarkdownToTerminal(sample, { maxWidth: 20 }));
+      const lines = out.split('\n');
+      const separators = lines.filter((l) => l.startsWith('├'));
+      // header-to-data separator only; no trailing separator after last row
+      expect(separators).toHaveLength(1);
+      // Confirm the bottom border follows the wrapped content (not a ├ line)
+      const lastDataLineIdx = lines.reduce(
+        (acc, l, i) => (l.includes('this text') || l.includes('wrap') ? i : acc),
+        -1
+      );
+      const bottomBorderIdx = lines.findIndex((l) => l.startsWith('└'));
+      expect(lastDataLineIdx).toBeGreaterThan(-1);
+      expect(bottomBorderIdx).toBeGreaterThan(lastDataLineIdx);
+      const linesBetween = lines
+        .slice(lastDataLineIdx + 1, bottomBorderIdx)
+        .filter((l) => l.length > 0);
+      expect(linesBetween.every((l) => !l.startsWith('├'))).toBe(true);
+    });
+
+    it('inserts separator between each pair of consecutive multi-line rows', () => {
+      // Two consecutive wrapped rows should each be followed by a separator
+      // (except the last one, which should have none).
+      const sample = [
+        '| A | B |',
+        '|---|---|',
+        '| this text is long enough to wrap at a narrow width | 2 |',
+        '| another long text that also wraps at this width setting | 4 |',
+        '| 5 | 6 |',
+        '',
+      ].join('\n');
+      const out = stripAnsi(renderMarkdownToTerminal(sample, { maxWidth: 20 }));
+      const lines = out.split('\n');
+      const separators = lines.filter((l) => l.startsWith('├'));
+      // header-to-data + one after first wrapped row + one after second wrapped row = 3
+      expect(separators).toHaveLength(3);
+      // The last data row ("5 | 6") should have no trailing separator.
+      const lastSingleLineIdx = lines.findIndex((l) => l.includes('5') && l.includes('6'));
+      const bottomBorderIdx = lines.findIndex((l) => l.startsWith('└'));
+      expect(lastSingleLineIdx).toBeGreaterThan(-1);
+      expect(bottomBorderIdx).toBeGreaterThan(lastSingleLineIdx);
+      const linesBetweenLastAndBottom = lines
+        .slice(lastSingleLineIdx + 1, bottomBorderIdx)
+        .filter((l) => l.length > 0);
+      expect(linesBetweenLastAndBottom.every((l) => !l.startsWith('├'))).toBe(true);
     });
 
     it('suppresses top chrome when consecutive tables have same structure', () => {
