@@ -390,6 +390,17 @@ describe('planGitRead (#4227): model-quirk normalization', () => {
     expect(planGitRead({ subcommand: 'show', args: ['HEAD'], pattern: '  ' }, CWD).ok).toBe(true);
     // grep still requires a real pattern — the empty string is not a search term.
     expect(rejected({ subcommand: 'grep', pattern: '' })).toContain('non-empty');
+    // ...but a whitespace-only grep pattern is a legitimate search (literal
+    // spaces / indentation) and must be passed through unchanged via -e.
+    for (const ws of [' ', '\t', '  ']) {
+      const g = planGitRead({ subcommand: 'grep', pattern: ws }, CWD);
+      expect(g.ok, JSON.stringify(ws)).toBe(true);
+      if (g.ok) {
+        const i = g.argv.indexOf('-e');
+        expect(i, JSON.stringify(ws)).toBeGreaterThan(-1);
+        expect(g.argv[i + 1], JSON.stringify(ws)).toBe(ws);
+      }
+    }
     // A non-empty pattern on a non-grep subcommand is still rejected.
     expect(rejected({ subcommand: 'log', pattern: 'x' })).toContain('only valid');
   });

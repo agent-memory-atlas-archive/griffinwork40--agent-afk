@@ -225,7 +225,12 @@ export function planGitRead(req: GitReadRequest, cwd: string): GitReadPlan {
   // A pattern is only meaningful for grep. Models that fill optional string
   // fields with "" must not trip the grep-only guard below, so an
   // empty/whitespace-only pattern counts as absent for every other subcommand.
-  const pattern = typeof req.pattern === 'string' && req.pattern.trim().length === 0 ? undefined : req.pattern;
+  // grep is excluded: whitespace is a legitimate search term there (indentation,
+  // literal spaces), and grep's own validation rejects a truly empty pattern.
+  const pattern =
+    subcommand !== 'grep' && typeof req.pattern === 'string' && req.pattern.trim().length === 0
+      ? undefined
+      : req.pattern;
   // Accept git's own grammar: a literal `--` in `args` separates revisions
   // from pathspecs. Tokens after it join `paths` and are confined below like
   // any other path, so this widens nothing.
