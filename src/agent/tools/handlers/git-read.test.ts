@@ -346,9 +346,10 @@ describe('planGitRead (#4058): new subcommand allowlist', () => {
   });
 
   it('log accepts -n (shorthand for --max-count)', () => {
-    const plan = planGitRead({ subcommand: 'log', args: ['-n', '--max-count=5', '--oneline'] }, CWD);
+    const plan = planGitRead({ subcommand: 'log', args: ['-n', '5', '--oneline'] }, CWD);
     expect(plan.ok).toBe(true);
-    expect(plan.ok && plan.argv).toContain('-n');
+    // -n 5 is normalised to --max-count=5 by the count-shorthand rewriter
+    expect(plan.ok && plan.argv).toContain('--max-count=5');
   });
 
   it('log accepts -i and --regexp-ignore-case (case-insensitive grep)', () => {
