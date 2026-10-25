@@ -79,11 +79,15 @@ export function likelyFilesForTool(toolName: string): readonly LikelyFile[] {
   const files: LikelyFile[] = [];
 
   if (toolName && toolName !== '<unknown>' && toolName !== '<the tool>') {
+    const handlerName = toolName.replace(/_/g, '-');
     files.push({
-      path: `src/agent/tools/handlers/${toolName}.ts`,
+      path: `src/agent/tools/handlers/${handlerName}.ts`,
       rationale: `Handler for the '${toolName}' tool. Read its error paths first — most isError: true returns originate here.`,
       riskTier: 'moderate',
-      confidence: 'high',
+      // Contract: confidence is 'medium' not 'high' because several tools share a
+      // handler file (e.g. create_schedule → schedules.ts, config_get → config-ops.ts).
+      // A reviewer should verify the path before acting on it.
+      confidence: 'medium',
     });
   }
 

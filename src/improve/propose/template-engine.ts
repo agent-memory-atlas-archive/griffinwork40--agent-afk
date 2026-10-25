@@ -118,11 +118,14 @@ export function proposeFromCard(card: FailureCard, ctx: TemplateContext): Improv
   if (card.pattern === 'tool-failure-density') {
     const toolName =
       typeof card.detail['toolName'] === 'string' ? card.detail['toolName'] : '';
-    const clusterKey =
-      typeof card.detail['dominantClusterKey'] === 'string'
-        ? card.detail['dominantClusterKey']
-        : '';
-    rootCauseClass = clusterKey ? rootCauseFromClusterKey(clusterKey) : template.rootCauseClass;
+    const breakdown =
+      card.detail['failureClassBreakdown'] !== null &&
+      typeof card.detail['failureClassBreakdown'] === 'object' &&
+      !Array.isArray(card.detail['failureClassBreakdown'])
+        ? (card.detail['failureClassBreakdown'] as Record<string, number>)
+        : {};
+    const dominantKey = Object.entries(breakdown).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+    rootCauseClass = dominantKey ? rootCauseFromClusterKey(dominantKey) : template.rootCauseClass;
     likelyFiles = likelyFilesForTool(toolName).map((f) => ({ ...f }));
   } else {
     rootCauseClass = template.rootCauseClass;

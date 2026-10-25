@@ -77,10 +77,12 @@ describe('rootCauseFromClusterKey', () => {
 });
 
 describe('likelyFilesForTool', () => {
-  it('puts the named handler file first with high confidence', () => {
+  it('puts the named handler file first with medium confidence', () => {
     const files = likelyFilesForTool('bash');
     expect(files[0]!.path).toBe('src/agent/tools/handlers/bash.ts');
-    expect(files[0]!.confidence).toBe('high');
+    // Fix 3: confidence downgraded to 'medium' — several tools share a handler
+    // file (e.g. create_schedule → schedules.ts), so 'high' overstated certainty.
+    expect(files[0]!.confidence).toBe('medium');
   });
 
   it('always includes dispatcher.ts', () => {
