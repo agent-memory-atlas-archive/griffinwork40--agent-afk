@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.337.0] - 2026-10-25
+
 ### Added
 - dynamic startup recall + ambient dashboard (#4397) (3a4908ef2)
 - add /usage-awareness toggle to control model visibility of subscription usage (#4402) (4fe650879)
