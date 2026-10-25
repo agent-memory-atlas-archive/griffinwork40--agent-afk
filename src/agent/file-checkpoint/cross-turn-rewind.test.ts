@@ -165,12 +165,14 @@ describe('uncaptured warnings in rewind results', () => {
     expect(result.uncaptured).toBeUndefined();
   });
 
-  it('warns about ignored and outside files even when all bash entries are captured', async () => {
+  it('no warnings when all bash entries in the range are fully captured', async () => {
+    // An all-captured range has no uncaptured shell side-effects to disclaim,
+    // so no standing advisory should be emitted (PR4298 item 2 fix).
     writeFileSync(file('a'), 'v0');
     await turn('t1', { a: 'v1' });
     appendTurnLog(SESSION, { kind: 'bash', turnId: 't1', status: 'captured', files: 2, ts: Date.now() }, stateDir);
     const result = await rewindFiles(deps(), 't1', { dryRun: true });
-    expect(result.uncaptured).toEqual([expect.stringContaining('git-ignored files or files outside the repo')]);
+    expect(result.uncaptured).toBeUndefined();
   });
 
   it('emits warnings for skipped bash entries in the folded suffix', async () => {

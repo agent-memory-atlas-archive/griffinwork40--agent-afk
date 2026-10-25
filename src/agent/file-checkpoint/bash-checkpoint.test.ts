@@ -192,6 +192,46 @@ describe('bash checkpoint hook', () => {
     expect(publish).toHaveBeenCalledTimes(1);
     expect(outcome()).toEqual([expect.objectContaining({ status: 'partial', reason: 'timeout', files: 1 })]);
   });
+  it('finish uses a single shared deadline: after-capture receives remaining time, not a fresh budget', async () => {
+    // Regression for PR4298 item 1: the old code computed deadline = Date.now() + timeoutMs
+    // inside finish() AFTER after-capture had already run, granting publication a fresh full
+    // budget instead of the time remaining from the shared deadline.
+    //
+    // With the fix, after-capture receives `remaining()` time. When the fake clock advances
+    // past the timeout DURING after-capture, `bounded()` rejects with 'timeout', so
+    // `capture()` returns { ok:false, reason:'timeout' } → finish logs 'skipped'.
+    // diffTrees must NOT be called — there is nothing left to diff.
+    vi.useFakeTimers(); vi.stubEnv('AFK_FILE_CHECKPOINT_BASH_TIMEOUT_MS', '10');
+    const hook = await beginBashCheckpoint(registry, root);
+    vi.mocked(captureWorkspaceTree).mockImplementation(async () => {
+      // Consume the entire budget during the after-capture phase.
+      await vi.advanceTimersByTimeAsync(11);
+      return { ok: true, repoRoot: root, tree: 'after' };
+    });
+    vi.mocked(diffTrees).mockImplementation(() => new Promise(() => {})); // should never be reached
+    const finish = hook.finish();
+    await vi.runAllTimersAsync();
+    await finish;
+    // After-capture times out → capture returns { ok:false, reason:'timeout' } → skipped.
+    // diffTrees must not have been called (budget was exhausted).
+    expect(diffTrees).not.toHaveBeenCalled();
+    expect(outcome()).toEqual([expect.objectContaining({ status: 'skipped', reason: 'timeout' })]);
+  });
+
+  it('after-capture timeout does not grant publication a fresh full budget', async () => {
+    // Regression for PR4298 item 1: after-capture timing out must propagate a zero/negative
+    // remaining time to publication, not restart the clock. Because after-capture times out,
+    // capture() returns { ok: false, reason: 'timeout' }, so publication never runs → skipped.
+    vi.useFakeTimers(); vi.stubEnv('AFK_FILE_CHECKPOINT_BASH_TIMEOUT_MS', '10');
+    const hook = await beginBashCheckpoint(registry, root);
+    vi.mocked(captureWorkspaceTree).mockImplementation(() => new Promise(() => {})); // hung after-capture
+    const finish = hook.finish();
+    await vi.advanceTimersByTimeAsync(11);
+    await finish;
+    expect(diffTrees).not.toHaveBeenCalled();
+    expect(outcome()).toEqual([expect.objectContaining({ status: 'skipped', reason: 'timeout' })]);
+  });
+
   it.each(['before', 'after'])('passes through partial snapshot reasons from %s capture', async (phase) => {
     const complete = { ok: true as const, repoRoot: root, tree: 'tree' };
     const partial = { ...complete, partial: 'unreadable paths omitted' };

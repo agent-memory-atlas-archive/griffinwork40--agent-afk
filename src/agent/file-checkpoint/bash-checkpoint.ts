@@ -111,24 +111,30 @@ async function prepareBashCheckpoint(
       log('skipped', reason);
       return;
     }
+    // Invariant: one shared deadline for after-capture, diff, and publication so
+    // the three phases together never exceed timeoutMs. Passing remaining time to
+    // each phase avoids granting a fresh full budget after earlier phases consume
+    // some of it. The before-capture retains its own independent bound (set at
+    // prepareBashCheckpoint time) and is not affected by this deadline.
+    const deadline = Date.now() + timeoutMs;
+    const remaining = () => Math.max(0, deadline - Date.now());
     try {
       // Invariant: capture and publish complete before returning the tool result,
       // so endCheckpointTurn sees every successfully published bash path.
-      const after = await capture(options);
+      const after = await capture({ ...options, timeoutMs: remaining() });
       if (!after.ok) { log('skipped', [...reasons, after.reason].join('; ')); return; }
       if (after.repoRoot !== baseline.repoRoot) { log('skipped', 'repository changed'); return; }
       reasons.push(...partialReason(after));
       const diff = await bounded(() => diffTrees({
         repoRoot: baseline.repoRoot, objectDir: options.objectDir, before: baseline.tree,
-        after: after.tree, maxFiles, timeoutMs,
-      }), timeoutMs);
+        after: after.tree, maxFiles, timeoutMs: remaining(),
+      }), remaining());
       if (!diff.ok) { log('skipped', [...reasons, diff.reason].join('; ')); return; }
       if (diff.truncated) reasons.push(`truncated at ${maxFiles} files`);
       if (diff.skipped.length) {
         const kinds = [...new Set(diff.skipped.map((s) => s.reason))].slice(0, 3).join(', ');
         reasons.push(`files skipped (${diff.skipped.length}): ${kinds}`);
       }
-      const deadline = Date.now() + timeoutMs;
       // Invariant: never race local publication against a timer. A write already
       // in flight must settle before endCheckpointTurn hashes touchedPaths.
       for (const change of diff.changes) {

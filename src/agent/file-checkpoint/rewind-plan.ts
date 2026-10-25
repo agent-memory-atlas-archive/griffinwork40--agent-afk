@@ -36,9 +36,12 @@ export type RewindPlanResult = { plan: RewindPlan } | { missing: true };
 /**
  * Collect human-readable warnings from bash log entries in `suffix` turns.
  *
- * Contract: one warning per non-captured bash call, plus a standing advisory
- * whenever any bash entry is present — so the user always
- * knows that shell side-effects may remain even after a file restore.
+ * Contract: one warning per non-captured bash call (skipped or partial).
+ * The standing advisory about git-ignored files and external side-effects is
+ * appended only when at least one such per-call warning exists, because an
+ * all-captured range has no uncaptured effects to disclaim. An explicit user
+ * decision to rewind despite knowing bash ran overrides the concern — no
+ * general advisory is emitted for fully-captured bash calls.
  */
 function collectBashWarnings(log: ReturnType<typeof readTurnLog>, suffix: readonly string[]): string[] {
   const suffixSet = new Set(suffix);
@@ -60,10 +63,16 @@ function collectBashWarnings(log: ReturnType<typeof readTurnLog>, suffix: readon
     }
     // `captured` with files > 0 is fully handled; no per-call warning needed.
   }
-  warnings.push(
-    'Bash changes to git-ignored files or files outside the repo are not restorable. ' +
-    'External side-effects (such as network calls) are not undone by this restore.',
-  );
+  // Append the standing advisory only when there are per-call warnings — i.e.
+  // when at least one bash call was not fully captured. A fully-captured range
+  // has no shell side-effects left unaccounted for, so the advisory would be
+  // misleading noise and is omitted.
+  if (warnings.length > 0) {
+    warnings.push(
+      'Bash changes to git-ignored files or files outside the repo are not restorable. ' +
+      'External side-effects (such as network calls) are not undone by this restore.',
+    );
+  }
   return warnings;
 }
 
