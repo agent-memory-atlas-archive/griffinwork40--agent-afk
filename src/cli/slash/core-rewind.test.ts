@@ -24,6 +24,7 @@ function makeStats(): SessionStats {
     totalTokens: 0,
     totalDurationMs: 0,
     sessionStartTime: Date.now(),
+    unpricedTurns: 0,
     turnCosts: [],
     turnTokens: [],
     turns: [],
