@@ -32,6 +32,7 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 - read rootCauseClass from failureClassBreakdown, hyphenate handler paths, medium confidence, integration test (741acf6e6)
 - wire tool-specific helpers into proposeFromCard; fix CLI flags and handler paths (c28433a00)
 - tool-failure-density template now produces tool-specific proposals (410db37fe)
+- rewrite shadow-verify nudge from advisory to action-gated imperative (#4447) (9dae4df52)
 
 ### Changed
 - trim system-prompt overlay from 307 to 110 lines (6d2cbd61d)
