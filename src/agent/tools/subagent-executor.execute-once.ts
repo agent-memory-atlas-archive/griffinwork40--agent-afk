@@ -9,7 +9,6 @@
  */
 
 import { SUBAGENT_BACKGROUND_TIMEOUT_MS } from '../subagent.js';
-import { computeInheritedReadRoots } from '../subagent-read-scope.js';
 import type { ToolCall, ToolResult } from './types.js';
 import { resolveMaxNestingDepth } from './nesting.js';
 import { resolveNamedAgent } from './subagent-executor.execute-once.gates.js';
@@ -126,15 +125,18 @@ export async function executeOnce(
   { const r = await checkAndRunRemoteDispatch(parsed, call.signal, budgetReceipt, call.id, updateCurrentWaveUnit); if (r !== undefined) return r; }
   const usageNotice = await evaluateDispatchUsageForModel(ctx.parentModel, ctx.traceWriter);
 
+  // childScopeInputs carries the parent manager's raw read-scope inputs.
+  // parentReadRoots is the fully-resolved inheritedReadRoots that the current
+  // session's forkSubagent computed (with all Gap A/B/C additions via
+  // resolveReadScope). We pass it directly as childInheritedReadRoots so the
+  // grandchild manager is seeded correctly — no pre-computation here.
+  // (Eliminates the redundant, incomplete computeInheritedReadRoots call that
+  // previously ran without afkStateRoot/afkFrameworkRoot/afkSkillsRoot — #4373.)
   const childScopeInputs = ctx.subagentManager.getReadScopeInputs?.() ?? {
     parentReadRoots: undefined,
     parentCwd: undefined,
   };
-  const childInheritedReadRoots = computeInheritedReadRoots({
-    parentReadRoots: childScopeInputs.parentReadRoots,
-    parentCwd: childScopeInputs.parentCwd,
-    childCwd: parsed.cwd ?? currentCwd,
-  });
+  const childInheritedReadRoots = childScopeInputs.parentReadRoots;
 
   // Phase 1: build base config (model, tools, budgets, credential) without
   // nesting wiring. Nesting is deferred until after isolation setup so depth-2+
