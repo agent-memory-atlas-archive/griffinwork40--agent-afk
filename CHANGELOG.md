@@ -11,6 +11,9 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+### Fixed
+- add missing mock exports for chat.mcp and chat.trace-identity tests (f1b06cc0b)
+
 ## [5.338.0] - 2026-10-26
 
 ### Added
