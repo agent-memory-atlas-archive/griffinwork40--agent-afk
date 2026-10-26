@@ -302,8 +302,13 @@ function repaintPickerFrame(self: FrameHost): void {
     contentHugBandReserve(self, self.stdout.rows ?? 24),
   );
   const { margin, width: bandWidth } = contentBand(self.stdout.columns ?? 80);
+  // Skip band-width truncation for editable overlays (e.g. text-input): their
+  // rows embed an inline caret, and truncating from the right hides the caret
+  // and all text after the cursor when the user types a long answer.
+  // Passing undefined lets buildPickerFrameLines default to Infinity (no-op).
+  const pickerBandWidth = self.pickerController.editable ? undefined : bandWidth;
   const frameLines = buildPickerFrameLines(
-    chrome, layout.trimmedOverlay, layout.renderGap, pickerRows, margin, bandWidth,
+    chrome, layout.trimmedOverlay, layout.renderGap, pickerRows, margin, pickerBandWidth,
   );
   // Empty-frame guard: when the picker's renderRows() is empty and no
   // chrome is active, frameLines is []. The CupFrameRenderer clamps

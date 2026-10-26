@@ -185,6 +185,36 @@ describe('live frame margin under AFK_CENTER_CONTENT (compositor owns the margin
     expect(wCount, 'label must be truncated to fit within band width (150)').toBeLessThanOrEqual(150);
   });
 
+  it('text-input overlay: inline caret is NOT truncated away by band-width clipping', async () => {
+    // Regression guard for the editable-truncation bug: when a runTextInput
+    // overlay is active, the input row embeds an inline caret character (▏ or
+    // an inverse-video character). Band-width truncation from the right would
+    // hide the caret when the buffer fills the band. The fix: editable:true on
+    // the controller causes repaintPickerFrame to pass undefined bandWidth, so
+    // buildPickerFrameLines defaults to Infinity and skips truncation.
+    //
+    // Geometry: COLS=200, AFK_TEXT_MEASURE=100 → margin=50, bandWidth=150.
+    // The input row is: margin(50) + "  > "(4) + buffer + caret(1).
+    // Fill the buffer to exactly bandWidth-5 = 145 chars so the caret lands
+    // AT bandWidth (col 150 within the band). Without the fix, truncation at
+    // bandWidth clips the caret off. With the fix, the caret survives.
+    const fillLen = 145; // margin(50) + prefix(4) + fill(145) + caret(1) = 200 cols exactly
+    const fill = 'A'.repeat(fillLen);
+    const { rows } = await scenario(true, (c) => {
+      void runTextInput(c, {
+        header: ['? TEXTINPUT_HEAD question'],
+        initial: fill,
+        help: 'TEXTINPUT_HELP enter to submit',
+      });
+    });
+    const inputRow = rows.find((r) => r.text.includes('A'.repeat(10)));
+    expect(inputRow, 'input row must be painted').toBeDefined();
+    // The caret glyph ▏ must survive — it would be truncated away without the fix.
+    expect(inputRow!.text, 'caret glyph ▏ must survive (not truncated)').toContain('▏');
+    // Row must still start at the margin.
+    expect(leadingSpaces(inputRow!.text), 'input row must start at margin').toBeGreaterThanOrEqual(MARGIN);
+  });
+
   it('centering off: no live row gains a leading margin', async () => {
     for (const { marks, drive } of Object.values(SCENARIOS)) {
       const { rows } = await scenario(false, drive);
