@@ -619,6 +619,18 @@ describe('git_read handler (#4058 live repo)', () => {
     expect(r.isError).toBeFalsy();
   });
 
+  it('log with ["-n", "5", "--oneline"] returns output (model-typical form)', async () => {
+    // This is the exact arg pattern models emit when limiting log output.
+    // The count-shorthand normalizer rewrites -n 5 → --max-count=5 before
+    // the argv reaches git, so the handler must accept it end-to-end.
+    const h = createGitReadHandler(repo);
+    const r = await h({ subcommand: 'log', args: ['-n', '5', '--oneline'] }, signal);
+    expect(r.isError).toBeFalsy();
+    // The scratch repo has 2 commits; both should appear in the output.
+    expect(String(r.content)).toContain('second');
+    expect(String(r.content)).toContain('first');
+  });
+
   it('write-variant requests never run git and never write', async () => {
     const h = createGitReadHandler(repo);
     // cat-file --batch would be the most dangerous; policy must reject it
