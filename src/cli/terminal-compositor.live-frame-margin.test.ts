@@ -158,13 +158,15 @@ describe('live frame margin under AFK_CENTER_CONTENT (compositor owns the margin
     expect(leadingSpaces(head!.text)).toBe(leadingSpaces(prompt!.text));
   });
 
-  it('centered picker: a label wider than the band does not wrap or land at col 0', async () => {
-    // A label wider than the content band (100 cols) but within the terminal
-    // (200 cols). withMargin (frame.lines.ts) prepends the margin without
-    // truncation; the row fits because 120 + margin + prefix stays under the
-    // 200-col terminal width, so no autowrap occurs. Band-width truncation
-    // itself is deferred — see #3765.
-    const wideLabel = 'W'.repeat(120); // 120 > band (100), < terminal (200)
+  it('centered picker: a label wider than the band is truncated and does not wrap', async () => {
+    // buildPickerFrameLines calls truncateDisplayWidth(row, bandWidth) before
+    // withMargin — matching the pattern in frame.layout.ts:65 for the mode notice.
+    //
+    // Geometry: COLS=200, AFK_TEXT_MEASURE=100 → marginCols=50, bandWidth=150.
+    // Picker row prefix is "  ▸ " (4 cols). A 200-char label gives a row of
+    // 4+200=204 display cols, which exceeds bandWidth=150. After truncation the
+    // row fits within 150 cols so margin(50)+row(≤150)=≤200 — no autowrap.
+    const wideLabel = 'W'.repeat(200); // row display width 4+200=204 > bandWidth 150
     const { rows } = await scenario(true, (c) => {
       const state: PickerState = { cursor: 0, scrollOffset: 0, filterQuery: '', filteredResults: [], selected: new Set() };
       c.enterPickerMode({
@@ -176,6 +178,11 @@ describe('live frame margin under AFK_CENTER_CONTENT (compositor owns the margin
     expect(wideRow, 'wide label row must be painted').toBeDefined();
     expect(wideRow!.wrapped, 'wide label row must not autowrap').toBe(false);
     expect(leadingSpaces(wideRow!.text), 'wide label row must start at margin').toBeGreaterThanOrEqual(MARGIN);
+    // After truncation to bandWidth=150 the painted W-run must be < 150
+    // (the 4-col prefix eats into the budget).
+    const wCount = (wideRow!.text.trimStart().match(/W+/) ?? [''])[0]!.length;
+    expect(wCount, 'label must be truncated to fit band width').toBeLessThan(200);
+    expect(wCount, 'label must be truncated to fit within band width (150)').toBeLessThanOrEqual(150);
   });
 
   it('centering off: no live row gains a leading margin', async () => {
