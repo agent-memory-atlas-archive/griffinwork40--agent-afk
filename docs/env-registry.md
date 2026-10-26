@@ -2,7 +2,7 @@
 
 Generated from `src/config/env.ts`. Do not edit by hand — run `pnpm scan:env` after changing the registry source.
 
-**250 vars** across 13 categories. Every `process.env[...]` read in `src/` outside `src/config/env.ts` is a CI failure (enforced by `pnpm audit:env:check`).
+**254 vars** across 13 categories. Every `process.env[...]` read in `src/` outside `src/config/env.ts` is a CI failure (enforced by `pnpm audit:env:check`).
 
 To add a var: edit `src/config/env.ts` (add a getter on `env` + an entry in `ENV_REGISTRY`), then run `pnpm scan:env`.
 
@@ -35,15 +35,19 @@ To add a var: edit `src/config/env.ts` (add a getter on `env` + an entry in `ENV
 | `AFK_MODEL_LARGE` | string |  |  | `claude-opus-5-5` | Bind the "large" capability tier (most capable) to a model id/alias. Overrides afk.config.json models.large. |
 | `AFK_MODEL_LARGE_API_KEY` | string |  |  |  | Per-slot API key for the "large" tier (Stage 2). Overrides global credentials for this tier only. |
 | `AFK_MODEL_LARGE_BASE_URL` | string |  |  | `http://localhost:8080/v1` | Per-slot endpoint base URL for the "large" tier (Stage 2). Anthropic Messages base or OpenAI-compatible base per the tier provider. |
+| `AFK_MODEL_LARGE_MAX_CONCURRENCY` | number |  |  | `1` | Per-slot concurrency cap for the "large" tier. When set, at most N model requests to this slot's endpoint are in flight simultaneously. Unset = unlimited. Accepted range 1-32. Part of #3886. |
 | `AFK_MODEL_LOCAL` | string |  |  | `llama3.2:3b` | Bind the "local" capability tier (cheapest/fastest, user-configured) to a model id. Overrides afk.config.json models.local. Point at a local Ollama, LM Studio, or any OpenAI-compatible shim. |
 | `AFK_MODEL_LOCAL_API_KEY` | string |  |  |  | Per-slot API key for the "local" tier. Overrides global credentials for this tier only. |
 | `AFK_MODEL_LOCAL_BASE_URL` | string |  |  | `http://localhost:11434/v1` | Per-slot endpoint base URL for the "local" tier. Anthropic Messages base or OpenAI-compatible base per the tier provider. |
+| `AFK_MODEL_LOCAL_MAX_CONCURRENCY` | number |  |  | `1` | Per-slot concurrency cap for the "local" tier. When set, at most N model requests to this slot's endpoint are in flight simultaneously (shared with any other slot targeting the same baseUrl). Useful for single-request local servers (Ollama, LM Studio, MLX). Unset = unlimited. Accepted range 1-32; out-of-range or unparseable input is ignored. Part of #3886. |
 | `AFK_MODEL_MEDIUM` | string |  |  | `claude-sonnet-5` | Bind the "medium" capability tier (general-use) to a model id/alias. Overrides afk.config.json models.medium. |
 | `AFK_MODEL_MEDIUM_API_KEY` | string |  |  |  | Per-slot API key for the "medium" tier (Stage 2). Overrides global credentials for this tier only. |
 | `AFK_MODEL_MEDIUM_BASE_URL` | string |  |  | `http://localhost:8080/v1` | Per-slot endpoint base URL for the "medium" tier (Stage 2). Anthropic Messages base or OpenAI-compatible base per the tier provider. |
+| `AFK_MODEL_MEDIUM_MAX_CONCURRENCY` | number |  |  | `1` | Per-slot concurrency cap for the "medium" tier. When set, at most N model requests to this slot's endpoint are in flight simultaneously. Unset = unlimited. Accepted range 1-32. Part of #3886. |
 | `AFK_MODEL_SMALL` | string |  |  | `gpt-4o-mini` | Bind the "small" capability tier (cheap/fast) to a model id/alias. Overrides afk.config.json models.small. |
 | `AFK_MODEL_SMALL_API_KEY` | string |  |  |  | Per-slot API key for the "small" tier (Stage 2). Overrides global credentials for this tier only. |
 | `AFK_MODEL_SMALL_BASE_URL` | string |  |  | `http://localhost:8080/v1` | Per-slot endpoint base URL for the "small" tier (Stage 2). Anthropic Messages base or OpenAI-compatible base per the tier provider. |
+| `AFK_MODEL_SMALL_MAX_CONCURRENCY` | number |  |  | `1` | Per-slot concurrency cap for the "small" tier. When set, at most N model requests to this slot's endpoint are in flight simultaneously. Unset = unlimited. Accepted range 1-32. Part of #3886. |
 | `AFK_MODEL_STALL_TIMEOUT_MS` | number |  | `1200000` | `600000` | Progress-aware POST-first-byte stall window (ms) for the anthropic-direct streaming loop. Bounds how long a stream that has ALREADY produced content may then go completely silent. Every streamed output event resets the window, so this is NOT a total-round cap: a legitimately long, actively-streaming round (large code emission, extended thinking) survives indefinitely, while a stream wedged mid-flight is aborted and surfaces as a real terminal error instead of hanging. Complements AFK_MODEL_TTFB_TIMEOUT_MS, which governs only the window BEFORE the first token; this one takes over after it. Default 1200000 (20min) — above the 18.5min maximum post-first-byte stream duration observed across 86,076 rounds in 12,381 local traces (p99 122s, p99.9 234s), so no healthy round trips it. Set to 0 to disable (issue #762). |
 | `AFK_MODEL_SUBAGENT` | string |  |  | `Qwen/Qwen3-32B` | Bind the "subagent" routing slot to a model id/alias. When set, all dispatched subagents (agent/skill/compose forks without an explicit model) use this model instead of the medium tier. Use with AFK_MODEL_SUBAGENT_BASE_URL to route subagent inference to a different provider (Together, Fireworks, Groq, or self-hosted vLLM/SGLang). Overrides afk.config.json models.subagent. |
 | `AFK_MODEL_SUBAGENT_API_KEY` | string |  |  |  | Per-slot API key for the "subagent" routing slot. Overrides global credentials for subagent forks only. |
