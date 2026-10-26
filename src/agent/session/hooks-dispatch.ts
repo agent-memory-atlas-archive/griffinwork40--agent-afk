@@ -67,6 +67,7 @@ async function emitSessionHookDecision(
       hookEvent,
       decision: 'block',
       ...(outcome.err.reason !== undefined ? { reason: outcome.err.reason } : {}),
+      ...(outcome.err.riskCategory !== undefined ? { riskCategory: outcome.err.riskCategory } : {}),
     });
     return;
   }

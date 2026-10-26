@@ -429,11 +429,14 @@ export function createAfkModeGate(
     // prompt would surface on the parent's surface with no attribution), and the
     // approval path can be opted out — both degrade to the legacy hard block.
     if (isSubagentContext(context) || !promptForApproval) {
-      const decision = blockDecision(
-        toolName,
-        'AFK mode runs autonomously without a human watching',
-        refusal,
-      );
+      const decision: import('./hooks.js').HookDecision = {
+        ...blockDecision(
+          toolName,
+          'AFK mode runs autonomously without a human watching',
+          refusal,
+        ),
+        riskCategory: verdict.category,
+      };
       // Emit the audit trace on the no-prompt refusal too. requestApproval's
       // decide() helper centralises the emit for the prompt paths, but this
       // branch returns BEFORE requestApproval — so without this emit an always-on

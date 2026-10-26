@@ -74,6 +74,7 @@ async function emitHookDecisionFromOutcome(
       ...(hookEvent === 'PreToolUse' && ctx.toolName !== undefined
         ? { blockedTool: ctx.toolName }
         : {}),
+      ...(outcome.err.riskCategory !== undefined ? { riskCategory: outcome.err.riskCategory } : {}),
     });
     return;
   }
