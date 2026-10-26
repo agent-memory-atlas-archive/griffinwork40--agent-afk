@@ -198,11 +198,28 @@ const NO_PATH_SUBCOMMANDS = new Set<GitReadSubcommand>([
 
 /**
  * Shorthand count flags for the subcommands whose allowlist already admits
- * `--max-count=<N>` (log, shortlog, rev-list). Models routinely emit the
- * shorthand forms `git log -5`, `git log -n 5`, `git log -n5`; each maps onto
- * the long form here so it lands on the allowlist instead of being rejected.
- * A non-numeric value (`-n abc`, `-nabc`) is rejected — it corresponds to no
- * valid count form, so there is nothing to widen.
+ * `--max-count=<N>` (log, shortlog, rev-list, reflog). Models routinely emit
+ * the shorthand forms `git log -5`, `git log -n 5`, `git log -n5`; each maps
+ * onto the long form here so it lands on the allowlist instead of being
+ * rejected. A non-numeric value (`-n abc`, `-nabc`) is rejected — it
+ * corresponds to no valid count form, so there is nothing to widen.
+ *
+ * Note: `reflog` also supports `--max-count=` and therefore receives this
+ * normalization, even though it was not listed in the original doc comment.
+ *
+ * Limitation (item 1): if the first token of `args` equals the subcommand
+ * name (e.g. `{subcommand: "show", args: ["show", "HEAD"]}`), it is always
+ * dropped as an echoed-subcommand artefact. A branch or tag whose name
+ * coincides with a subcommand name (e.g. a branch literally named "show" or
+ * "log") will be silently treated as HEAD. Runtime ref-verification during
+ * policy checking is intentionally avoided, so this edge case is documented
+ * here rather than fixed.
+ *
+ * Ambiguity (item 3): on shortlog, `-n <digits>` is always interpreted as a
+ * count shorthand and normalised to `--max-count=<digits>`. An all-digit short
+ * SHA (e.g. `git shortlog -n 1a2b3c` is fine, but `git shortlog -n 12345`)
+ * would be treated as a count rather than a revision. This is rare but worth
+ * noting if shortlog is ever used with numeric-only short SHAs.
  */
 const COUNT_SHORT_RE = /^-(?:n(\d+)|(\d+))$/;
 
@@ -242,7 +259,7 @@ export function planGitRead(req: GitReadRequest, cwd: string): GitReadPlan {
   if (subcommand !== 'grep' && policy.valued.includes('--max-count=')) {
     const countOnly = subcommand === 'log' || subcommand === 'rev-list';
     for (let i = 0; i < preSep.length; i++) {
-      const tok = preSep[i] as string;
+      const tok = preSep[i] ?? '';
       const next = preSep[i + 1];
       const m = COUNT_SHORT_RE.exec(tok);
       if (m !== null) {
@@ -251,9 +268,10 @@ export function planGitRead(req: GitReadRequest, cwd: string): GitReadPlan {
       }
       if (tok === '-n' && next !== undefined && !next.startsWith('-')) {
         if (!/^\d+$/.test(next)) {
-          // Not a count: on shortlog an attached -n is --numbered followed by
-          // an unrelated token, so only log/rev-list may reject the pair.
-          if (countOnly) return { ok: false, error: `Rejected count flag "-n ${next}": expected a positive integer.` };
+          // Not a count: for shortlog, a bare `-n` without a digit argument
+          // means --numbered (a separate flag), so only log/rev-list reject
+          // the non-digit pair; shortlog passes both tokens through.
+          if (countOnly) return { ok: false, error: `Rejected count flag "-n ${next}": expected a non-negative integer.` };
           args.push(tok, next);
           i++;
         } else {

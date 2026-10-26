@@ -404,10 +404,10 @@ describe('planGitRead (#4227): model-quirk normalization', () => {
   });
 
   it('rejects -n with a non-numeric value for log/rev-list', () => {
-    expect(rejected({ subcommand: 'log', args: ['-n', 'abc'] })).toContain('positive integer');
+    expect(rejected({ subcommand: 'log', args: ['-n', 'abc'] })).toContain('non-negative integer');
     expect(rejected({ subcommand: 'log', args: ['-nabc'] })).toContain('Rejected option');
     expect(rejected({ subcommand: 'log', args: ['-n'] })).toContain('expects --max-count=');
-    expect(rejected({ subcommand: 'rev-list', args: ['-n', 'abc'] })).toContain('positive integer');
+    expect(rejected({ subcommand: 'rev-list', args: ['-n', 'abc'] })).toContain('non-negative integer');
   });
 
   it('treats an empty or whitespace-only pattern as absent for non-grep subcommands', () => {
