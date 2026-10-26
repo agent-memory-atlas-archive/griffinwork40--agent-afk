@@ -126,17 +126,16 @@ export async function executeOnce(
   const usageNotice = await evaluateDispatchUsageForModel(ctx.parentModel, ctx.traceWriter);
 
   // childScopeInputs carries the parent manager's raw read-scope inputs.
-  // parentReadRoots is the fully-resolved inheritedReadRoots that the current
-  // session's forkSubagent computed (with all Gap A/B/C additions via
-  // resolveReadScope). We pass it directly as childInheritedReadRoots so the
-  // grandchild manager is seeded correctly — no pre-computation here.
-  // (Eliminates the redundant, incomplete computeInheritedReadRoots call that
-  // previously ran without afkStateRoot/afkFrameworkRoot/afkSkillsRoot — #4373.)
+  // parentReadRoots is the fully-resolved inheritedReadRoots the current
+  // session's forkSubagent computed (all Gap A/B/C additions via resolveReadScope).
+  // Falls back to parentCwd for the root manager (#4438). Replaces the old
+  // computeInheritedReadRoots that lacked afkStateRoot/afkFrameworkRoot (#4373).
   const childScopeInputs = ctx.subagentManager.getReadScopeInputs?.() ?? {
     parentReadRoots: undefined,
     parentCwd: undefined,
   };
-  const childInheritedReadRoots = childScopeInputs.parentReadRoots;
+  const childInheritedReadRoots = childScopeInputs.parentReadRoots
+    ?? (childScopeInputs.parentCwd !== undefined ? [childScopeInputs.parentCwd] : undefined);
 
   // Phase 1: build base config (model, tools, budgets, credential) without
   // nesting wiring. Nesting is deferred until after isolation setup so depth-2+
