@@ -174,4 +174,28 @@ describe('fix #3963-4: emitTurnTerminal replaces tool-call markup on wind-down',
     expect(msg).toBeDefined();
     expect(msg!.text).toMatch(/incomplete wind-down/i);
   });
+
+  it('replaces self-closing <tool_call/> markup (was missed by old [\\ s>] class)', async () => {
+    const { emitTurnTerminal } = await import('./turn-driver.emit-terminal.js');
+    const ctx = makeCtx();
+    const markup = '<tool_call/>';
+    const events = await collectEvents(
+      emitTurnTerminal(ctx, markup, [], makeUsage(), CONTEXT_PRESSURE_WIND_DOWN, Date.now()),
+    );
+    const msg = events.find(e => e.type === 'assistant.message') as { type: string; text: string } | undefined;
+    expect(msg).toBeDefined();
+    expect(msg!.text).toMatch(/incomplete wind-down/i);
+  });
+
+  it('replaces Mistral/Mixtral plural <tool_calls> markup (was missed by old pattern)', async () => {
+    const { emitTurnTerminal } = await import('./turn-driver.emit-terminal.js');
+    const ctx = makeCtx();
+    const markup = '<tool_calls>[{"name":"bash","arguments":{"command":"ls"}}]</tool_calls>';
+    const events = await collectEvents(
+      emitTurnTerminal(ctx, markup, [], makeUsage(), TOOL_USE_LOOP_CAPPED, Date.now()),
+    );
+    const msg = events.find(e => e.type === 'assistant.message') as { type: string; text: string } | undefined;
+    expect(msg).toBeDefined();
+    expect(msg!.text).toMatch(/incomplete wind-down/i);
+  });
 });
