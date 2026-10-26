@@ -82,6 +82,7 @@ async function emitHookDecisionFromOutcome(
     hookEvent,
     decision: decision.decision,
     ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+    ...(decision.riskCategory !== undefined ? { riskCategory: decision.riskCategory } : {}),
     // PreToolUse context is counted by the dispatcher only after result delivery.
     ...(hookEvent !== 'PreToolUse' && decision.injectContext !== undefined
       ? { injectedContextBytes: Buffer.byteLength(decision.injectContext, 'utf8') }

@@ -75,6 +75,7 @@ async function emitSessionHookDecision(
     hookEvent,
     decision: decision.decision,
     ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+    ...(decision.riskCategory !== undefined ? { riskCategory: decision.riskCategory } : {}),
     ...(decision.injectContext !== undefined
       ? { injectedContextBytes: Buffer.byteLength(decision.injectContext, 'utf8') }
       : {}),

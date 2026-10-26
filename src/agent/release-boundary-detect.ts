@@ -48,6 +48,10 @@ import {
   RELEASE_BOUNDARY_PATTERNS,
   type ReleaseBoundaryPattern,
 } from './release-boundary-patterns.js';
+import type { RiskCategory } from './risk-classifier.js';
+
+/** The risk category emitted on every release-boundary gate verdict. */
+const RELEASE_BOUNDARY_RISK_CATEGORY: RiskCategory = 'release-boundary';
 
 /**
  * Stable prefix on OBSERVE reason strings. Exported so telemetry, tests, and
@@ -163,6 +167,7 @@ export function createReleaseBoundaryDetect(): (context: HookContext) => HookDec
       return {
         decision: 'approve',
         reason: `${RELEASE_BOUNDARY_DETECT_REASON_PREFIX} [${matched.join(', ')}] (dry-run: not blocked)`,
+        riskCategory: RELEASE_BOUNDARY_RISK_CATEGORY,
       };
     }
 
@@ -184,6 +189,7 @@ export function createReleaseBoundaryDetect(): (context: HookContext) => HookDec
           decision: 'block',
           reason: pattern.blockReason,
           injectContext: RELEASE_BOUNDARY_BLOCK_INJECT_CONTEXT,
+          riskCategory: RELEASE_BOUNDARY_RISK_CATEGORY,
         };
       }
     }
@@ -192,6 +198,7 @@ export function createReleaseBoundaryDetect(): (context: HookContext) => HookDec
     return {
       decision: 'approve',
       reason: `${RELEASE_BOUNDARY_DETECT_REASON_PREFIX} [${matched.join(', ')}]`,
+      riskCategory: RELEASE_BOUNDARY_RISK_CATEGORY,
     };
   };
 }
