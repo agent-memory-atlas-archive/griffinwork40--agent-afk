@@ -409,8 +409,10 @@ export class SessionOwner {
     this.mcpManagers.delete(id);
     // Close async but do not await — retire() is called from an async context
     // (handleWebExit is async) but callers do not await the cleanup.
-    if (control) control.close().catch(() => {});
+    // Contract: session closes BEFORE control, mirroring closeAll() — a closing
+    // session may raise a final tool call that needs the MCP/control transport alive.
     if (session) session.close().catch(() => {});
+    if (control) control.close().catch(() => {});
     if (mcpManager) mcpManager.disconnectAll().catch(() => {});
   }
 
