@@ -461,6 +461,23 @@ describe('prefix-cache stability: filterBackgroundToolDefs (#4235)', () => {
     expect(names).toContain('cancel_background_job');
     expect(names).toContain('get_background_job_health');
   });
+
+  it('filterBackgroundToolDefs(true, false) keeps all three bg tools', () => {
+    // subagentBackground=true → early-return path; all three bg tools kept regardless of processJobs
+    const filtered = filterBackgroundToolDefs([...builtinToolSchemas], true, false);
+    const names = filtered.map((t) => t.name);
+    expect(names).toContain('cancel_background_job');
+    expect(names).toContain('send_message_to_agent');
+    expect(names).toContain('get_background_job_health');
+  });
+
+  it('invariant core prefix is intact after filterBackgroundToolDefs(true, false)', () => {
+    // subagentBackground=true → early-return path; prefix must still be stable
+    const filtered = filterBackgroundToolDefs([...builtinToolSchemas], true, false);
+    const prefix = filtered.slice(0, INVARIANT_CORE_COUNT).map((t) => t.name);
+    const coreNames = builtinToolSchemas.slice(0, INVARIANT_CORE_COUNT).map((t) => t.name);
+    expect(prefix).toEqual(coreNames);
+  });
 });
 
 describe('prefix-cache stability: MCP sort (#4198)', () => {
