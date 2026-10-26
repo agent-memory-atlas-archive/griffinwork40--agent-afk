@@ -32,6 +32,7 @@ import type { OpenAIChunk } from './translate.js';
 import { WIND_DOWN_NOTE } from '../shared/tool-loop-cap.js';
 import { SOFT_DEADLINE_NOTE, SOFT_DEADLINE_WIND_DOWN } from '../shared/soft-deadline.js';
 import { CONTEXT_PRESSURE_WIND_DOWN } from '../shared/context-pressure.js';
+import { INCOMPLETE_MARKER } from './query/turn-driver.js';
 
 // vi.mock is hoisted by vitest before imports. By default each spy calls
 // through to the real implementation so the existing context-pressure tests
@@ -1259,7 +1260,7 @@ describe('OpenAICompatibleQuery — tool dispatch without dispatcher', () => {
 // ---------------------------------------------------------------------------
 
 describe('OpenAICompatibleQuery — Fix #3963-2: context-pressure canSynthesizeUnderPressure=false integration', () => {
-  const INCOMPLETE_MARKER = 'Context capacity exhausted. Partial tool outputs are journaled; resume from saved work.';
+
 
   beforeEach(() => {
     // Default within this suite: guard does not fire so the control-case test
