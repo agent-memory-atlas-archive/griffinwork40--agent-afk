@@ -67,6 +67,7 @@ async function emitSessionHookDecision(
       hookEvent,
       decision: 'block',
       ...(outcome.err.reason !== undefined ? { reason: outcome.err.reason } : {}),
+      ...(outcome.err.riskCategory !== undefined ? { riskCategory: outcome.err.riskCategory } : {}),
     });
     return;
   }
@@ -75,6 +76,7 @@ async function emitSessionHookDecision(
     hookEvent,
     decision: decision.decision,
     ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+    ...(decision.riskCategory !== undefined ? { riskCategory: decision.riskCategory } : {}),
     ...(decision.injectContext !== undefined
       ? { injectedContextBytes: Buffer.byteLength(decision.injectContext, 'utf8') }
       : {}),

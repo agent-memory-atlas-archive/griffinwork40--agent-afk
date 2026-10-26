@@ -50,6 +50,7 @@ export type RiskLevel = 'safe' | 'medium' | 'high';
  *   `browser-action`     — browser_open / browser_act (stateful browser interaction).
  *   `remote-exec`        — remote_agent (arbitrary code on another machine over SSH).
  *   `outbound-message`   — send_telegram or similar outbound-message tool.
+ *   `release-boundary`   — bash command that crosses a publish/deploy boundary (release-boundary-detect hook).
  *   `unknown`            — tool not classified by any rule; defaults to safe.
  */
 export const RISK_CATEGORIES = [
@@ -68,6 +69,7 @@ export const RISK_CATEGORIES = [
   'browser-action',
   'remote-exec',
   'outbound-message',
+  'release-boundary',
   'unknown',
 ] as const;
 
