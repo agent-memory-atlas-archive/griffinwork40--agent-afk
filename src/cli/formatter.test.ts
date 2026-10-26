@@ -254,11 +254,13 @@ describe('renderMarkdownToTerminal', () => {
 
     it('inserts separator after a multi-line row', () => {
       // Force wrapping by rendering at a narrow width.
+      // Cell content uses short unique strings that survive column truncation
+      // at maxWidth 20 (col-A budget ~9 chars, col-B budget ~8 chars).
       const sample = [
         '| A | B |',
         '|---|---|',
         '| this text is long enough to wrap at a narrow width | 2 |',
-        '| 3 | 4 |',
+        '| rowBa | rowBb |',
         '',
       ].join('\n');
       const out = stripAnsi(renderMarkdownToTerminal(sample, { maxWidth: 20 }));
@@ -268,8 +270,9 @@ describe('renderMarkdownToTerminal', () => {
       expect(separators).toHaveLength(2);
       // The inter-row separator must sit AFTER the wrapped row content and
       // BEFORE the next single-line row — not before the wrapped row.
-      const wrappedContentIdx = lines.findIndex((l) => l.includes('this text'));
-      const nextRowIdx = lines.findIndex((l) => l.includes('3') && l.includes('4'));
+      // Match the first line of the wrapped row (col-A renders 'this' on its own line).
+      const wrappedContentIdx = lines.findIndex((l) => /│\s*this\s*│/.test(l));
+      const nextRowIdx = lines.findIndex((l) => l.includes('rowBa'));
       // Find the inter-row separator (second ├ line, after the header separator)
       const interRowSepIdx = lines.findIndex(
         (l, i) => l.startsWith('├') && i > wrappedContentIdx
@@ -282,22 +285,30 @@ describe('renderMarkdownToTerminal', () => {
 
     it('emits no trailing separator when multi-line row is the last data row', () => {
       // The last data row should never produce a trailing separator even if
-      // it wraps to multiple lines.
+      // it wraps to multiple lines. Row 1 also wraps so prevRowHeight > 1
+      // when entering row 2 — this actually exercises the separator guard
+      // (a single-line row 1 makes the guard vacuously true).
+      // Cell content uses short unique strings that survive column truncation
+      // at maxWidth 20 (col-A budget ~8 chars, col-B budget ~9 chars).
       const sample = [
         '| A | B |',
         '|---|---|',
-        '| 1 | 2 |',
-        '| this text is long enough to wrap at a narrow width | 4 |',
+        '| first row also wraps at narrow width | r1c2 |',
+        '| this text is long enough to wrap at a narrow width | r2c2 |',
         '',
       ].join('\n');
       const out = stripAnsi(renderMarkdownToTerminal(sample, { maxWidth: 20 }));
       const lines = out.split('\n');
       const separators = lines.filter((l) => l.startsWith('├'));
-      // header-to-data separator only; no trailing separator after last row
-      expect(separators).toHaveLength(1);
-      // Confirm the bottom border follows the wrapped content (not a ├ line)
+      // header-to-data separator + one inter-row separator after row 1 (which
+      // wraps); no trailing separator after the last (also-wrapped) row 2.
+      expect(separators).toHaveLength(2);
+      // Confirm the bottom border follows the wrapped content (not a ├ line).
+      // Use the last line that contains the col-B marker for row 2 ('r2c2')
+      // or any row-2 col-A content ('this', 'text', etc.) — take the maximum
+      // index so we anchor to the final physical line of the wrapped row.
       const lastDataLineIdx = lines.reduce(
-        (acc, l, i) => (l.includes('this text') || l.includes('wrap') ? i : acc),
+        (acc, l, i) => (/│\s*(this|text|long|enough|to|wrap|at|a|narrow|width|r2c2)\s*│/.test(l) ? i : acc),
         -1
       );
       const bottomBorderIdx = lines.findIndex((l) => l.startsWith('└'));
@@ -312,12 +323,14 @@ describe('renderMarkdownToTerminal', () => {
     it('inserts separator between each pair of consecutive multi-line rows', () => {
       // Two consecutive wrapped rows should each be followed by a separator
       // (except the last one, which should have none).
+      // Cell content uses short unique strings that survive column truncation
+      // at maxWidth 20 (col-A budget ~9 chars, col-B budget ~8 chars).
       const sample = [
         '| A | B |',
         '|---|---|',
         '| this text is long enough to wrap at a narrow width | 2 |',
         '| another long text that also wraps at this width setting | 4 |',
-        '| 5 | 6 |',
+        '| rowCa | rowCb |',
         '',
       ].join('\n');
       const out = stripAnsi(renderMarkdownToTerminal(sample, { maxWidth: 20 }));
@@ -325,8 +338,8 @@ describe('renderMarkdownToTerminal', () => {
       const separators = lines.filter((l) => l.startsWith('├'));
       // header-to-data + one after first wrapped row + one after second wrapped row = 3
       expect(separators).toHaveLength(3);
-      // The last data row ("5 | 6") should have no trailing separator.
-      const lastSingleLineIdx = lines.findIndex((l) => l.includes('5') && l.includes('6'));
+      // The last data row ("rowCa | rowCb") should have no trailing separator.
+      const lastSingleLineIdx = lines.findIndex((l) => l.includes('rowCa'));
       const bottomBorderIdx = lines.findIndex((l) => l.startsWith('└'));
       expect(lastSingleLineIdx).toBeGreaterThan(-1);
       expect(bottomBorderIdx).toBeGreaterThan(lastSingleLineIdx);
