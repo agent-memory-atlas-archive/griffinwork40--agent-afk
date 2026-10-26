@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.338.0] - 2026-10-26
+
 ### Added
 - enrich general-purpose agent prompt with quality and parallelism guidance (#4451) (f14a54bb3)
 - three-value provenance for Ctrl+B steering (#4359) (ea29e3abc)
