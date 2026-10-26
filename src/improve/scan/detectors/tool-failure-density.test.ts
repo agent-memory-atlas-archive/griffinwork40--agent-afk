@@ -739,6 +739,10 @@ describe('normalizeErrorHead — over-collapse fixes (issue #4401)', () => {
     expect(result).not.toContain('<val>');
     expect(result).toBe("the system can't open the file");
   });
+
+  it('collapses single-quoted values preceded by colon (error:\'value\' pattern)', () => {
+    expect(normalizeErrorHead("error:'some-dynamic-value'")).toBe('error:<val>');
+  });
 });
 
 describe('normalizeErrorHead — combined / idempotent', () => {
