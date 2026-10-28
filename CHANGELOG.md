@@ -11,6 +11,8 @@ Entries in the [Unreleased] section may include a short commit hash suffix
 
 ## [Unreleased]
 
+## [5.339.0] - 2026-10-28
+
 ### Added
 - capture bash side effects so /rewind can undo them (#4271 stage 2) (c08d69130)
 
