@@ -218,6 +218,8 @@ describe('hook command data exemptions (#3762)', () => {
       const lines = result.split('\n');
       expect(lines[0]).toBe("cat >big.txt <<'EOF'");
       expect(lines[lines.length - 1]).toBe('EOF');
+      // Body lines should be replaced by blank lines (one per masked line).
+      expect(lines.length).toBe(50_000 + 2); // header + 50k body + EOF
       // Should complete quickly (well under 5s even on slow CI).
       expect(elapsed).toBeLessThan(5000);
     });
