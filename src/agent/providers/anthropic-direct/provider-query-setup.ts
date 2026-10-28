@@ -21,6 +21,7 @@ import { setUpQueryClient } from './query/client-setup.js';
 import { wireQueryDispatcher } from './query/dispatcher-wiring.js';
 import { assembleQueryPrompt } from './query/prompt-assembly.js';
 import { dumpIfEnabled } from '../../session/prompt-dump.js';
+import { logStablePartsTokens } from '../shared/prompt-fragment-tokens.js';
 import type { ProviderQueryContext } from './provider-context.js';
 import { normalizeSystemPromptOverlay } from '../shared/system-prompt.js';
 import { grantsWorkspacePrompt, grantsToolStrict } from '../shared/tool-grant.js';
@@ -217,6 +218,10 @@ export function setUpQuerySession(
   });
 
   dumpQuerySetupPrompt({ args, config, model, maxTokens, toolSystemAppend });
+
+  // Emit per-fragment token estimates to the witness trace (#4449). Read-path
+  // only — the assembled prompt is never mutated by this call.
+  logStablePartsTokens(config.traceWriter, stableSystemPrefix);
 
   // Contract: `credentialFromStore` is true IFF the session token was sourced
   // from the Claude Code OAuth keychain store (not an env var or slot-pinned
